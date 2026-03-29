@@ -1,0 +1,45 @@
+{
+    "name": "flowrise-hms/clinical",
+    "description": "Clinical module for patient encounters, service requests, tasks, vital signs, and clinical notes",
+    "type": "laravel-module",
+    "keywords": ["hms", "hospital", "clinical", "encounter", "fhir", "vitals", "healthcare"],
+    "license": "MIT",
+    "authors": [
+        {
+            "name": "Flowrise Digital",
+            "homepage": "https://github.com/Flowrise-HMS",
+            "email": "flowrisedigitals@gmail.com"
+        },
+        {
+            "name": "Mushe Abdul-Hakim",
+            "email": "musheabdulhakim99@gmail.com",
+            "homepage": "https://github.com/musheabdulhakim",
+            "role": "Lead Developer"
+        }
+    ],
+    "require": {
+        "php": "^8.4",
+        "flowrise-hms/core": "dev-main",
+        "flowrise-hms/patient": "dev-main"
+    },
+    "extra": {
+        "laravel": {
+            "providers": [],
+            "aliases": {}
+        }
+    },
+    "autoload": {
+        "psr-4": {
+            "Modules\\Clinical\\": "app/",
+            "Modules\\Clinical\\Database\\Factories\\": "database/factories/",
+            "Modules\\Clinical\\Database\\Seeders\\": "database/seeders/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "Modules\\Clinical\\Tests\\": "tests/"
+        }
+    },
+    "minimum-stability": "dev",
+    "prefer-stable": true
+}

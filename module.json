@@ -1,0 +1,15 @@
+{
+    "name": "Clinical",
+    "alias": "clinical",
+    "description": "Clinical module for patient encounters, service requests, tasks, vital signs, and clinical notes. Supports walk-in guests, shift work, and role-based fulfillment following FHIR terminology.",
+    "keywords": ["hms", "hospital", "clinical", "encounter", "fhir", "vitals", "healthcare"],
+    "priority": 20,
+    "providers": [
+        "Modules\\Clinical\\Providers\\ClinicalServiceProvider"
+    ],
+    "files": [],
+    "requires": [
+        "Modules\\Core",
+        "Modules\\Patient"
+    ]
+}
