@@ -6,38 +6,35 @@ use BezhanSalleh\FilamentShield\Traits\HasPageShield;
 use CodeWithDennis\FilamentLucideIcons\Enums\LucideIcon;
 use Filament\Actions\Concerns\InteractsWithActions;
 use Filament\Actions\Contracts\HasActions;
-use Filament\Infolists\Components\ImageEntry;
-use Filament\Infolists\Components\TextEntry;
-use Filament\Infolists\Concerns\InteractsWithInfolists;
-use Filament\Infolists\Contracts\HasInfolists;
+use Filament\Forms\Components\Select;
+use Filament\Notifications\Notification;
 use Filament\Pages\Page;
-use Filament\Schemas\Components\Grid;
-use Filament\Schemas\Components\Section;
 use Filament\Schemas\Concerns\InteractsWithSchemas;
 use Filament\Schemas\Contracts\HasSchemas;
-use Filament\Schemas\Schema;
-use Filament\Support\Enums\Width;
 use Filament\Tables\Columns\ImageColumn;
 use Filament\Tables\Columns\Layout\Stack;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Concerns\InteractsWithTable;
 use Filament\Tables\Contracts\HasTable;
 use Filament\Tables\Enums\RecordActionsPosition;
+use Filament\Tables\Filters\Filter;
 use Filament\Tables\Table;
-use Modules\Clinical\Enums\EncounterStatus;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Session;
+use Modules\Clinical\Classes\Actions\PatientActions;
 use Modules\Clinical\Enums\EncounterType;
 use Modules\Clinical\Filament\Clusters\Workspace\WorkspaceCluster;
 use Modules\Clinical\Filament\Widgets\CriticalPatientsWidget;
 use Modules\Clinical\Filament\Widgets\MyTasksWidget;
 use Modules\Clinical\Filament\Widgets\PatientTimelineWidget;
 use Modules\Clinical\Filament\Widgets\RecentPatientsWidget;
-use Modules\Patient\Filament\Clusters\Patient\Resources\Patients\PatientResource;
+use Modules\Patient\Classes\Services\PatientSearchService;
 use Modules\Patient\Models\Patient;
 
-class Patients extends Page implements HasActions, HasInfolists, HasSchemas, HasTable
+class Patients extends Page implements HasActions, HasSchemas, HasTable
 {
-    use InteractsWithActions, InteractsWithInfolists, InteractsWithSchemas, InteractsWithTable;
     use HasPageShield;
+    use InteractsWithActions, InteractsWithSchemas, InteractsWithTable;
 
     protected static ?string $slug = '';
 
@@ -51,178 +48,89 @@ class Patients extends Page implements HasActions, HasInfolists, HasSchemas, Has
 
     protected string $view = 'clinical::clinical.workspace.patient-list';
 
-    public string $viewMode = 'card';
+    public string $viewMode;
 
-    public string $search = '';
-
-    public string $encounterStatusFilter = 'all';
-
-    public string $dateRangeFilter = 'all';
-
-    public string $encounterTypeFilter = 'all';
-
-    public int $perPage = 12;
+    public string $viewModeSessionKey;
 
     public function mount(): void
     {
-        $this->applyFiltersFromUrl();
-    }
-
-    public function applyFiltersFromUrl(): void
-    {
-        $this->encounterStatusFilter = request()->input('status', 'all');
-        $this->dateRangeFilter = request()->input('date', 'all');
-        $this->encounterTypeFilter = request()->input('type', 'all');
-    }
-
-    public function resetFilters()
-    {
-        $this->search = '';
-        $this->encounterStatusFilter = 'all';
-        $this->dateRangeFilter = 'all';
-        $this->encounterTypeFilter = 'all';
-    }
-
-    public function updatedSearch(): void
-    {
-        $this->resetPage();
-    }
-
-    public function updatedEncounterStatusFilter(): void
-    {
-        $this->resetPage();
-    }
-
-    public function updatedDateRangeFilter(): void
-    {
-        $this->resetPage();
-    }
-
-    public function updatedEncounterTypeFilter(): void
-    {
-        $this->resetPage();
-    }
-
-    public function updatedPerPage(): void
-    {
-        $this->resetPage();
+        $this->viewModeSessionKey = Auth::id().'_patients_view_mode';
+        $this->viewMode = Session::get($this->viewModeSessionKey, 'card');
     }
 
     public function toggleViewMode(string $mode): void
     {
-        $this->viewMode = $mode;
+        if ($mode != $this->viewMode) {
+            $this->viewMode = $mode;
+            Session::put($this->viewModeSessionKey, $mode);
+            $this->resetTable();
+            Notification::make()->title("View mode changed to <b>{$mode}</b>")->success()->send();
+        }
     }
 
     public function getPatients()
     {
         return Patient::query()
             ->with(['latestEncounter', 'activeEncounter', 'latestVitals', 'allergies'])
-            ->when($this->search, fn ($query) => $query->where(function ($q) {
-                $q->where('first_name', 'like', "%{$this->search}%")
-                    ->orWhere('last_name', 'like', "%{$this->search}%")
-                    ->orWhere('mrn', 'like', "%{$this->search}%")
-                    ->orWhere('phone', 'like', "%{$this->search}%");
-            }))
-            ->when($this->encounterStatusFilter !== 'all', function ($query) {
-                if ($this->encounterStatusFilter === 'active') {
-                    $query->whereHas('encounters', fn ($q) => $q->whereIn('status', [
-                        EncounterStatus::ARRIVED->value,
-                        EncounterStatus::TRIAGED->value,
-                        EncounterStatus::IN_PROGRESS->value,
-                        EncounterStatus::ON_LEAVE->value,
-                    ]));
-                } elseif ($this->encounterStatusFilter === 'inactive') {
-                    $query->whereDoesntHave('encounters', fn ($q) => $q->whereIn('status', [
-                        EncounterStatus::ARRIVED->value,
-                        EncounterStatus::TRIAGED->value,
-                        EncounterStatus::IN_PROGRESS->value,
-                        EncounterStatus::ON_LEAVE->value,
-                    ]));
-                }
-            })
-            ->when($this->encounterTypeFilter !== 'all', fn ($query) => $query->whereHas('encounters', fn ($q) => $q->where('type', $this->encounterTypeFilter)))
-            ->when($this->dateRangeFilter !== 'all', fn ($query) => $this->applyDateRange($query))
-            ->orderByDesc('updated_at')
-            ->paginate($this->perPage);
-    }
-
-    protected function applyDateRange($query): void
-    {
-        $date = match ($this->dateRangeFilter) {
-            'today' => now()->startOfDay(),
-            'this_week' => now()->startOfWeek(),
-            'this_month' => now()->startOfMonth(),
-            default => null,
-        };
-
-        if ($date) {
-            $query->whereHas('encounters', fn ($q) => $q->where('created_at', '>=', $date));
-        }
-    }
-
-    public function patientInfoList(Patient $patient): Schema
-    {
-        return $this->makeSchema()
-            ->record($patient)
-            ->components([
-                Section::make()
-                    ->headerActions([
-                        PatientResource::profileAction(),
-                        PatientResource::timelineAction(),
-                    ])
-                    ->schema([
-                        // Larger, more prominent photo
-                        ImageEntry::make('photo')
-                            ->imageSize(120)
-                            ->hiddenLabel()
-                            ->alignCenter()
-                            ->circular()
-                            ->extraAttributes(['class' => 'mt-6']),
-
-                        TextEntry::make('full_name')
-                            ->label('Name')
-                            ->weight('bold')
-                            ->size('lg')
-                            ->alignCenter(),
-
-                        Grid::make(2)
-                            ->schema([
-                                TextEntry::make('mrn')->label('MRN'),
-                                TextEntry::make('age')->label('Age'),
-                                TextEntry::make('gender')
-                                    ->label('Gender')
-                                    ->formatStateUsing(fn ($state) => $state?->getLabel() ?? 'N/A'),
-                                TextEntry::make('activeEncounter.status')
-                                    ->label('Status')
-                                    ->badge()
-                                    ->color(fn ($state) => $state?->getColor() ?? 'gray'),
-                                TextEntry::make('activeEncounter.type')
-                                    ->label('Type')
-                                    ->badge()
-                                    ->color(fn ($state) => $state?->getColor() ?? 'gray'),
-                            ])
-                            ->columns(2),
-
-                    ])
-                    ->extraAttributes(['class' => 'px-6 pb-8 text-center']),
-            ]);
+            ->orderByDesc('updated_at');
     }
 
     public function table(Table $table): Table
     {
-        $patients = $this->getPatients();
-        $isCardView = $this->viewMode === 'card';
+        $actions = app(PatientActions::class);
 
         return $table
-            ->query(fn () => $patients?->count() > 0 ? $patients?->toQuery() : null)
+            ->query(Patient::query()
+                ->with(['latestEncounter', 'activeEncounter', 'latestVitals', 'allergies']))
             ->defaultSort('updated_at', 'desc')
-            ->paginated(false)
-            ->columns($isCardView ? $this->getCardColumns() : $this->getTableColumns())
-            ->contentGrid($isCardView ? ['md' => 3, 'xl' => 4] : null)
+            ->paginationPageOptions([12, 24, 48])
+            ->searchable(app(PatientSearchService::class)->getSearchableFields())
+            ->columns($this->viewMode === 'card' ? $this->getCardColumns() : $this->getTableColumns())
+            ->contentGrid($this->viewMode === 'card' ? ['md' => 3, 'xl' => 4] : null)
+            ->heading('Patients')
+            ->filters([
+                Filter::make('filters')
+                    ->schema([
+                        Select::make('status')
+                            ->options(fn () => $this->getEncounterStatusOptions())
+                            ->placeholder('All Status'),
+                        Select::make('type')
+                            ->options(fn () => $this->getEncounterTypeOptions())
+                            ->placeholder('All Types'),
+                        Select::make('date_range')
+                            ->options(fn () => $this->getDateRangeOptions())
+                            ->placeholder('All Time'),
+                    ])
+                    ->query(function ($query, array $data) {
+                        $activeStatuses = array_filter($this->getEncounterTypeOptions(), fn ($value) => $value != 'all');
+
+                        $query->when(($data['status'] ?? 'all') !== 'all', function ($q) use ($data, $activeStatuses) {
+                            if ($data['status'] === 'active') {
+                                $q->whereHas('encounters', fn ($q) => $q->whereIn('status', $activeStatuses));
+                            } else {
+                                $q->whereDoesntHave('encounters', fn ($q) => $q->whereIn('status', $activeStatuses));
+                            }
+                        })
+                            ->when(($data['type'] ?? 'all') !== 'all', function ($q) use ($data) {
+                                $q->whereHas('encounters', fn ($q) => $q->where('type', $data['type']));
+                            })
+                            ->when(($data['date_range'] ?? 'all') !== 'all', function ($q) use ($data) {
+                                $date = match ($data['date_range']) {
+                                    'today' => now()->startOfDay(),
+                                    'this_week' => now()->startOfWeek(),
+                                    'this_month' => now()->startOfMonth(),
+                                    default => null,
+                                };
+                                if ($date) {
+                                    $q->whereHas('encounters', fn ($q) => $q->where('created_at', '>=', $date));
+                                }
+                            });
+                    }),
+            ])
             ->recordActions([
-                PatientResource::profileAction(),
-                PatientResource::timelineAction(),
-            ], position: $isCardView ? RecordActionsPosition::BeforeColumns: null);
+                $actions->profileAction(),
+                $actions->timelineAction(),
+            ], position: $this->viewMode === 'card' ? RecordActionsPosition::BeforeColumns : null);
     }
 
     protected function getCardColumns(): array
@@ -233,8 +141,7 @@ class Patients extends Page implements HasActions, HasInfolists, HasSchemas, Has
                     ->circular()
                     ->imageSize(80)
                     ->alignCenter()
-                    ->extraAttributes(['class' => 'mt-2'])
-                    ->state(fn (Patient $record) => $record->photo_url),
+                    ->extraAttributes(['class' => 'mt-2']),
                 TextColumn::make('full_name')
                     ->size('lg')
                     ->weight('bold')
@@ -247,7 +154,7 @@ class Patients extends Page implements HasActions, HasInfolists, HasSchemas, Has
                 TextColumn::make('age_gender')
                     ->label('Age / Gender')
                     ->alignCenter()
-                    ->formatStateUsing(fn (Patient $record) => $record->age . ' / ' . ($record->gender?->getLabel() ?? 'N/A')),
+                    ->formatStateUsing(fn (Patient $record) => $record->age.' / '.($record->gender?->getLabel() ?? 'N/A')),
                 TextColumn::make('activeEncounter.status')
                     ->label('Status')
                     ->alignCenter()
@@ -266,6 +173,7 @@ class Patients extends Page implements HasActions, HasInfolists, HasSchemas, Has
     protected function getTableColumns(): array
     {
         return [
+            TextColumn::make('#')->rowIndex(),
             TextColumn::make('full_name')
                 ->weight('bold'),
             TextColumn::make('mrn')
@@ -315,20 +223,6 @@ class Patients extends Page implements HasActions, HasInfolists, HasSchemas, Has
             EncounterType::OUTPATIENT->value => 'Outpatient',
             EncounterType::VIRTUAL->value => 'Virtual',
         ];
-    }
-
-    public function getPerPageOptions(): array
-    {
-        return [
-            12 => '12',
-            24 => '24',
-            48 => '48',
-        ];
-    }
-
-    public function getMaxContentWidth(): Width
-    {
-        return Width::Full;
     }
 
     protected function getHeaderWidgets(): array
