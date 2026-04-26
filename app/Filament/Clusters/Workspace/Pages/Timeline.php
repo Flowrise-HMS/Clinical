@@ -7,6 +7,7 @@ use Filament\Pages\Page;
 use Filament\Support\Enums\Width;
 use Illuminate\Support\Collection;
 use Modules\Clinical\Classes\Actions\PatientActions;
+use Modules\Clinical\Classes\Services\ClinicalWorkspaceService;
 use Modules\Clinical\Filament\Clusters\Workspace\WorkspaceCluster;
 
 class Timeline extends Page
@@ -66,9 +67,20 @@ class Timeline extends Page
 
     public function getEventCounts(): array
     {
-        return $this->workspaceService?->getTimelineEventCounts() ?? [
-            'all' => 0, 'encounter' => 0, 'vitals' => 0, 'note' => 0, 'order' => 0
-        ];
+        if (! $this->currentPatient) {
+            return [
+                'all' => 0, 'encounter' => 0, 'vitals' => 0, 'note' => 0, 'order' => 0
+            ];
+        }
+
+        $service = app(ClinicalWorkspaceService::class)
+            ->setPatient($this->currentPatient);
+
+        if ($this->currentEncounter) {
+            $service->setEncounter($this->currentEncounter);
+        }
+
+        return $service->getTimelineEventCounts();
     }
 
     public function getTimelineEvents(): Collection
