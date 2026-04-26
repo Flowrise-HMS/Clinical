@@ -3,6 +3,7 @@
 namespace Modules\Clinical\Classes\Actions;
 
 use Filament\Actions\Action;
+use Filament\Actions\ActionGroup;
 use Illuminate\Support\Facades\Auth;
 use Modules\Clinical\Classes\Services\AllergyService;
 use Modules\Clinical\Classes\Services\ClinicalNoteService;
@@ -72,8 +73,25 @@ class PatientActions
         }
 
         return [
-            $this->timelineAction(),
+            $this->profileAction(),
+            $this->patientActionGroups(),
         ];
+    }
+
+    public function patientActionGroups()
+    {
+        return ActionGroup::make([
+                $this->encounter(),
+                $this->note(),
+                $this->order(),
+                $this->vitals(),
+                $this->allergy(),
+            ])
+            ->label('More Actions')
+            ->icon('heroicon-m-ellipsis-vertical')
+            ->size('sm')
+            ->color('primary')
+            ->button();
     }
 
     public function forPatient(Patient $patient): static
@@ -222,10 +240,10 @@ class PatientActions
     {
         return $this->encounterService->createForPatient(
             patient: $this->patient,
-            type: EncounterType::from($data['type']),
+            type: ($data['type']),
             chiefComplaint: $data['chief_complaint'] ?? null,
             priority: isset($data['priority'])
-                ? EncounterPriority::from($data['priority'])
+                ? ($data['priority'])
                 : null,
             locationId: $data['location_id'] ?? null,
             departmentId: $data['department_id'] ?? null,

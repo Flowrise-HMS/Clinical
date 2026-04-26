@@ -6,6 +6,7 @@ use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
 use Filament\Schemas\Components\Grid;
 use Filament\Schemas\Components\Section;
+use Filament\Schemas\Components\Utilities\Get;
 use Filament\Schemas\Components\Utilities\Set;
 use Filament\Schemas\Schema;
 
@@ -109,7 +110,7 @@ class VitalSignForm
                                 ->suffix('cm')
                                 ->numeric()
                                 ->live()
-                                ->afterStateUpdated(function (Set $set, ?string $state, ?string $get) {
+                                ->afterStateUpdated(function (Set $set, ?string $state, Get $get) {
                                     $weight = $get('weight');
                                     if ($state && $weight) {
                                         $bmi = $weight / (($state / 100) ** 2);

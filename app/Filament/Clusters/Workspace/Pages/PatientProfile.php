@@ -18,6 +18,7 @@ use Filament\Schemas\Components\Grid;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
 use Illuminate\Database\Eloquent\Collection;
+use Modules\Clinical\Classes\Actions\PatientActions;
 use Modules\Clinical\Filament\Clusters\Workspace\WorkspaceCluster;
 use Modules\Clinical\Models\Allergy;
 use Modules\Clinical\Models\ClinicalNote;
@@ -189,13 +190,13 @@ class PatientProfile extends Page implements HasActions, HasForms, HasInfolists
             return [];
         }
 
+        $actions = PatientActions::make()->forPatient($this->currentPatient);
+
         return [
-            Action::make('timeline')
-                ->button()
-                ->color('gray')
-                ->url(Timeline::getUrl(['patient' => $this->currentPatient?->id]))
-                ->icon('heroicon-m-clock'),
+            $actions->timelineAction(),
+            $actions->patientActionGroups()
         ];
+
     }
 
     public function hasAllergies(): bool

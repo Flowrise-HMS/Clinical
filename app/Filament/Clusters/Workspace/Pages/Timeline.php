@@ -65,13 +65,7 @@ class Timeline extends Page
 
         $actions = PatientActions::make()->forPatient($this->currentPatient);
 
-        return array_filter([
-            $actions->profileAction(),
-            $actions->encounter(),
-            $actions->note(),
-            $actions->order(),
-            $actions->vitals(),
-        ]);
+        return $actions->timelineQuickActions();
     }
 
     protected function loadTimelineData(): void
