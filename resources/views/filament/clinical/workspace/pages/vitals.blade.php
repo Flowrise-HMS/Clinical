@@ -1,12 +1,6 @@
 <x-filament-panels::page>
     {{-- Patient Context Header --}}
-    @if($currentPatient)
-        @include('clinical::clinical.workspace.components.patient-context-bar', [
-            'patient' => $currentPatient,
-            'encounter' => $currentEncounter,
-            'latestVitals' => $latestVitals,
-        ])
-    @endif
+    {{ $this->infolist() }}
 
     {{-- Vitals Content --}}
     <div class="p-6 bg-gray-50 min-h-[calc(100vh-8rem)]">

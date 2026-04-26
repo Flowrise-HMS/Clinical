@@ -1,7 +1,6 @@
 <x-filament-panels::page class="p-0 bg-gray-50 dark:bg-gray-950">
-    <div class="min-h-screen">
-
-        <div class="max-w-5xl mx-auto px-6 pt-8 pb-12">
+    <div class="max-w-5xl mx-auto px-6 pt-8 pb-12">
+            {{ $this->infolist() }}
 
             @if($currentPatient)
 
@@ -47,5 +46,4 @@
             @endif
 
         </div>
-    </div>
 </x-filament-panels::page>
