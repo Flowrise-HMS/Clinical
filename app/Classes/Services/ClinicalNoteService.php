@@ -3,6 +3,7 @@
 namespace Modules\Clinical\Classes\Services;
 
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Auth;
 use Modules\Clinical\Enums\NoteStatus;
 use Modules\Clinical\Enums\NoteType;
 use Modules\Clinical\Models\ClinicalNote;
@@ -10,6 +11,32 @@ use Modules\Patient\Models\Patient;
 
 class ClinicalNoteService
 {
+    public function record(
+        Patient $patient,
+        array $noteData,
+        ?string $encounterId = null,
+        ?int $authorId = null
+    ): ClinicalNote {
+        $data = [
+            'patient_id' => $patient->id,
+            'author_id' => $authorId ?? Auth::id(),
+            'encounter_id' => $encounterId,
+        ];
+
+        $optionalFields = [
+            'note_type', 'status', 'subject', 'content',
+            'service_request_id', 'attachments',
+        ];
+
+        foreach ($optionalFields as $field) {
+            if (isset($noteData[$field])) {
+                $data[$field] = $noteData[$field];
+            }
+        }
+
+        return ClinicalNote::create($data);
+    }
+
     public function create(
         Patient $patient,
         NoteType $noteType,
@@ -24,7 +51,7 @@ class ClinicalNoteService
             'note_type' => $noteType,
             'subject' => $subject,
             'content' => $content,
-            'author_id' => $authorId ?? auth()->id(),
+            'author_id' => $authorId ?? Auth::id(),
             'encounter_id' => $encounterId,
             'service_request_id' => $serviceRequestId,
             'status' => NoteStatus::DRAFT,
@@ -113,7 +140,7 @@ class ClinicalNoteService
             throw new \InvalidArgumentException('Note is already signed');
         }
 
-        $note->sign(auth()->id());
+        $note->sign(Auth::id());
 
         return $note->fresh();
     }
@@ -124,7 +151,7 @@ class ClinicalNoteService
             throw new \InvalidArgumentException('Only signed notes can be amended');
         }
 
-        $note->amend($reason, auth()->id());
+        $note->amend($reason, Auth::id());
 
         return $note->fresh();
     }

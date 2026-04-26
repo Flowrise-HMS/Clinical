@@ -9,6 +9,7 @@ use Illuminate\Database\Eloquent\Factories\Factory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Support\Facades\Auth;
 use Modules\Clinical\Database\Factories\EncounterFactory;
 use Modules\Clinical\Enums\DischargeDisposition;
 use Modules\Clinical\Enums\EncounterPriority;
@@ -273,7 +274,7 @@ class Encounter extends BaseModel
     {
         $this->update([
             'status' => EncounterStatus::FINISHED,
-            'discharged_by' => $dischargedBy ?? auth()->id(),
+            'discharged_by' => $dischargedBy ?? Auth::id(),
             'discharged_at' => now(),
             'discharge_disposition' => $disposition ?? DischargeDisposition::COMPLETED,
         ]);

@@ -11,7 +11,6 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Modules\Clinical\Database\Factories\EncounterParticipantFactory;
 use Modules\Clinical\Enums\ParticipantRole;
 use Modules\Clinical\Enums\ParticipantStatus;
-use Modules\Core\Models\CoreUser;
 
 class EncounterParticipant extends Model
 {

@@ -7,17 +7,16 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Factories\Factory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Support\Facades\Auth;
 use Modules\Clinical\Database\Factories\TaskFactory;
 use Modules\Clinical\Enums\TaskOutcome;
 use Modules\Clinical\Enums\TaskStatus;
-use Modules\Core\Models\BaseModel;
-use Modules\Core\Models\CoreUser;
 use Modules\Core\Models\Service;
 use Modules\Patient\Models\Patient;
 
-class Task extends BaseModel
+class Task extends Model
 {
     /** @use HasFactory<TaskFactory> */
     use HasFactory, HasUuids;

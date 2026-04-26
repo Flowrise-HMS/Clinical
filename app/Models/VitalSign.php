@@ -2,6 +2,7 @@
 
 namespace Modules\Clinical\Models;
 
+use App\Models\User;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Factories\Factory;
@@ -15,7 +16,6 @@ use Modules\Clinical\Enums\VitalSignType;
 use Modules\Core\Models\BaseModel;
 use Modules\Core\Models\Branch;
 use Modules\Patient\Models\Patient;
-use App\Models\User;
 
 class VitalSign extends BaseModel
 {

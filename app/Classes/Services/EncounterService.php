@@ -30,17 +30,19 @@ class EncounterService
         ?string $departmentId = null,
         ?int $createdBy = null
     ): Encounter {
-        return Encounter::create([
-            'patient_id' => $patient->id,
-            'branch_id' => $patient->branch_id,
-            'type' => $type,
-            'status' => EncounterStatus::PLANNED,
-            'priority' => $priority ?? EncounterPriority::default(),
-            'chief_complaint' => $chiefComplaint,
-            'location_id' => $locationId,
-            'department_id' => $departmentId,
-            'created_by' => $createdBy ?? auth()->id(),
-        ]);
+        return DB::transaction(function () use ($patient, $type, $chiefComplaint, $priority, $locationId, $departmentId, $createdBy) {
+            return Encounter::create([
+                'patient_id' => $patient->id,
+                'branch_id' => $patient->branch_id,
+                'type' => $type,
+                'status' => EncounterStatus::PLANNED,
+                'priority' => $priority ?? EncounterPriority::default(),
+                'chief_complaint' => $chiefComplaint,
+                'location_id' => $locationId,
+                'department_id' => $departmentId,
+                'created_by' => $createdBy ?? auth()->id(),
+            ]);
+        });
     }
 
     public function createForGuest(

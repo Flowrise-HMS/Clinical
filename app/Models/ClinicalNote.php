@@ -6,16 +6,16 @@ use App\Models\User;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Factories\Factory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\MorphTo;
 use Illuminate\Support\Str;
 use Modules\Clinical\Database\Factories\ClinicalNoteFactory;
 use Modules\Clinical\Enums\NoteStatus;
 use Modules\Clinical\Enums\NoteType;
-use Modules\Core\Models\BaseModel;
 use Modules\Patient\Models\Patient;
 
-class ClinicalNote extends BaseModel
+class ClinicalNote extends Model
 {
     /** @use HasFactory<ClinicalNoteFactory> */
     use HasFactory, HasUuids;

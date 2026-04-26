@@ -35,6 +35,20 @@ class ClinicalServiceProvider extends ModuleServiceProvider
     ];
 
     /**
+     * Register any other services for the module.
+     */
+    public function register(): void
+    {
+        parent::register();
+
+        // Register Filament views namespace
+        $this->loadViewsFrom(
+            module_path($this->name, 'resources/views/filament'),
+            'clinical'
+        );
+    }
+
+    /**
      * Define module schedules.
      *
      * @param  $schedule

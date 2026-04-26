@@ -20,6 +20,35 @@ class ServiceRequestService
         protected BranchService $branchService
     ) {}
 
+    public function record(
+        Patient $patient,
+        array $requestData,
+        ?string $encounterId = null,
+        ?int $orderedBy = null
+    ): ServiceRequest {
+        $data = [
+            'patient_id' => $patient->id,
+            'encounter_id' => $encounterId,
+            'branch_id' => $patient->branch_id,
+            'ordered_by' => $orderedBy ?? auth()->id(),
+            'created_by' => $orderedBy ?? auth()->id(),
+        ];
+
+        $optionalFields = [
+            'status', 'priority', 'notes',
+            'guest_name', 'guest_phone', 'guest_email',
+            'metadata',
+        ];
+
+        foreach ($optionalFields as $field) {
+            if (isset($requestData[$field])) {
+                $data[$field] = $requestData[$field];
+            }
+        }
+
+        return ServiceRequest::create($data);
+    }
+
     public function createForPatient(
         Patient $patient,
         array $serviceIds,
