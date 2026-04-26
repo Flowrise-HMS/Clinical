@@ -2,11 +2,12 @@
 
 namespace Modules\Clinical\Filament\Clusters\Clinical\Resources\Tasks\Tables;
 
+use Filament\Actions\BulkActionGroup;
+use Filament\Actions\DeleteBulkAction;
+use Filament\Actions\EditAction;
 use Filament\Actions\ViewAction;
-use Filament\Tables\Columns\BadgeColumn;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\SelectFilter;
-use Filament\Tables\Filters\TimestampsFilter;
 use Filament\Tables\Table;
 use Modules\Clinical\Enums\TaskOutcome;
 use Modules\Clinical\Enums\TaskStatus;
@@ -30,7 +31,6 @@ class TasksTable
 
                 TextColumn::make('requestItem.serviceRequest.patient.full_name')
                     ->label('Patient')
-                    ->searchable()
                     ->sortable()
                     ->placeholder('Guest'),
 
@@ -65,8 +65,13 @@ class TasksTable
             ])
             ->recordActions([
                 ViewAction::make(),
+                EditAction::make(),
             ])
-
+            ->toolbarActions([
+                BulkActionGroup::make([
+                    DeleteBulkAction::make(),
+                ]),
+            ])
             ->defaultSort('created_at', 'desc');
     }
 }

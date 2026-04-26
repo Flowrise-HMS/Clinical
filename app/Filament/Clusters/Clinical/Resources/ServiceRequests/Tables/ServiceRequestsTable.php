@@ -3,12 +3,13 @@
 namespace Modules\Clinical\Filament\Clusters\Clinical\Resources\ServiceRequests\Tables;
 
 use Filament\Actions\ActionGroup;
+use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteAction;
+use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
 use Filament\Actions\ViewAction;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\SelectFilter;
-use Filament\Tables\Filters\TimestampsFilter;
 use Filament\Tables\Table;
 use Modules\Clinical\Enums\RequestPriority;
 use Modules\Clinical\Enums\RequestStatus;
@@ -27,7 +28,6 @@ class ServiceRequestsTable
 
                 TextColumn::make('patient.full_name')
                     ->label('Patient')
-                    ->searchable()
                     ->sortable()
                     ->placeholder('Guest'),
 
@@ -84,6 +84,11 @@ class ServiceRequestsTable
                     ViewAction::make(),
                     EditAction::make(),
                     DeleteAction::make(),
+                ]),
+            ])
+            ->toolbarActions([
+                BulkActionGroup::make([
+                    DeleteBulkAction::make(),
                 ]),
             ])
             ->defaultSort('created_at', 'desc')

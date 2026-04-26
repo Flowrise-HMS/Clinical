@@ -5,16 +5,17 @@ namespace Modules\Clinical\Filament\Clusters\Clinical\Resources\ServiceRequests;
 use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
 use Filament\Tables\Table;
-use Modules\Clinical\Enums\NavigationGroup;
 use Modules\Clinical\Filament\Clusters\Clinical\ClinicalCluster;
 use Modules\Clinical\Filament\Clusters\Clinical\Resources\ServiceRequests\Pages\CreateServiceRequest;
 use Modules\Clinical\Filament\Clusters\Clinical\Resources\ServiceRequests\Pages\EditServiceRequest;
 use Modules\Clinical\Filament\Clusters\Clinical\Resources\ServiceRequests\Pages\ListServiceRequests;
 use Modules\Clinical\Filament\Clusters\Clinical\Resources\ServiceRequests\Pages\ViewServiceRequest;
+use Modules\Clinical\Filament\Clusters\Clinical\Resources\ServiceRequests\RelationManagers\RequestItemsRelationManager;
 use Modules\Clinical\Filament\Clusters\Clinical\Resources\ServiceRequests\Schemas\ServiceRequestForm;
 use Modules\Clinical\Filament\Clusters\Clinical\Resources\ServiceRequests\Schemas\ServiceRequestInfolist;
 use Modules\Clinical\Filament\Clusters\Clinical\Resources\ServiceRequests\Tables\ServiceRequestsTable;
 use Modules\Clinical\Models\ServiceRequest;
+use Modules\Core\Enums\NavigationGroup;
 
 class ServiceRequestResource extends Resource
 {
@@ -46,7 +47,7 @@ class ServiceRequestResource extends Resource
     public static function getRelations(): array
     {
         return [
-            //
+            RequestItemsRelationManager::class,
         ];
     }
 

@@ -5,16 +5,20 @@ namespace Modules\Clinical\Filament\Clusters\Clinical\Resources\Encounters;
 use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
 use Filament\Tables\Table;
-use Modules\Clinical\Enums\NavigationGroup;
 use Modules\Clinical\Filament\Clusters\Clinical\ClinicalCluster;
 use Modules\Clinical\Filament\Clusters\Clinical\Resources\Encounters\Pages\CreateEncounter;
 use Modules\Clinical\Filament\Clusters\Clinical\Resources\Encounters\Pages\EditEncounter;
 use Modules\Clinical\Filament\Clusters\Clinical\Resources\Encounters\Pages\ListEncounters;
 use Modules\Clinical\Filament\Clusters\Clinical\Resources\Encounters\Pages\ViewEncounter;
+use Modules\Clinical\Filament\Clusters\Clinical\Resources\Encounters\RelationManagers\ClinicalNotesRelationManager;
+use Modules\Clinical\Filament\Clusters\Clinical\Resources\Encounters\RelationManagers\EncounterParticipantsRelationManager;
+use Modules\Clinical\Filament\Clusters\Clinical\Resources\Encounters\RelationManagers\ServiceRequestsRelationManager;
+use Modules\Clinical\Filament\Clusters\Clinical\Resources\Encounters\RelationManagers\VitalSignsRelationManager;
 use Modules\Clinical\Filament\Clusters\Clinical\Resources\Encounters\Schemas\EncounterForm;
 use Modules\Clinical\Filament\Clusters\Clinical\Resources\Encounters\Schemas\EncounterInfolist;
 use Modules\Clinical\Filament\Clusters\Clinical\Resources\Encounters\Tables\EncountersTable;
 use Modules\Clinical\Models\Encounter;
+use Modules\Core\Enums\NavigationGroup;
 
 class EncounterResource extends Resource
 {
@@ -46,7 +50,10 @@ class EncounterResource extends Resource
     public static function getRelations(): array
     {
         return [
-            //
+            EncounterParticipantsRelationManager::class,
+            VitalSignsRelationManager::class,
+            ClinicalNotesRelationManager::class,
+            ServiceRequestsRelationManager::class,
         ];
     }
 
