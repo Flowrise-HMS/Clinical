@@ -16,12 +16,14 @@ use Modules\Clinical\Filament\Clusters\Clinical\Resources\ClinicalNotes\Schemas\
 use Modules\Clinical\Filament\Clusters\Clinical\Resources\ClinicalNotes\Schemas\ClinicalNoteInfolist;
 use Modules\Clinical\Filament\Clusters\Clinical\Resources\ClinicalNotes\Tables\ClinicalNotesTable;
 use Modules\Clinical\Models\ClinicalNote;
+use Modules\Core\Enums\NavigationGroup;
 
 class ClinicalNoteResource extends Resource
 {
     protected static ?string $model = ClinicalNote::class;
 
-    protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedRectangleStack;
+    protected static string|BackedEnum|null $navigationIcon = null;
+     protected static string|\UnitEnum|null $navigationGroup = NavigationGroup::CLINICAL;
 
     protected static ?string $cluster = ClinicalCluster::class;
 

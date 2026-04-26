@@ -16,13 +16,14 @@ use Modules\Clinical\Filament\Clusters\Clinical\Resources\VitalSigns\Schemas\Vit
 use Modules\Clinical\Filament\Clusters\Clinical\Resources\VitalSigns\Schemas\VitalSignInfolist;
 use Modules\Clinical\Filament\Clusters\Clinical\Resources\VitalSigns\Tables\VitalSignsTable;
 use Modules\Clinical\Models\VitalSign;
+use Modules\Core\Enums\NavigationGroup;
 
 class VitalSignResource extends Resource
 {
     protected static ?string $model = VitalSign::class;
 
-    protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedRectangleStack;
-
+    protected static string|BackedEnum|null $navigationIcon = null;
+     protected static string|\UnitEnum|null $navigationGroup = NavigationGroup::CLINICAL;
     protected static ?string $cluster = ClinicalCluster::class;
 
     public static function form(Schema $schema): Schema

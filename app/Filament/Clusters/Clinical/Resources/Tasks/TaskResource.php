@@ -16,12 +16,13 @@ use Modules\Clinical\Filament\Clusters\Clinical\Resources\Tasks\Schemas\TaskForm
 use Modules\Clinical\Filament\Clusters\Clinical\Resources\Tasks\Schemas\TaskInfolist;
 use Modules\Clinical\Filament\Clusters\Clinical\Resources\Tasks\Tables\TasksTable;
 use Modules\Clinical\Models\Task;
+use Modules\Core\Enums\NavigationGroup;
 
 class TaskResource extends Resource
 {
     protected static ?string $model = Task::class;
 
-    protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedRectangleStack;
+    protected static string|\UnitEnum|null $navigationGroup = NavigationGroup::CLINICAL;
 
     protected static ?string $cluster = ClinicalCluster::class;
 

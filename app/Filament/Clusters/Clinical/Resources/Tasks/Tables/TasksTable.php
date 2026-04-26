@@ -18,6 +18,7 @@ class TasksTable
     {
         return $table
             ->columns([
+                TextColumn::make('#')->rowIndex(),
                 TextColumn::make('requestItem.serviceRequest.request_number')
                     ->label('Request')
                     ->searchable()
