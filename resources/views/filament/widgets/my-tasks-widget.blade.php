@@ -1,18 +1,6 @@
 <x-filament-widgets::widget>
-    <x-filament::section>
+    <x-filament::section heading="My Tasks ({{ $tasks->count() }}) Pending" icon="heroicon-m-clipboard-document-check">
         <div>
-            <div class="flex items-center justify-between mb-3">
-                <h4 class="text-sm font-semibold text-gray-700 uppercase tracking-wide flex items-center gap-2">
-                    <x-heroicon-m-clipboard-document-check class="w-4 h-4" />
-                    My Tasks
-                </h4>
-                @if($tasks->isNotEmpty())
-                    <span class="text-xs bg-warning-100 text-warning-700 px-2 py-0.5 rounded-full font-medium">
-                        {{ $tasks->count() }} pending
-                    </span>
-                @endif
-            </div>
-
             @if($tasks->isNotEmpty())
                 <div class="space-y-2">
                     @foreach($tasks->take(5) as $task)
@@ -44,7 +32,7 @@
                     @endif
                 </div>
             @else
-                <div class="flex items-center justify-center text-center py-6 bg-gray-50 rounded-lg">
+                <div class="flex items-center justify-center text-center py-6 rounded-lg">
                     <x-heroicon-m-check-circle class="w-8 h-8 mx-auto text-success-400 mb-2" />
                     <p class="text-sm text-gray-600">All caught up!</p>
                     <p class="text-xs text-gray-400 mt-1">No pending tasks assigned to you</p>

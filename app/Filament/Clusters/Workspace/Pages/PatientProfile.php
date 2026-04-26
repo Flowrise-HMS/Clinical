@@ -13,12 +13,16 @@ use Filament\Infolists\Components\ImageEntry;
 use Filament\Infolists\Components\TextEntry;
 use Filament\Infolists\Concerns\InteractsWithInfolists;
 use Filament\Infolists\Contracts\HasInfolists;
+use Filament\Navigation\NavigationItem;
 use Filament\Pages\Page;
 use Filament\Schemas\Components\Grid;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
 use Illuminate\Database\Eloquent\Collection;
 use Modules\Clinical\Classes\Actions\PatientActions;
+use Modules\Clinical\Filament\Clusters\Workspace\Pages\Notes;
+use Modules\Clinical\Filament\Clusters\Workspace\Pages\Orders;
+use Modules\Clinical\Filament\Clusters\Workspace\Pages\Vitals;
 use Modules\Clinical\Filament\Clusters\Workspace\WorkspaceCluster;
 use Modules\Clinical\Models\Allergy;
 use Modules\Clinical\Models\ClinicalNote;
@@ -64,6 +68,21 @@ class PatientProfile extends Page implements HasActions, HasForms, HasInfolists
     public function mount(): void
     {
         $this->mountHasPatientContext();
+    }
+
+    public function getSubNavigation(): array
+    {
+        return [
+            NavigationItem::make('Notes')
+                ->icon(Notes::getActiveNavigationIcon())
+                ->url(fn () => Notes::getUrl(['patient' => $this->currentPatient]), shouldOpenInNewTab: true),
+            NavigationItem::make('Orders')
+                ->icon(Orders::getActiveNavigationIcon())
+                ->url(fn () => Orders::getUrl(['patient' => $this->currentPatient]), shouldOpenInNewTab: true),
+            NavigationItem::make('Vitals')
+                ->icon(Vitals::getActiveNavigationIcon())
+                ->url(fn () => Vitals::getUrl(['patient' => $this->currentPatient]), shouldOpenInNewTab: true),
+        ];
     }
 
     public function patientInfoList(Patient $patient): Schema

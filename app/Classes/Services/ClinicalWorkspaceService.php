@@ -50,7 +50,7 @@ class ClinicalWorkspaceService
         return $this->currentEncounter;
     }
 
-    public function getTimelineEvents(int $limit = 50)
+    public function getTimelineEvents(int $limit = 50, ?string $type = null)
     {
         if (! $this->currentPatient) {
             return null;
@@ -60,47 +60,84 @@ class ClinicalWorkspaceService
         $patientId = $this->currentPatient->id;
         $encounterId = $this->currentEncounter?->id;
 
-        $query = Encounter::query()
-            ->where('patient_id', $patientId)
-            ->when($encounterId, fn ($q) => $q->where('id', $encounterId))
-            ->orderBy('admitted_at', 'desc')
-            ->limit($limit);
+        if (! $type || $type === 'encounter') {
+            $query = Encounter::query()
+                ->where('patient_id', $patientId)
+                ->when($encounterId, fn ($q) => $q->where('id', $encounterId))
+                ->orderBy('admitted_at', 'desc')
+                ->limit($limit);
 
-        foreach ($query->get() as $encounter) {
-            $events->push($this->createEncounterEvent($encounter));
+            foreach ($query->get() as $encounter) {
+                $events->push($this->createEncounterEvent($encounter));
+            }
         }
 
-        $vitalsQuery = VitalSign::query()
-            ->where('patient_id', $patientId)
-            ->when($encounterId, fn ($q) => $q->where('encounter_id', $encounterId))
-            ->orderBy('recorded_at', 'desc')
-            ->limit($limit);
+        if (! $type || $type === 'vitals') {
+            $vitalsQuery = VitalSign::query()
+                ->where('patient_id', $patientId)
+                ->when($encounterId, fn ($q) => $q->where('encounter_id', $encounterId))
+                ->orderBy('recorded_at', 'desc')
+                ->limit($limit);
 
-        foreach ($vitalsQuery->get() as $vital) {
-            $events->push($this->createVitalSignEvent($vital));
+            foreach ($vitalsQuery->get() as $vital) {
+                $events->push($this->createVitalSignEvent($vital));
+            }
         }
 
-        $notesQuery = ClinicalNote::query()
-            ->where('patient_id', $patientId)
-            ->when($encounterId, fn ($q) => $q->where('encounter_id', $encounterId))
-            ->orderBy('created_at', 'desc')
-            ->limit($limit);
+        if (! $type || $type === 'note') {
+            $notesQuery = ClinicalNote::query()
+                ->where('patient_id', $patientId)
+                ->when($encounterId, fn ($q) => $q->where('encounter_id', $encounterId))
+                ->orderBy('created_at', 'desc')
+                ->limit($limit);
 
-        foreach ($notesQuery->get() as $note) {
-            $events->push($this->createNoteEvent($note));
+            foreach ($notesQuery->get() as $note) {
+                $events->push($this->createNoteEvent($note));
+            }
         }
 
-        $ordersQuery = ServiceRequest::query()
-            ->where('patient_id', $patientId)
-            ->when($encounterId, fn ($q) => $q->where('encounter_id', $encounterId))
-            ->orderBy('created_at', 'desc')
-            ->limit($limit);
+        if (! $type || $type === 'order') {
+            $ordersQuery = ServiceRequest::query()
+                ->where('patient_id', $patientId)
+                ->when($encounterId, fn ($q) => $q->where('encounter_id', $encounterId))
+                ->orderBy('created_at', 'desc')
+                ->limit($limit);
 
-        foreach ($ordersQuery->get() as $order) {
-            $events->push($this->createOrderEvent($order));
+            foreach ($ordersQuery->get() as $order) {
+                $events->push($this->createOrderEvent($order));
+            }
         }
 
         return $events?->sortByDesc('occurred_at')?->take($limit)?->values() ?? collect();
+    }
+
+    public function getTimelineEventCounts(): array
+    {
+        $patientId = $this->currentPatient?->id;
+        if (! $patientId) {
+            return ['all' => 0, 'encounter' => 0, 'vitals' => 0, 'note' => 0, 'order' => 0];
+        }
+
+        $encounterId = $this->currentEncounter?->id;
+
+        return [
+            'all' => Encounter::where('patient_id', $patientId)->count()
+                  + VitalSign::where('patient_id', $patientId)
+                      ->when($encounterId, fn ($q) => $q->where('encounter_id', $encounterId))
+                      ->count()
+                  + ClinicalNote::where('patient_id', $patientId)
+                      ->when($encounterId, fn ($q) => $q->where('encounter_id', $encounterId))
+                      ->count()
+                  + ServiceRequest::where('patient_id', $patientId)->count(),
+            'encounter' => Encounter::where('patient_id', $patientId)->count(),
+            'vitals' => VitalSign::where('patient_id', $patientId)
+                ->when($encounterId, fn ($q) => $q->where('encounter_id', $encounterId))
+                ->count(),
+            'note' => ClinicalNote::where('patient_id', $patientId)
+                ->when($encounterId, fn ($q) => $q->where('encounter_id', $encounterId))
+                ->count(),
+            'order' => ServiceRequest::where('patient_id', $patientId)->count(),
+        ];
     }
 
     protected function createEncounterEvent(Encounter $encounter): array

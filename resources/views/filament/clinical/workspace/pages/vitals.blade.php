@@ -3,18 +3,19 @@
     {{ $this->infolist() }}
 
     {{-- Vitals Content --}}
-    <div class="p-6 bg-gray-50 min-h-[calc(100vh-8rem)]">
+    <div class="p-6 min-h-[calc(100vh-8rem)]">
         @if($currentPatient)
             {{-- Current Vitals Card --}}
             @if($latestVitals)
-                <div class="rounded-xl border border-gray-200 p-6 mb-6 shadow-sm">
-                    <h3 class="text-lg font-semibold text-gray-900 mb-4">Current Vitals</h3>
-                    {{ $this->vitalsInfolist() }}
+                <div class="mb-6">
+                    <x-filament::section heading="Current Vitals">
+                        {{ $this->vitalsInfolist() }}
+                    </x-filament::section>
                 </div>
             @endif
 
             {{-- Vitals History --}}
-            <div class="rounded-xl border border-gray-200 p-6 shadow-sm">
+            <div>
                 <div>{{ $this->table }}</div>
             </div>
         @else

@@ -1,21 +1,7 @@
 <x-filament-widgets::widget>
-    <x-filament::section>
+    <x-filament::section heading="Critical Patients ({{ $criticalPatients->count() }})">
         {{-- Outer Container: Uses a subtle background that shifts in dark mode --}}
         <div>
-            <div class="flex items-center gap-2 mb-3">
-                <div class="w-2 h-2 rounded-full bg-danger-600 dark:bg-danger-500 animate-pulse"></div>
-                <h4 class="text-sm font-semibold text-danger-800 dark:text-danger-400 uppercase tracking-wide">
-                    Critical Patients
-                </h4>
-
-                {{-- Using a standard Filament Badge for the count --}}
-                <div class="ml-auto">
-                    <x-filament::badge color="danger" size="sm">
-                        {{ $criticalPatients->count() }}
-                    </x-filament::badge>
-                </div>
-            </div>
-
             @if($criticalPatients->isNotEmpty())
                 <div class="space-y-2">
                     @foreach($criticalPatients as $patient)

@@ -3,7 +3,6 @@
 namespace Modules\Clinical\Filament\Clusters\Workspace\Pages;
 
 use CodeWithDennis\FilamentLucideIcons\Enums\LucideIcon;
-use Filament\Navigation\NavigationItem;
 use Filament\Pages\Page;
 use Filament\Support\Enums\Width;
 use Illuminate\Support\Collection;
@@ -26,6 +25,8 @@ class Timeline extends Page
 
     protected static ?string $slug = 'patient/{patient}/timeline';
 
+    public ?string $activeFilter = 'all';
+
     public Collection|array|null $timelineEvents;
 
     protected string $view = 'clinical::clinical.workspace.pages.timeline';
@@ -33,24 +34,11 @@ class Timeline extends Page
     public function boot(): void
     {
         $this->patientId = request()->route('patient');
+        $this->activeFilter = request()->query('filter', 'all');
         $this->bootHasPatientContext();
         $this->loadTimelineData();
     }
 
-    public function getSubNavigation(): array
-    {
-        return [
-            NavigationItem::make('Notes')
-                ->icon(Notes::getActiveNavigationIcon())
-                ->url(fn () => Notes::getUrl(['patient' => $this->currentPatient]), shouldOpenInNewTab: true),
-            NavigationItem::make('Orders')
-                ->icon(Orders::getActiveNavigationIcon())
-                ->url(fn () => Orders::getUrl(['patient' => $this->currentPatient]), shouldOpenInNewTab: true),
-            NavigationItem::make('Vitals')
-                ->icon(Vitals::getActiveNavigationIcon())
-                ->url(fn () => Vitals::getUrl(['patient' => $this->currentPatient]), shouldOpenInNewTab: true),
-        ];
-    }
 
     public function mount(): void
     {
@@ -71,8 +59,16 @@ class Timeline extends Page
     protected function loadTimelineData(): void
     {
         if ($this->workspaceService) {
-            $this->timelineEvents = $this->workspaceService->getTimelineEvents();
+            $type = $this->activeFilter === 'all' ? null : $this->activeFilter;
+            $this->timelineEvents = $this->workspaceService->getTimelineEvents(15, $type);
         }
+    }
+
+    public function getEventCounts(): array
+    {
+        return $this->workspaceService?->getTimelineEventCounts() ?? [
+            'all' => 0, 'encounter' => 0, 'vitals' => 0, 'note' => 0, 'order' => 0
+        ];
     }
 
     public function getTimelineEvents(): Collection

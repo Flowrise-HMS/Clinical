@@ -1,15 +1,6 @@
 <x-filament-widgets::widget>
-    <x-filament::section>
+    <x-filament::section heading="Recent Patients ({{ $patients->count() }})" icon="heroicon-m-clock">
         <div>
-            <div class="flex items-center justify-between mb-3">
-                <h4 class="text-sm font-semibold text-gray-700 uppercase tracking-wide flex items-center gap-2">
-                    <x-heroicon-m-clock class="w-4 h-4" />
-                    Recent Patients
-                </h4>
-                <span class="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full">
-                    {{ $patients->count() }}
-                </span>
-            </div>
 
             @if($patients->isNotEmpty())
                 <div class="space-y-2">

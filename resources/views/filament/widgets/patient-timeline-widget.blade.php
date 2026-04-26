@@ -1,25 +1,7 @@
 <x-filament-widgets::widget>
-    <x-filament::section>
+    <x-filament::section heading="Clinical Timeline" icon="heroicon-m-clock">
         {{-- Widget content --}}
-        <div class="bg-gray-50 rounded-xl p-6">
-            {{-- Header --}}
-            <div class="flex items-center justify-between mb-6">
-                <h3 class="text-lg font-semibold text-gray-900 flex items-center gap-2">
-                    <x-heroicon-m-clock class="w-5 h-5 text-gray-500" />
-                    Clinical Timeline
-                </h3>
-                <div class="flex items-center gap-2">
-                    <x-filament::button size="sm" color="gray" icon="heroicon-m-funnel"
-                                        class="text-gray-600">
-                        Filter
-                    </x-filament::button>
-                    <x-filament::button size="sm" color="gray" icon="heroicon-m-arrows-up-down"
-                                        class="text-gray-600">
-                        Sort
-                    </x-filament::button>
-                </div>
-            </div>
-
+        <div class="rounded-xl p-6">
             @if($this->canView())
                 {{-- Timeline --}}
                 @if($events->isNotEmpty())
@@ -125,7 +107,7 @@
                 @else
                     {{-- Empty State --}}
                     <div class="text-center py-12">
-                        <div class="w-16 h-16 mx-auto mb-4 rounded-full bg-gray-100 flex items-center justify-center">
+                        <div class="w-16 h-16 mx-auto mb-4 rounded-full flex items-center justify-center">
                             <x-heroicon-m-clipboard-document-list class="w-8 h-8 text-gray-400" />
                         </div>
                         <p class="text-gray-500">No clinical events recorded yet</p>
