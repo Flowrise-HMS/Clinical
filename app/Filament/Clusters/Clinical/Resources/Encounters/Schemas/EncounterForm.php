@@ -2,10 +2,11 @@
 
 namespace Modules\Clinical\Filament\Clusters\Clinical\Resources\Encounters\Schemas;
 
+use Filament\Forms\Components\RichEditor;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
-use Filament\Forms\Components\Toggle;
+use Filament\Schemas\Components\Fieldset;
 use Filament\Schemas\Components\Grid;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
@@ -19,17 +20,19 @@ class EncounterForm
     public static function configure(Schema $schema): Schema
     {
         return $schema
-            ->components([
+            ->components(array_merge([
                 Section::make('Patient Information')
+                    ->description('Select an existing patient or register a walk-in guest')
                     ->schema([
                         Grid::make(2)
                             ->schema([
                                 Select::make('patient_id')
-                                    ->relationship('patient', 'full_name')
+                                    ->relationship('patient', 'mrn')
+                                    ->getOptionLabelFromRecordUsing(fn ($record) => $record ? $record->full_name : 'Select patient')
                                     ->searchable()
                                     ->preload()
                                     ->nullable()
-                                    ->label('Patient'),
+                                    ->label('Patient (Existing)'),
 
                                 TextInput::make('guest_name')
                                     ->label('Guest Name')
@@ -49,84 +52,87 @@ class EncounterForm
                             ]),
                     ]),
 
-                Section::make('Encounter Details')
-                    ->schema([
-                        Grid::make(3)
-                            ->schema([
-                                Select::make('type')
-                                    ->enum(EncounterType::class)
-                                    ->options(EncounterType::class)
-                                    ->default('outpatient')
-                                    ->required()
-                                    ->label('Encounter Type'),
+            ], self::quickElements()));
+    }
 
-                                Select::make('priority')
-                                    ->enum(EncounterPriority::class)
-                                    ->options(EncounterPriority::class)
-                                    ->default('routine')
-                                    ->required()
-                                    ->label('Priority'),
+    public static function quickElements(): array
+    {
+        return [
+            Section::make('Encounter Details')
+                ->description('Basic encounter information')
+                ->schema([
+                    Grid::make(3)
+                        ->schema([
+                            Select::make('type')
+                                ->options(EncounterType::class)
+                                ->default('outpatient')
+                                ->required()
+                                ->live()
+                                ->label('Encounter Type'),
 
-                                Select::make('status')
-                                    ->enum(EncounterStatus::class)
-                                    ->options(EncounterStatus::class)
-                                    ->default('planned')
-                                    ->required()
-                                    ->label('Status'),
-                            ]),
+                            Select::make('priority')
+                                ->options(EncounterPriority::class)
+                                ->default('routine')
+                                ->required()
+                                ->label('Priority'),
 
-                        Textarea::make('chief_complaint')
-                            ->label('Chief Complaint')
-                            ->rows(3)
-                            ->columnSpanFull(),
-                    ]),
+                            Select::make('status')
+                                ->options(EncounterStatus::class)
+                                ->default('planned')
+                                ->required()
+                                ->label('Status'),
+                        ]),
 
-                Section::make('Location')
-                    ->schema([
-                        Grid::make(3)
-                            ->schema([
-                                Select::make('branch_id')
-                                    ->relationship('branch', 'name')
-                                    ->required()
-                                    ->default(fn () => app(BranchService::class)->getDefaultBranchId())
-                                    ->label('Branch'),
+                    Fieldset::make('Clinical Information')
+                        ->schema([
+                            Textarea::make('chief_complaint')
+                                ->label('Chief Complaint')
+                                ->helperText('Primary reason for visit')
+                                ->rows(2)
+                                ->columnSpanFull(),
 
-                                Select::make('location_id')
-                                    ->relationship('location', 'name')
-                                    ->searchable()
-                                    ->preload()
-                                    ->nullable()
-                                    ->label('Current Location'),
+                            RichEditor::make('notes')
+                                ->label('Clinical Notes')
+                                ->toolbarButtons([
+                                    'attachFiles',
+                                    'bold',
+                                    'bulletList',
+                                    'italic',
+                                    'orderedList',
+                                    'strike',
+                                ])
+                                ->fileAttachmentsDisk('local')
+                                ->fileAttachmentsDirectory('encounters')
+                                ->columnSpanFull(),
+                        ]),
+                ]),
 
-                                Select::make('department_id')
-                                    ->relationship('department', 'name')
-                                    ->searchable()
-                                    ->preload()
-                                    ->nullable()
-                                    ->label('Department'),
-                            ]),
+            Section::make('Location & Assignment')
+                ->description('Encounter location and assigned resources')
+                ->schema([
+                    Grid::make(3)
+                        ->schema([
+                            Select::make('branch_id')
+                                ->relationship('branch', 'name')
+                                ->required()
+                                ->default(fn () => app(BranchService::class)->getDefaultBranchId())
+                                ->label('Branch/ Facility'),
 
-                        Select::make('bed_id')
-                            ->relationship('bed', 'name')
-                            ->searchable()
-                            ->preload()
-                            ->nullable()
-                            ->label('Bed (Inpatient)')
-                            ->visible(fn (callable $get) => $get('type') === 'inpatient'),
-                    ]),
+                            Select::make('location_id')
+                                ->relationship('location', 'name')
+                                ->searchable()
+                                ->preload()
+                                ->nullable()
+                                ->label('Current Location'),
 
-                Section::make('Additional Information')
-                    ->schema([
-                        Textarea::make('notes')
-                            ->label('Notes')
-                            ->rows(3)
-                            ->columnSpanFull(),
-
-                        Toggle::make('is_active')
-                            ->label('Active')
-                            ->default(true),
-                    ])
-                    ->collapsible(),
-            ]);
+                            Select::make('department_id')
+                                ->relationship('department', 'name')
+                                ->searchable()
+                                ->preload()
+                                ->nullable()
+                                ->label('Department'),
+                        ]),
+                ]),
+        ];
     }
 }

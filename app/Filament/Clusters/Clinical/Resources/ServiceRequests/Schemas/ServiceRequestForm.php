@@ -2,32 +2,35 @@
 
 namespace Modules\Clinical\Filament\Clusters\Clinical\Resources\ServiceRequests\Schemas;
 
-use Filament\Actions\Action;
+use Filament\Forms\Components\RichEditor;
 use Filament\Forms\Components\Select;
-use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
 use Filament\Infolists\Components\TextEntry;
+use Filament\Schemas\Components\Fieldset;
 use Filament\Schemas\Components\Grid;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
 use Modules\Clinical\Enums\RequestPriority;
+use Modules\Clinical\Enums\RequestStatus;
 
 class ServiceRequestForm
 {
     public static function configure(Schema $schema): Schema
     {
         return $schema
-            ->components([
+            ->components(array_merge([
                 Section::make('Patient Information')
+                    ->description('Select an existing patient or register a walk-in guest')
                     ->schema([
                         Grid::make(2)
                             ->schema([
                                 Select::make('patient_id')
-                                    ->relationship('patient', 'full_name')
+                                    ->relationship('patient', 'mrn')
+                                    ->getOptionLabelFromRecordUsing(fn ($record) => $record ? $record->full_name : 'Select patient')
                                     ->searchable()
                                     ->preload()
                                     ->nullable()
-                                    ->label('Patient'),
+                                    ->label('Patient (Existing)'),
 
                                 TextInput::make('guest_name')
                                     ->label('Guest Name')
@@ -47,53 +50,77 @@ class ServiceRequestForm
                             ]),
                     ]),
 
-                Section::make('Request Details')
-                    ->schema([
-                        Grid::make(3)
-                            ->schema([
-                                Select::make('priority')
-                                    ->enum(RequestPriority::class)
-                                    ->options(RequestPriority::class)
-                                    ->default('routine')
-                                    ->required()
-                                    ->label('Priority'),
+            ], self::quickElements()));
+    }
 
-                                Select::make('encounter_id')
-                                    ->relationship('encounter', 'encounter_number')
-                                    ->searchable()
-                                    ->preload()
-                                    ->nullable()
-                                    ->label('Encounter'),
-                            ]),
+    public static function quickElements(): array
+    {
+        return [
+            Section::make('Request Details')
+                ->description('Service request information')
+                ->schema([
+                    Grid::make(3)
+                        ->schema([
+                            Select::make('encounter_id')
+                                ->relationship('encounter', 'encounter_number')
+                                ->getOptionLabelFromRecordUsing(fn ($record) => $record ? "{$record->encounter_number} - {$record->display_name}" : 'Select encounter')
+                                ->searchable()
+                                ->preload()
+                                ->nullable()
+                                ->label('Linked Encounter'),
 
-                        Textarea::make('notes')
-                            ->label('Notes/Instructions')
-                            ->rows(3)
-                            ->columnSpanFull(),
-                    ]),
+                            Select::make('priority')
+                                ->options(RequestPriority::class)
+                                ->default('routine')
+                                ->required()
+                                ->label('Priority'),
 
-                Section::make('Service Items')
-                    ->headerActions([
-                        Action::make('add_service')
-                            ->label('Add Service')
-                            ->icon('heroicon-m-plus')
-                            ->form([
-                                Select::make('service_id')
-                                    ->relationship('items.service', 'name')
-                                    ->searchable()
-                                    ->preload()
-                                    ->required()
-                                    ->label('Service'),
-                            ])
-                            ->action(function (array $data) {
-                                // Add service item
-                            }),
-                    ])
-                    ->schema([
-                        TextEntry::make('items_count')
-                            ->label('Service Items')
-                            ->state(fn ($record) => $record ? $record?->items?->count().' items' : 'No items'),
-                    ]),
-            ]);
+                            Select::make('status')
+                                ->options(RequestStatus::class)
+                                ->default('draft')
+                                ->required()
+                                ->label('Status'),
+                        ]),
+
+                    Fieldset::make('Ordering Provider')
+                        ->schema([
+                            TextEntry::make('ordered_by_name')
+                                ->label('Ordered By')
+                                ->state(fn ($record) => $record?->orderedBy?->name ?? 'Not assigned'),
+                        ]),
+
+                    RichEditor::make('notes')
+                        ->label('Instructions/Notes')
+                        ->toolbarButtons([
+                            'attachFiles',
+                            'bold',
+                            'bulletList',
+                            'italic',
+                            'orderedList',
+                            'strike',
+                        ])
+                        ->fileAttachmentsDisk('local')
+                        ->fileAttachmentsDirectory('service-requests')
+                        ->columnSpanFull(),
+                ]),
+
+            Section::make('Service Items')
+                ->description('Add services to be requested. Use the "Add Item" button below.')
+                ->collapsible()
+                ->collapsed(fn ($record) => $record && $record->items->isEmpty())
+                ->schema([
+                    TextEntry::make('items_summary')
+                        ->label('Current Items')
+                        ->state(function ($record) {
+                            if (! $record) {
+                                return 'No items added yet';
+                            }
+                            $count = $record->items->count();
+                            $total = $record->total_amount;
+
+                            return "{$count} item(s) - Total: $".number_format($total, 2);
+                        }),
+                ]),
+        ];
     }
 }
