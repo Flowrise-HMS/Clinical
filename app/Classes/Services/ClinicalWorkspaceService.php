@@ -50,17 +50,18 @@ class ClinicalWorkspaceService
         return $this->currentEncounter;
     }
 
-    public function getTimelineEvents(int $limit = 50, ?string $type = null)
+    public function getTimelineEvents(int $limit = 50, ?string $type = null, int $offset = 0)
     {
         if (! $this->currentPatient) {
-            return null;
+            return collect();
         }
 
         $events = collect();
         $patientId = $this->currentPatient->id;
         $encounterId = $this->currentEncounter?->id;
+        $normalizedType = in_array($type, ['encounter', 'vitals', 'note', 'order'], true) ? $type : null;
 
-        if (! $type || $type === 'encounter') {
+        if (! $normalizedType || $normalizedType === 'encounter') {
             $query = Encounter::query()
                 ->where('patient_id', $patientId)
                 ->when($encounterId, fn ($q) => $q->where('id', $encounterId))
@@ -72,7 +73,7 @@ class ClinicalWorkspaceService
             }
         }
 
-        if (! $type || $type === 'vitals') {
+        if (! $normalizedType || $normalizedType === 'vitals') {
             $vitalsQuery = VitalSign::query()
                 ->where('patient_id', $patientId)
                 ->when($encounterId, fn ($q) => $q->where('encounter_id', $encounterId))
@@ -84,7 +85,7 @@ class ClinicalWorkspaceService
             }
         }
 
-        if (! $type || $type === 'note') {
+        if (! $normalizedType || $normalizedType === 'note') {
             $notesQuery = ClinicalNote::query()
                 ->where('patient_id', $patientId)
                 ->when($encounterId, fn ($q) => $q->where('encounter_id', $encounterId))
@@ -96,7 +97,7 @@ class ClinicalWorkspaceService
             }
         }
 
-        if (! $type || $type === 'order') {
+        if (! $normalizedType || $normalizedType === 'order') {
             $ordersQuery = ServiceRequest::query()
                 ->where('patient_id', $patientId)
                 ->when($encounterId, fn ($q) => $q->where('encounter_id', $encounterId))
@@ -108,7 +109,14 @@ class ClinicalWorkspaceService
             }
         }
 
-        return $events?->sortByDesc('occurred_at')?->take($limit)?->values() ?? collect();
+        return $events
+            ->sortBy([
+                ['occurred_at', 'desc'],
+                ['id', 'desc'],
+            ])
+            ->skip(max(0, $offset))
+            ->take(max(1, $limit))
+            ->values();
     }
 
     public function getTimelineEventCounts(): array
@@ -121,22 +129,30 @@ class ClinicalWorkspaceService
         $encounterId = $this->currentEncounter?->id;
 
         return [
-            'all' => Encounter::where('patient_id', $patientId)->count()
+            'all' => Encounter::where('patient_id', $patientId)
+                  ->when($encounterId, fn ($q) => $q->where('id', $encounterId))
+                  ->count()
                   + VitalSign::where('patient_id', $patientId)
                       ->when($encounterId, fn ($q) => $q->where('encounter_id', $encounterId))
                       ->count()
                   + ClinicalNote::where('patient_id', $patientId)
                       ->when($encounterId, fn ($q) => $q->where('encounter_id', $encounterId))
                       ->count()
-                  + ServiceRequest::where('patient_id', $patientId)->count(),
-            'encounter' => Encounter::where('patient_id', $patientId)->count(),
+                  + ServiceRequest::where('patient_id', $patientId)
+                      ->when($encounterId, fn ($q) => $q->where('encounter_id', $encounterId))
+                      ->count(),
+            'encounter' => Encounter::where('patient_id', $patientId)
+                ->when($encounterId, fn ($q) => $q->where('id', $encounterId))
+                ->count(),
             'vitals' => VitalSign::where('patient_id', $patientId)
                 ->when($encounterId, fn ($q) => $q->where('encounter_id', $encounterId))
                 ->count(),
             'note' => ClinicalNote::where('patient_id', $patientId)
                 ->when($encounterId, fn ($q) => $q->where('encounter_id', $encounterId))
                 ->count(),
-            'order' => ServiceRequest::where('patient_id', $patientId)->count(),
+            'order' => ServiceRequest::where('patient_id', $patientId)
+                ->when($encounterId, fn ($q) => $q->where('encounter_id', $encounterId))
+                ->count(),
         ];
     }
 

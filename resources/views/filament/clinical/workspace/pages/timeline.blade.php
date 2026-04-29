@@ -1,6 +1,10 @@
 <x-filament-panels::page class="p-0 bg-gray-50 dark:bg-gray-950">
     <div>
         @if($currentPatient)
+            @php
+                $eventCounts = $this->getEventCounts();
+            @endphp
+
             <div class="mb-8">
                 <x-filament::tabs x-data="{ activeTab: '{{ $activeFilter }}' }">
                     <x-filament::tabs.item
@@ -8,7 +12,7 @@
                         x-on:click="activeTab = 'all'; window.location = '{{ URL::current() }}?filter=all'"
                     >
                         All
-                        <x-slot name="badge">{{ $this->getEventCounts()['all'] }}</x-slot>
+                        <x-slot name="badge">{{ $eventCounts['all'] }}</x-slot>
                     </x-filament::tabs.item>
 
                     <x-filament::tabs.item
@@ -16,7 +20,7 @@
                         x-on:click="activeTab = 'encounter'; window.location = '{{ URL::current() }}?filter=encounter'"
                     >
                         Encounters
-                        <x-slot name="badge">{{ $this->getEventCounts()['encounter'] }}</x-slot>
+                        <x-slot name="badge">{{ $eventCounts['encounter'] }}</x-slot>
                     </x-filament::tabs.item>
 
                     <x-filament::tabs.item
@@ -24,7 +28,7 @@
                         x-on:click="activeTab = 'vitals'; window.location = '{{ URL::current() }}?filter=vitals'"
                     >
                         Vitals
-                        <x-slot name="badge">{{ $this->getEventCounts()['vitals'] }}</x-slot>
+                        <x-slot name="badge">{{ $eventCounts['vitals'] }}</x-slot>
                     </x-filament::tabs.item>
 
                     <x-filament::tabs.item
@@ -32,7 +36,7 @@
                         x-on:click="activeTab = 'note'; window.location = '{{ URL::current() }}?filter=note'"
                     >
                         Notes
-                        <x-slot name="badge">{{ $this->getEventCounts()['note'] }}</x-slot>
+                        <x-slot name="badge">{{ $eventCounts['note'] }}</x-slot>
                     </x-filament::tabs.item>
 
                     <x-filament::tabs.item
@@ -40,83 +44,352 @@
                         x-on:click="activeTab = 'order'; window.location = '{{ URL::current() }}?filter=order'"
                     >
                         Orders
-                        <x-slot name="badge">{{ $this->getEventCounts()['order'] }}</x-slot>
+                        <x-slot name="badge">{{ $eventCounts['order'] }}</x-slot>
                     </x-filament::tabs.item>
                 </x-filament::tabs>
             </div>
 
             @if($this->getTimelineEvents()->isNotEmpty())
-                <div class="relative">
-                    <div class="absolute left-6 top-0 bottom-0 w-0.5 bg-gray-200 dark:bg-gray-700"></div>
+                <div
+                    class="max-w-5xl mx-auto px-4"
+                    x-data="{
+                        observer: null,
+                        loadTimer: null,
+                        init() {
+                            this.observer = new IntersectionObserver((entries) => {
+                                entries.forEach((entry) => {
+                                    if (!entry.isIntersecting) {
+                                        return;
+                                    }
 
-                    @foreach($this->getTimelineEvents() as $event)
-                        @php
-                            $type = $event['type'];
-                            $dotColor = 'bg-gray-400';
-                            $bgColorClass = 'bg-gray-100 text-gray-600';
-                            if ($type === 'encounter') { $dotColor = 'bg-emerald-500'; $bgColorClass = 'bg-emerald-100 text-emerald-600 dark:bg-emerald-900 dark:text-emerald-400'; }
-                            elseif ($type === 'vitals') { $dotColor = 'bg-pink-500'; $bgColorClass = 'bg-pink-100 text-pink-600 dark:bg-pink-900 dark:text-pink-400'; }
-                            elseif ($type === 'note') { $dotColor = 'bg-amber-500'; $bgColorClass = 'bg-amber-100 text-amber-600 dark:bg-amber-900 dark:text-amber-400'; }
-                            elseif ($type === 'order') { $dotColor = 'bg-blue-500'; $bgColorClass = 'bg-blue-100 text-blue-600 dark:bg-blue-900 dark:text-blue-400'; }
-                            $hasMetadata = !empty($event['metadata']);
-                            $hasCreator = !empty($event['creator']);
-                        @endphp
-                        <div class="relative pl-16 pb-8 last:pb-0">
-                            <div class="absolute left-[22px] top-4 w-3 h-3 rounded-full {{ $dotColor }} ring-4 ring-gray-50 dark:ring-gray-900"></div>
+                                    clearTimeout(this.loadTimer);
+                                    this.loadTimer = setTimeout(() => {
+                                        if (!$wire.hasMoreEvents || $wire.isLoadingMore) {
+                                            return;
+                                        }
 
-                            <div class="bg-white dark:bg-gray-900 rounded-2xl p-5 shadow-sm border @if($event['is_critical']) border-l-4 border-l-red-500 @else border-gray-100 dark:border-gray-800 @endif">
-                                <div class="flex items-start gap-4">
-                                    <div class="w-10 h-10 rounded-xl flex items-center justify-center {{ $bgColorClass }}">
-                                        @if($type === 'encounter')
-                                            <x-heroicon-o-user-plus class="w-5 h-5" />
-                                        @elseif($type === 'vitals')
-                                            <x-heroicon-o-heart class="w-5 h-5" />
-                                        @elseif($type === 'note')
-                                            <x-heroicon-o-document-text class="w-5 h-5" />
-                                        @else
-                                            <x-heroicon-o-clipboard-document-list class="w-5 h-5" />
-                                        @endif
-                                    </div>
-                                    <div class="flex-1">
-                                        <h3 class="font-semibold text-gray-900 dark:text-white">
-                                            {{ $event['title'] }}
-                                        </h3>
-                                        <p class="text-sm text-gray-600 dark:text-gray-400 mt-0.5">
-                                            {{ $event['description'] }}
-                                        </p>
-                                        <p class="text-xs text-gray-400 mt-1">
-                                            {{ $event['occurred_at']->format('M j, Y g:i A') }}
-                                            @if($hasCreator)
-                                                - {{ $event['creator'] }}
-                                            @endif
-                                        </p>
-                                    </div>
-                                </div>
+                                        $wire.loadMoreEvents();
+                                    }, 300);
+                                });
+                            }, { rootMargin: '200px 0px 200px 0px' });
 
-                                @if($hasMetadata)
-                                <div class="mt-4 pt-4 border-t border-gray-100 dark:border-gray-800">
-                                    <div class="grid grid-cols-2 gap-3">
-                                        @foreach($event['metadata'] as $key => $value)
-                                            @if(!empty($value))
-                                            <div>
-                                                <span class="text-xs text-gray-400">{{ $key }}</span>
-                                                <p class="text-sm text-gray-700 dark:text-gray-300">{{ $value }}</p>
+                            if (this.$refs.loadMoreSentinel) {
+                                this.observer.observe(this.$refs.loadMoreSentinel);
+                            }
+                        },
+                    }"
+                >
+                    @php
+                        $events = $this->getTimelineEvents();
+                        $isAllFilter = $activeFilter === 'all';
+
+                        $styleMap = [
+                            'encounter' => ['dot' => 'bg-emerald-500', 'card' => 'border-l-emerald-500', 'iconWrap' => 'bg-emerald-100 dark:bg-emerald-900/40', 'icon' => 'text-emerald-600 dark:text-emerald-400'],
+                            'vitals' => ['dot' => 'bg-pink-500', 'card' => 'border-l-pink-500', 'iconWrap' => 'bg-pink-100 dark:bg-pink-900/40', 'icon' => 'text-pink-600 dark:text-pink-400'],
+                            'note' => ['dot' => 'bg-amber-500', 'card' => 'border-l-amber-500', 'iconWrap' => 'bg-amber-100 dark:bg-amber-900/40', 'icon' => 'text-amber-600 dark:text-amber-400'],
+                            'order' => ['dot' => 'bg-blue-500', 'card' => 'border-l-blue-500', 'iconWrap' => 'bg-blue-100 dark:bg-blue-900/40', 'icon' => 'text-blue-600 dark:text-blue-400'],
+                            'other' => ['dot' => 'bg-gray-500', 'card' => 'border-l-gray-500', 'iconWrap' => 'bg-gray-100 dark:bg-gray-800', 'icon' => 'text-gray-600 dark:text-gray-300'],
+                        ];
+
+                        $toCarbon = fn ($value) => $value instanceof \Carbon\CarbonInterface
+                            ? $value
+                            : \Illuminate\Support\Carbon::parse($value);
+                    @endphp
+
+                    <div class="relative pl-12 sm:pl-16 md:pl-0">
+                        <div class="absolute left-4 sm:left-6 md:left-1/2 top-0 bottom-0 w-0.5 bg-gray-200 dark:bg-gray-700 md:-translate-x-1/2"></div>
+
+                        @if($isAllFilter)
+                            @php
+                                $preferredTypeOrder = ['note', 'encounter', 'order', 'vitals'];
+                                $groupedEvents = $events
+                                    ->groupBy(fn ($event) => $event['type'] ?? 'other')
+                                    ->map(function ($items, $type) use ($toCarbon) {
+                                        $sorted = collect($items)
+                                            ->sortByDesc(fn ($item) => $toCarbon($item['occurred_at'])->timestamp)
+                                            ->values();
+
+                                        return [
+                                            'type' => $type,
+                                            'events' => $sorted,
+                                            'latest_at' => $toCarbon($sorted->first()['occurred_at']),
+                                        ];
+                                    })
+                                    ->sortByDesc(fn ($group) => $group['latest_at']->timestamp)
+                                    ->values();
+
+                                $groupTypeOrder = collect($groupedEvents)
+                                    ->pluck('type')
+                                    ->sortBy(function ($type) use ($preferredTypeOrder) {
+                                        $position = array_search($type, $preferredTypeOrder, true);
+
+                                        return $position === false ? (count($preferredTypeOrder) + 100) : $position;
+                                    })
+                                    ->values()
+                                    ->all();
+                            @endphp
+
+                            @foreach($groupedEvents as $group)
+                                @php
+                                    $type = $group['type'];
+                                    $style = $styleMap[$type] ?? $styleMap['other'];
+                                    $typePosition = array_search($type, $groupTypeOrder, true);
+                                    $isLeft = $typePosition === false ? true : ($typePosition % 2 === 0);
+                                    $latestAt = $group['latest_at'];
+                                    $groupLabel = match($type) {
+                                        'encounter' => 'Encounters',
+                                        'vitals' => 'Vitals',
+                                        'note' => 'Notes',
+                                        'order' => 'Orders',
+                                        default => ucfirst($type),
+                                    };
+                                    $headerEvent = $group['events']->first();
+                                    $childEvents = $group['events']->slice(1)->values();
+                                @endphp
+
+                                <section class="relative mb-8" x-data="{ open: true }">
+                                    <div class="{{ $isLeft ? 'md:col-start-1' : 'md:col-start-3' }}">
+                                        <article class="relative mb-3 md:grid md:grid-cols-[1fr_3rem_1fr] md:gap-6" x-data="{ expanded: false }">
+                                            <div class="{{ $isLeft ? 'md:col-start-1' : 'md:col-start-3' }}">
+                                                <x-filament::section class="relative border-l-4 {{ $style['card'] }} {{ $isLeft ? 'md:text-right' : '' }}">
+                                                    <div class="hidden md:block absolute top-8 {{ $isLeft ? 'right-[-1.65rem]' : 'left-[-1.65rem]' }} w-6 h-0.5 bg-gray-300 dark:bg-gray-600"></div>
+                                                    <div class="hidden md:block absolute top-[1.625rem] {{ $isLeft ? 'right-[-1.5rem]' : 'left-[-1.5rem]' }}">
+                                                        @if($isLeft)
+                                                            <x-heroicon-o-chevron-right class="w-3 h-3 text-gray-500 dark:text-gray-400" />
+                                                        @else
+                                                            <x-heroicon-o-chevron-left class="w-3 h-3 text-gray-500 dark:text-gray-400" />
+                                                        @endif
+                                                    </div>
+
+                                                    <div class="flex items-start gap-3 {{ $isLeft ? 'md:flex-row-reverse' : '' }}">
+                                                        <div class="w-9 h-9 rounded-lg flex items-center justify-center {{ $style['iconWrap'] }}">
+                                                            <x-dynamic-component :component="$headerEvent['icon'] ?? 'heroicon-o-clock'" class="w-5 h-5 {{ $style['icon'] }}" />
+                                                        </div>
+
+                                                        <div class="min-w-0 flex-1">
+                                                            <div class="flex items-start justify-between gap-2 {{ $isLeft ? 'md:flex-row-reverse' : '' }}">
+                                                                <div class="min-w-0">
+                                                                    <h3 class="text-sm font-semibold">{{ $groupLabel }}</h3>
+                                                                    <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                                                                        {{ $group['events']->count() }} event(s) • Latest {{ $latestAt->format('M j, Y g:i A') }}
+                                                                    </p>
+                                                                </div>
+                                                                <button
+                                                                    type="button"
+                                                                    x-on:click="open = !open"
+                                                                    class="inline-flex items-center gap-1 rounded-md border border-gray-200 px-2 py-1 text-xs text-gray-600 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-gray-800"
+                                                                >
+                                                                    <span x-text="open ? 'Collapse' : 'Expand'"></span>
+                                                                    <x-heroicon-o-chevron-down class="w-3.5 h-3.5 transition-transform duration-200" x-bind:class="{ 'rotate-180': !open }" />
+                                                                </button>
+                                                            </div>
+
+                                                            <div class="mt-2 flex flex-wrap items-center gap-2 {{ $isLeft ? 'md:justify-end' : '' }}">
+                                                                <h4 class="font-semibold text-sm text-gray-900 dark:text-white">{{ $headerEvent['title'] }}</h4>
+                                                                @if(!empty($headerEvent['is_critical']))
+                                                                    <x-filament::badge color="danger">Critical</x-filament::badge>
+                                                                @endif
+                                                            </div>
+                                                            <p class="mt-1 text-sm text-gray-600 dark:text-gray-300">{{ $headerEvent['description'] }}</p>
+                                                        </div>
+                                                    </div>
+                                                </x-filament::section>
                                             </div>
-                                            @endif
-                                        @endforeach
-                                    </div>
-                                </div>
-                                @endif
-                            </div>
-                        </div>
-                    @endforeach
 
-                    <div class="pl-16 pt-4">
-                        <p class="text-sm text-gray-400 text-center">Scroll to load more events</p>
+                                            <div class="absolute left-[-2.2rem] sm:left-[-2.7rem] top-[1.65rem] md:static md:col-start-2 md:flex md:justify-center md:pt-7">
+                                                <div class="w-3.5 h-3.5 rounded-full {{ $style['dot'] }} ring-4 ring-gray-50 dark:ring-gray-950"></div>
+                                            </div>
+                                        </article>
+
+                                        <div x-show="open" x-transition class="relative mt-1 space-y-3">
+                                            <div class="hidden md:block absolute top-0 bottom-3 {{ $isLeft ? 'right-6' : 'left-6' }} w-px bg-gray-300 dark:bg-gray-600"></div>
+                                            @foreach($childEvents as $event)
+                                                @php
+                                                    $hasMetadata = !empty($event['metadata']);
+                                                    $hasCreator = !empty($event['creator']);
+                                                    $occurredAt = $toCarbon($event['occurred_at']);
+                                                @endphp
+
+                                                <article class="relative md:grid md:grid-cols-[1fr_3rem_1fr] md:gap-6" x-data="{ expanded: false }">
+                                                    <div class="{{ $isLeft ? 'md:col-start-1' : 'md:col-start-3' }}">
+                                                        <x-filament::section compact class="relative {{ $isLeft ? 'md:ml-auto md:max-w-[86%] md:text-right' : 'md:mr-auto md:max-w-[86%]' }}">
+                                                            <div class="hidden md:block absolute top-6 {{ $isLeft ? 'right-[-1.65rem]' : 'left-[-1.65rem]' }} w-6 h-0.5 bg-gray-300 dark:bg-gray-600"></div>
+                                                            <div class="hidden md:block absolute top-[1.2rem] {{ $isLeft ? 'right-[-1.5rem]' : 'left-[-1.5rem]' }}">
+                                                                @if($isLeft)
+                                                                    <x-heroicon-o-chevron-right class="w-3 h-3 text-gray-500 dark:text-gray-400" />
+                                                                @else
+                                                                    <x-heroicon-o-chevron-left class="w-3 h-3 text-gray-500 dark:text-gray-400" />
+                                                                @endif
+                                                            </div>
+
+                                                            <div class="flex items-start gap-3 {{ $isLeft ? 'md:flex-row-reverse' : '' }}">
+                                                                <div class="w-8 h-8 rounded-lg flex items-center justify-center {{ $style['iconWrap'] }}">
+                                                                    <x-dynamic-component :component="$event['icon'] ?? 'heroicon-o-clock'" class="w-4 h-4 {{ $style['icon'] }}" />
+                                                                </div>
+                                                                <div class="min-w-0 flex-1">
+                                                                    <div class="flex flex-wrap items-center gap-2 {{ $isLeft ? 'md:justify-end' : '' }}">
+                                                                        <h4 class="font-medium text-sm text-gray-900 dark:text-white">{{ $event['title'] }}</h4>
+                                                                        @if(!empty($event['is_critical']))
+                                                                            <x-filament::badge color="danger">Critical</x-filament::badge>
+                                                                        @endif
+                                                                    </div>
+                                                                    <p class="mt-1 text-xs text-gray-600 dark:text-gray-300">{{ $event['description'] }}</p>
+                                                                    <div class="mt-2 flex flex-wrap items-center gap-2 text-xs text-gray-500 dark:text-gray-400 {{ $isLeft ? 'md:justify-end' : '' }}">
+                                                                        @if($hasCreator)
+                                                                            <span>{{ $event['creator'] }}</span>
+                                                                            <span class="opacity-50">•</span>
+                                                                        @endif
+                                                                        <time datetime="{{ $occurredAt->toIso8601String() }}">{{ $occurredAt->format('M j, Y g:i A') }}</time>
+                                                                    </div>
+
+                                                                    @if($hasMetadata)
+                                                                        <div class="mt-2">
+                                                                            <button
+                                                                                type="button"
+                                                                                x-on:click="expanded = !expanded"
+                                                                                class="inline-flex items-center gap-1 text-xs font-medium text-primary-600 hover:text-primary-500 dark:text-primary-400 dark:hover:text-primary-300"
+                                                                            >
+                                                                                <span x-text="expanded ? 'Hide details' : 'Show details'"></span>
+                                                                                <x-heroicon-o-chevron-down class="w-3.5 h-3.5 transition-transform duration-200" x-bind:class="{ 'rotate-180': expanded }" />
+                                                                            </button>
+
+                                                                            <div x-show="expanded" x-transition class="mt-2 border-t border-gray-200 pt-2 dark:border-gray-700">
+                                                                                <div class="grid grid-cols-1 gap-y-1 text-xs sm:grid-cols-2 sm:gap-x-3 {{ $isLeft ? 'md:text-right' : '' }}">
+                                                                                    @foreach($event['metadata'] as $key => $value)
+                                                                                        @if(!empty($value))
+                                                                                            <div class="text-gray-600 dark:text-gray-300">
+                                                                                                <span class="font-medium text-gray-500 dark:text-gray-400">{{ $key }}:</span>
+                                                                                                <span>{{ $value }}</span>
+                                                                                            </div>
+                                                                                        @endif
+                                                                                    @endforeach
+                                                                                </div>
+                                                                            </div>
+                                                                        </div>
+                                                                    @endif
+                                                                </div>
+                                                            </div>
+                                                        </x-filament::section>
+                                                    </div>
+
+                                                    <div class="absolute left-[-2.2rem] sm:left-[-2.7rem] top-[1.2rem] md:static md:col-start-2 md:flex md:justify-center md:pt-5">
+                                                        <div class="w-3 h-3 rounded-full {{ $style['dot'] }} ring-4 ring-gray-50 dark:ring-gray-950"></div>
+                                                    </div>
+                                                </article>
+                                            @endforeach
+                                        </div>
+                                    </div>
+                                </section>
+                            @endforeach
+                        @else
+                            @foreach($events as $event)
+                                @php
+                                    $type = $event['type'] ?? 'other';
+                                    $style = $styleMap[$type] ?? $styleMap['other'];
+                                    $hasMetadata = !empty($event['metadata']);
+                                    $hasCreator = !empty($event['creator']);
+                                    $occurredAt = $toCarbon($event['occurred_at']);
+                                    $isLeft = $loop->odd;
+                                @endphp
+
+                                <article class="relative mb-5 md:grid md:grid-cols-[1fr_3rem_1fr] md:gap-6" x-data="{ expanded: false }">
+                                    <div class="{{ $isLeft ? 'md:col-start-1' : 'md:col-start-3' }}">
+                                        <div class="relative rounded-xl border border-l-4 {{ $style['card'] }} {{ !empty($event['is_critical']) ? 'border-red-300 bg-red-50/60 dark:border-red-900 dark:bg-red-950/20' : 'border-gray-200 dark:border-gray-800' }} p-4 sm:p-5 shadow-sm {{ $isLeft ? 'md:text-right' : '' }}">
+                                            <div class="hidden md:block absolute top-8 {{ $isLeft ? 'right-[-1.65rem]' : 'left-[-1.65rem]' }} w-6 h-0.5 bg-gray-300 dark:bg-gray-600"></div>
+                                            <div class="hidden md:block absolute top-[1.625rem] {{ $isLeft ? 'right-[-1.5rem]' : 'left-[-1.5rem]' }}">
+                                                @if($isLeft)
+                                                    <x-heroicon-o-chevron-right class="w-3 h-3 text-gray-500 dark:text-gray-400" />
+                                                @else
+                                                    <x-heroicon-o-chevron-left class="w-3 h-3 text-gray-500 dark:text-gray-400" />
+                                                @endif
+                                            </div>
+
+                                            <div class="flex items-start gap-3 {{ $isLeft ? 'md:flex-row-reverse' : '' }}">
+                                                <div class="w-9 h-9 rounded-lg flex items-center justify-center {{ $style['iconWrap'] }}">
+                                                    <x-dynamic-component :component="$event['icon'] ?? 'heroicon-o-clock'" class="w-5 h-5 {{ $style['icon'] }}" />
+                                                </div>
+                                                <div class="min-w-0 flex-1">
+                                                    <div class="flex flex-wrap items-center gap-2 {{ $isLeft ? 'md:justify-end' : '' }}">
+                                                        <h3 class="font-semibold text-sm text-gray-900 dark:text-white">{{ $event['title'] }}</h3>
+                                                        <x-filament::badge color="primary">{{ ucfirst($type) }}</x-filament::badge>
+                                                        @if(!empty($event['is_critical']))
+                                                            <x-filament::badge color="danger">Critical</x-filament::badge>
+                                                        @endif
+                                                    </div>
+                                                    <p class="mt-1 text-sm text-gray-600 dark:text-gray-300">{{ $event['description'] }}</p>
+                                                    <div class="mt-2 flex flex-wrap items-center gap-2 text-xs text-gray-500 dark:text-gray-400 {{ $isLeft ? 'md:justify-end' : '' }}">
+                                                        @if($hasCreator)
+                                                            <span>{{ $event['creator'] }}</span>
+                                                            <span class="opacity-50">•</span>
+                                                        @endif
+                                                        <time datetime="{{ $occurredAt->toIso8601String() }}">{{ $occurredAt->format('M j, Y g:i A') }}</time>
+                                                    </div>
+
+                                                    @if($hasMetadata)
+                                                        <div class="mt-3">
+                                                            <button
+                                                                type="button"
+                                                                x-on:click="expanded = !expanded"
+                                                                class="inline-flex items-center gap-1 text-xs font-medium text-primary-600 hover:text-primary-500 dark:text-primary-400 dark:hover:text-primary-300"
+                                                            >
+                                                                <span x-text="expanded ? 'Hide details' : 'Show details'"></span>
+                                                                <x-heroicon-o-chevron-down class="w-3.5 h-3.5 transition-transform duration-200" x-bind:class="{ 'rotate-180': expanded }" />
+                                                            </button>
+
+                                                            <div
+                                                                x-show="expanded"
+                                                                x-transition:enter="transition ease-out duration-200"
+                                                                x-transition:enter-start="opacity-0 -translate-y-1"
+                                                                x-transition:enter-end="opacity-100 translate-y-0"
+                                                                x-transition:leave="transition ease-in duration-150"
+                                                                x-transition:leave-start="opacity-100 translate-y-0"
+                                                                x-transition:leave-end="opacity-0 -translate-y-1"
+                                                                class="mt-3 border-t border-gray-200 pt-3 dark:border-gray-700"
+                                                            >
+                                                                <div class="grid grid-cols-1 gap-y-1 text-xs sm:grid-cols-2 sm:gap-x-4 {{ $isLeft ? 'md:text-right' : '' }}">
+                                                                    @foreach($event['metadata'] as $key => $value)
+                                                                        @if(!empty($value))
+                                                                            <div class="dark:text-gray-300">
+                                                                                <span class="font-medium dark:text-gray-400">{{ $key }}:</span>
+                                                                                <span>{{ $value }}</span>
+                                                                            </div>
+                                                                        @endif
+                                                                    @endforeach
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    @endif
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div class="absolute left-[-2.2rem] sm:left-[-2.7rem] top-[1.65rem] md:static md:col-start-2 md:flex md:justify-center md:pt-7">
+                                        <div class="w-3.5 h-3.5 rounded-full {{ $style['dot'] }} ring-4 ring-gray-50 dark:ring-gray-950"></div>
+                                    </div>
+                                </article>
+                            @endforeach
+                        @endif
                     </div>
+
+                    <div class="pb-2" x-ref="loadMoreSentinel" aria-hidden="true"></div>
+
+                    @if($this->isLoadingMore)
+                        <div class="text-center py-4">
+                            <p class="text-xs text-gray-400">Loading more events...</p>
+                        </div>
+                    @elseif($this->hasMoreEvents)
+                        <div class="text-center py-4">
+                            <p class="text-xs text-gray-400">Scroll to load more events</p>
+                        </div>
+                    @else
+                        <div class="text-center py-4">
+                            <p class="text-xs text-gray-400">No more events</p>
+                        </div>
+                    @endif
                 </div>
             @else
-                <div class="bg-white dark:bg-gray-900 rounded-3xl p-20 text-center">
+                <div class="dark:bg-gray-900 rounded-3xl p-20 text-center max-w-2xl mx-auto">
                     <x-heroicon-o-clock class="w-24 h-24 mx-auto text-gray-300 mb-6" />
                     <h2 class="text-2xl font-medium text-gray-900 dark:text-white">No Events</h2>
                     <p class="text-gray-500 mt-3">
@@ -129,7 +402,7 @@
                 </div>
             @endif
         @else
-            <div class="bg-white dark:bg-gray-900 rounded-3xl p-20 text-center">
+            <div class="dark:bg-gray-900 rounded-3xl p-20 text-center max-w-2xl mx-auto">
                 <x-heroicon-o-user-circle class="w-24 h-24 mx-auto text-gray-300 mb-6" />
                 <h2 class="text-2xl font-medium text-gray-900 dark:text-white">No Patient Selected</h2>
                 <p class="text-gray-500 mt-3">Please select a patient from the workspace to view their timeline.</p>

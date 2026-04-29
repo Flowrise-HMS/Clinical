@@ -30,12 +30,20 @@ class Timeline extends Page
 
     public Collection|array|null $timelineEvents;
 
+    public int $timelineLimit = 15;
+
+    public int $timelineIncrement = 10;
+
+    public bool $hasMoreEvents = false;
+
+    public bool $isLoadingMore = false;
+
     protected string $view = 'clinical::clinical.workspace.pages.timeline';
 
     public function boot(): void
     {
         $this->patientId = request()->route('patient');
-        $this->activeFilter = request()->query('filter', 'all');
+        $this->activeFilter = $this->normalizeFilter(request()->query('filter', 'all'));
         $this->bootHasPatientContext();
         $this->loadTimelineData();
     }
@@ -59,10 +67,31 @@ class Timeline extends Page
 
     protected function loadTimelineData(): void
     {
-        if ($this->workspaceService) {
-            $type = $this->activeFilter === 'all' ? null : $this->activeFilter;
-            $this->timelineEvents = $this->workspaceService->getTimelineEvents(15, $type);
+        if (! $this->workspaceService || ! $this->currentPatient) {
+            $this->timelineEvents = collect();
+            $this->hasMoreEvents = false;
+
+            return;
         }
+
+        $type = $this->activeFilter === 'all' ? null : $this->activeFilter;
+        $this->timelineEvents = $this->workspaceService->getTimelineEvents($this->timelineLimit, $type);
+
+        $counts = $this->workspaceService->getTimelineEventCounts();
+        $targetCount = $type ? ($counts[$type] ?? 0) : ($counts['all'] ?? 0);
+        $this->hasMoreEvents = $this->timelineEvents->count() < $targetCount;
+    }
+
+    public function loadMoreEvents(): void
+    {
+        if ($this->isLoadingMore || ! $this->hasMoreEvents) {
+            return;
+        }
+
+        $this->isLoadingMore = true;
+        $this->timelineLimit += $this->timelineIncrement;
+        $this->loadTimelineData();
+        $this->isLoadingMore = false;
     }
 
     public function getEventCounts(): array
@@ -86,6 +115,13 @@ class Timeline extends Page
     public function getTimelineEvents(): Collection
     {
         return $this->timelineEvents ?? collect();
+    }
+
+    protected function normalizeFilter(?string $filter): string
+    {
+        $allowed = ['all', 'encounter', 'vitals', 'note', 'order'];
+
+        return in_array($filter, $allowed, true) ? $filter : 'all';
     }
 
     public function getMaxContentWidth(): Width
