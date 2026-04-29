@@ -201,8 +201,9 @@
                                             </div>
                                         </article>
 
-                                        <div x-show="open" x-transition class="relative mt-1 space-y-3">
-                                            <div class="hidden md:block absolute top-0 bottom-3 {{ $isLeft ? 'right-6' : 'left-6' }} w-px bg-gray-300 dark:bg-gray-600"></div>
+                                        <div x-show="open" x-transition class="relative mt-2 ml-6 sm:ml-10 space-y-2">
+                                            <div class="absolute top-0 bottom-0 left-0 w-px bg-gray-300 dark:bg-gray-600"></div>
+
                                             @foreach($childEvents as $event)
                                                 @php
                                                     $hasMetadata = !empty($event['metadata']);
@@ -210,31 +211,27 @@
                                                     $occurredAt = $toCarbon($event['occurred_at']);
                                                 @endphp
 
-                                                <article class="relative md:grid md:grid-cols-[1fr_3rem_1fr] md:gap-6" x-data="{ expanded: false }">
-                                                    <div class="{{ $isLeft ? 'md:col-start-1' : 'md:col-start-3' }}">
-                                                        <x-filament::section compact class="relative {{ $isLeft ? 'md:ml-auto md:max-w-[86%] md:text-right' : 'md:mr-auto md:max-w-[86%]' }}">
-                                                            <div class="hidden md:block absolute top-6 {{ $isLeft ? 'right-[-1.65rem]' : 'left-[-1.65rem]' }} w-6 h-0.5 bg-gray-300 dark:bg-gray-600"></div>
-                                                            <div class="hidden md:block absolute top-[1.2rem] {{ $isLeft ? 'right-[-1.5rem]' : 'left-[-1.5rem]' }}">
-                                                                @if($isLeft)
-                                                                    <x-heroicon-o-chevron-right class="w-3 h-3 text-gray-500 dark:text-gray-400" />
-                                                                @else
-                                                                    <x-heroicon-o-chevron-left class="w-3 h-3 text-gray-500 dark:text-gray-400" />
-                                                                @endif
-                                                            </div>
+                                                <div class="flex items-center justify-center">
+                                                    <article class="relative ml-4" x-data="{ expanded: false }">
+                                                        <div class="absolute left-[-0.35rem] top-[1.1rem]">
+                                                            <div class="w-1.5 h-1.5 rounded-full {{ $style['dot'] }} ring-2 ring-gray-50 dark:ring-gray-950"></div>
+                                                        </div>
+                                                        <div class="absolute left-[-0.35rem] top-[1.1rem] bottom-[-0.5rem] w-px bg-gray-300 dark:bg-gray-600"></div>
 
-                                                            <div class="flex items-start gap-3 {{ $isLeft ? 'md:flex-row-reverse' : '' }}">
-                                                                <div class="w-8 h-8 rounded-lg flex items-center justify-center {{ $style['iconWrap'] }}">
-                                                                    <x-dynamic-component :component="$event['icon'] ?? 'heroicon-o-clock'" class="w-4 h-4 {{ $style['icon'] }}" />
+                                                        <x-filament::section compact="false" class="!p-2.5 !text-xs">
+                                                            <div class="flex items-start gap-2">
+                                                                <div class="w-6 h-6 rounded-md flex items-center justify-center {{ $style['iconWrap'] }} shrink-0">
+                                                                    <x-dynamic-component :component="$event['icon'] ?? 'heroicon-o-clock'" class="w-3 h-3 {{ $style['icon'] }}" />
                                                                 </div>
                                                                 <div class="min-w-0 flex-1">
-                                                                    <div class="flex flex-wrap items-center gap-2 {{ $isLeft ? 'md:justify-end' : '' }}">
-                                                                        <h4 class="font-medium text-sm text-gray-900 dark:text-white">{{ $event['title'] }}</h4>
+                                                                    <div class="flex flex-wrap items-center gap-1.5">
+                                                                        <h4 class="font-medium text-xs text-gray-900 dark:text-white">{{ $event['title'] }}</h4>
                                                                         @if(!empty($event['is_critical']))
-                                                                            <x-filament::badge color="danger">Critical</x-filament::badge>
+                                                                            <x-filament::badge color="danger" size="xs">Critical</x-filament::badge>
                                                                         @endif
                                                                     </div>
-                                                                    <p class="mt-1 text-xs text-gray-600 dark:text-gray-300">{{ $event['description'] }}</p>
-                                                                    <div class="mt-2 flex flex-wrap items-center gap-2 text-xs text-gray-500 dark:text-gray-400 {{ $isLeft ? 'md:justify-end' : '' }}">
+                                                                    <p class="mt-0.5 text-2xs text-gray-600 dark:text-gray-300">{{ $event['description'] }}</p>
+                                                                    <div class="mt-1 flex flex-wrap items-center gap-1.5 text-2xs text-gray-500 dark:text-gray-400">
                                                                         @if($hasCreator)
                                                                             <span>{{ $event['creator'] }}</span>
                                                                             <span class="opacity-50">•</span>
@@ -243,22 +240,22 @@
                                                                     </div>
 
                                                                     @if($hasMetadata)
-                                                                        <div class="mt-2">
+                                                                        <div class="mt-1.5">
                                                                             <button
                                                                                 type="button"
                                                                                 x-on:click="expanded = !expanded"
-                                                                                class="inline-flex items-center gap-1 text-xs font-medium text-primary-600 hover:text-primary-500 dark:text-primary-400 dark:hover:text-primary-300"
+                                                                                class="inline-flex items-center gap-1 text-2xs font-medium text-primary-600 hover:text-primary-500 dark:text-primary-400 dark:hover:text-primary-300"
                                                                             >
-                                                                                <span x-text="expanded ? 'Hide details' : 'Show details'"></span>
-                                                                                <x-heroicon-o-chevron-down class="w-3.5 h-3.5 transition-transform duration-200" x-bind:class="{ 'rotate-180': expanded }" />
+                                                                                <span x-text="expanded ? 'Hide' : 'Details'"></span>
+                                                                                <x-heroicon-o-chevron-down class="w-3 h-3 transition-transform duration-200" x-bind:class="{ 'rotate-180': expanded }" />
                                                                             </button>
 
-                                                                            <div x-show="expanded" x-transition class="mt-2 border-t border-gray-200 pt-2 dark:border-gray-700">
-                                                                                <div class="grid grid-cols-1 gap-y-1 text-xs sm:grid-cols-2 sm:gap-x-3 {{ $isLeft ? 'md:text-right' : '' }}">
+                                                                            <div x-show="expanded" x-transition class="mt-1.5 border-t border-gray-200 pt-1.5 dark:border-gray-700">
+                                                                                <div class="grid grid-cols-1 gap-y-1 text-2xs sm:grid-cols-2 sm:gap-x-3">
                                                                                     @foreach($event['metadata'] as $key => $value)
                                                                                         @if(!empty($value))
-                                                                                            <div class="text-gray-600 dark:text-gray-300">
-                                                                                                <span class="font-medium text-gray-500 dark:text-gray-400">{{ $key }}:</span>
+                                                                                            <div class="dark:text-gray-300">
+                                                                                                <span class="font-medium dark:text-gray-400">{{ $key }}:</span>
                                                                                                 <span>{{ $value }}</span>
                                                                                             </div>
                                                                                         @endif
@@ -270,12 +267,8 @@
                                                                 </div>
                                                             </div>
                                                         </x-filament::section>
-                                                    </div>
-
-                                                    <div class="absolute left-[-2.2rem] sm:left-[-2.7rem] top-[1.2rem] md:static md:col-start-2 md:flex md:justify-center md:pt-5">
-                                                        <div class="w-3 h-3 rounded-full {{ $style['dot'] }} ring-4 ring-gray-50 dark:ring-gray-950"></div>
-                                                    </div>
-                                                </article>
+                                                    </article>
+                                                </div>
                                             @endforeach
                                         </div>
                                     </div>
@@ -291,8 +284,7 @@
                                     $occurredAt = $toCarbon($event['occurred_at']);
                                     $isLeft = $loop->odd;
                                 @endphp
-
-                                <article class="relative mb-5 md:grid md:grid-cols-[1fr_3rem_1fr] md:gap-6" x-data="{ expanded: false }">
+                                <article class="relative mt-5 md:grid md:grid-cols-[1fr_3rem_1fr] md:gap-6" x-data="{ expanded: false }">
                                     <div class="{{ $isLeft ? 'md:col-start-1' : 'md:col-start-3' }}">
                                         <div class="relative rounded-xl border border-l-4 {{ $style['card'] }} {{ !empty($event['is_critical']) ? 'border-red-300 bg-red-50/60 dark:border-red-900 dark:bg-red-950/20' : 'border-gray-200 dark:border-gray-800' }} p-4 sm:p-5 shadow-sm {{ $isLeft ? 'md:text-right' : '' }}">
                                             <div class="hidden md:block absolute top-8 {{ $isLeft ? 'right-[-1.65rem]' : 'left-[-1.65rem]' }} w-6 h-0.5 bg-gray-300 dark:bg-gray-600"></div>
@@ -308,7 +300,7 @@
                                                 <div class="w-9 h-9 rounded-lg flex items-center justify-center {{ $style['iconWrap'] }}">
                                                     <x-dynamic-component :component="$event['icon'] ?? 'heroicon-o-clock'" class="w-5 h-5 {{ $style['icon'] }}" />
                                                 </div>
-                                                <div class="min-w-0 flex-1">
+                                                <div class="">
                                                     <div class="flex flex-wrap items-center gap-2 {{ $isLeft ? 'md:justify-end' : '' }}">
                                                         <h3 class="font-semibold text-sm text-gray-900 dark:text-white">{{ $event['title'] }}</h3>
                                                         <x-filament::badge color="primary">{{ ucfirst($type) }}</x-filament::badge>
