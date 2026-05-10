@@ -2,11 +2,13 @@
 
 namespace Modules\Clinical\Enums;
 
+use Filament\Support\Contracts\HasColor;
 use Filament\Support\Contracts\HasDescription;
 use Filament\Support\Contracts\HasIcon;
 use Filament\Support\Contracts\HasLabel;
+use Illuminate\Contracts\Support\Htmlable;
 
-enum AllergenType: string implements HasDescription, HasIcon, HasLabel
+enum AllergenType: string implements HasColor, HasDescription, HasIcon, HasLabel
 {
     case MEDICATION = 'medication';
     case FOOD = 'food';
@@ -14,7 +16,7 @@ enum AllergenType: string implements HasDescription, HasIcon, HasLabel
     case BIOLOGICAL = 'biological';
     case OTHER = 'other';
 
-    public function getLabel(): ?string
+    public function getLabel(): string|Htmlable|null
     {
         return match ($this) {
             self::MEDICATION => 'Medication',
@@ -36,7 +38,7 @@ enum AllergenType: string implements HasDescription, HasIcon, HasLabel
         };
     }
 
-    public function getDescription(): ?string
+    public function getDescription(): string|Htmlable|null
     {
         return match ($this) {
             self::MEDICATION => 'Adverse reaction to medication or drug',
@@ -44,6 +46,17 @@ enum AllergenType: string implements HasDescription, HasIcon, HasLabel
             self::ENVIRONMENTAL => 'Reaction to environmental triggers',
             self::BIOLOGICAL => 'Reaction to biological substances',
             self::OTHER => 'Other or unspecified allergen type',
+        };
+    }
+
+    public function getColor(): string|array|null
+    {
+        return match ($this) {
+            self::MEDICATION => 'danger',
+            self::FOOD => 'warning',
+            self::ENVIRONMENTAL => 'success',
+            self::BIOLOGICAL => 'primary',
+            self::OTHER => 'gray',
         };
     }
 

@@ -3,6 +3,10 @@
 namespace Modules\Clinical\Providers;
 
 use Illuminate\Console\Scheduling\Schedule;
+use Modules\Clinical\Models\Encounter;
+use Modules\Clinical\Models\RequestItem;
+use Modules\Clinical\Observers\EncounterObserver;
+use Modules\Clinical\Observers\RequestItemObserver;
 use Nwidart\Modules\Support\ModuleServiceProvider;
 
 class ClinicalServiceProvider extends ModuleServiceProvider
@@ -46,6 +50,14 @@ class ClinicalServiceProvider extends ModuleServiceProvider
             module_path($this->name, 'resources/views/filament'),
             'clinical'
         );
+    }
+
+    public function boot(): void
+    {
+        parent::boot();
+
+        Encounter::observe(EncounterObserver::class);
+        RequestItem::observe(RequestItemObserver::class);
     }
 
     /**

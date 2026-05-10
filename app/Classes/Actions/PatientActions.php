@@ -4,31 +4,31 @@ namespace Modules\Clinical\Classes\Actions;
 
 use Filament\Actions\Action;
 use Filament\Actions\ActionGroup;
+use Filament\Forms\Components\Select;
+use Filament\Forms\Components\TextInput;
 use Illuminate\Support\Facades\Auth;
 use Modules\Clinical\Classes\Services\AllergyService;
 use Modules\Clinical\Classes\Services\ClinicalNoteService;
 use Modules\Clinical\Classes\Services\EncounterService;
 use Modules\Clinical\Classes\Services\ServiceRequestService;
-use Modules\Clinical\Classes\Services\TaskService;
 use Modules\Clinical\Classes\Services\VitalSignService;
-use Modules\Clinical\Enums\EncounterPriority;
-use Modules\Clinical\Enums\EncounterType;
 use Modules\Clinical\Filament\Clusters\Clinical\Resources\Allergies\Schemas\AllergyForm;
 use Modules\Clinical\Filament\Clusters\Clinical\Resources\ClinicalNotes\Schemas\ClinicalNoteForm;
 use Modules\Clinical\Filament\Clusters\Clinical\Resources\Encounters\Schemas\EncounterForm;
 use Modules\Clinical\Filament\Clusters\Clinical\Resources\ServiceRequests\Schemas\ServiceRequestForm;
-use Modules\Clinical\Filament\Clusters\Clinical\Resources\Tasks\Schemas\TaskForm;
 use Modules\Clinical\Filament\Clusters\Clinical\Resources\VitalSigns\Schemas\VitalSignForm;
+use Modules\Clinical\Enums\DischargeDisposition;
+use Modules\Clinical\Enums\EncounterStatus;
 use Modules\Clinical\Filament\Clusters\Workspace\Pages\PatientProfile;
 use Modules\Clinical\Filament\Clusters\Workspace\Pages\Timeline;
 use Modules\Clinical\Models\Allergy;
 use Modules\Clinical\Models\ClinicalNote;
 use Modules\Clinical\Models\Encounter;
 use Modules\Clinical\Models\ServiceRequest;
-use Modules\Clinical\Models\Task;
 use Modules\Clinical\Models\VitalSign;
 use Modules\Patient\Models\Patient;
 use Modules\Patient\Policies\PatientPolicy;
+use Modules\Pharmacy\Classes\Actions\MedicationOrderAction;
 
 class PatientActions
 {
@@ -81,12 +81,13 @@ class PatientActions
     public function patientActionGroups()
     {
         return ActionGroup::make([
-                $this->encounter(),
-                $this->note(),
-                $this->order(),
-                $this->vitals(),
-                $this->allergy(),
-            ])
+            $this->encounter(),
+            $this->note(),
+            $this->order(),
+            $this->medicationOrder(),
+            $this->vitals(),
+            $this->allergy(),
+        ])
             ->label('More Actions')
             ->icon('heroicon-m-ellipsis-vertical')
             ->size('sm')
@@ -207,6 +208,75 @@ class PatientActions
                 $this->encounterId
             ))
             ->successNotificationTitle('Service request created');
+    }
+
+    public function medicationOrder(): Action
+    {
+        if (! class_exists(MedicationOrderAction::class)) {
+            return Action::make('medication_order')
+                ->label('Medication Order')
+                ->icon('heroicon-m-beaker')
+                ->disabled()
+                ->tooltip('Pharmacy module is not available.');
+        }
+
+        return MedicationOrderAction::make($this->patient, $this->encounterId);
+    }
+
+    public function printHospitalCardAction(): Action
+    {
+        return Action::make('print_hospital_card')
+            ->label(__('Hospital card'))
+            ->icon('heroicon-m-identification')
+            ->url(fn (): string => $this->patient
+                ? route('patients.hospital-card', $this->patient)
+                : '#')
+            ->openUrlInNewTab()
+            ->visible(fn (): bool => $this->patient !== null
+                && (Auth::user()?->can('print_hospital_card') ?? false));
+    }
+
+    public function dischargeAction(): Action
+    {
+        return Action::make('discharge_patient')
+            ->label('Discharge patient')
+            ->icon('heroicon-m-arrow-left-end-on-rectangle')
+            ->color('danger')
+            ->slideOver()
+            ->schema([
+                Select::make('discharge_disposition')
+                    ->label('Disposition')
+                    ->options(DischargeDisposition::class)
+                    ->default(DischargeDisposition::COMPLETED->value)
+                    ->required(),
+                TextInput::make('transfer_destination')
+                    ->label('Transfer destination')
+                    ->visible(fn (callable $get) => $get('discharge_disposition') === DischargeDisposition::TRANSFERRED->value),
+            ])
+            ->visible(function (): bool {
+                if (! $this->patient) {
+                    return false;
+                }
+
+                $encounter = $this->patient->activeEncounter()->first();
+
+                return $encounter !== null
+                    && $encounter->canTransitionTo(EncounterStatus::FINISHED)
+                    && (Auth::user()?->can('discharge_patient') ?? false);
+            })
+            ->action(function (array $data): void {
+                $encounter = $this->patient?->activeEncounter()->first();
+                if ($encounter === null || ! ($this->patient instanceof Patient)) {
+                    return;
+                }
+
+                $this->encounterService->discharge(
+                    $encounter,
+                    DischargeDisposition::from($data['discharge_disposition']),
+                    $data['transfer_destination'] ?? null
+                );
+            })
+            ->successNotificationTitle('Patient discharged successfully');
     }
 
     public function encounter(): Action

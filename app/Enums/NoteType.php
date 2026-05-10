@@ -3,10 +3,11 @@
 namespace Modules\Clinical\Enums;
 
 use Filament\Support\Contracts\HasColor;
+use Filament\Support\Contracts\HasDescription;
 use Filament\Support\Contracts\HasLabel;
 use Illuminate\Contracts\Support\Htmlable;
 
-enum NoteType: string implements HasColor, HasLabel
+enum NoteType: string implements HasColor, HasDescription, HasLabel
 {
     case GENERAL = 'general';
     case PROGRESS = 'progress';
@@ -54,6 +55,24 @@ enum NoteType: string implements HasColor, HasLabel
             self::LAB => 'primary',
             self::MEDICATION => 'warning',
             self::REFERRAL => 'gray',
+        };
+    }
+
+    public function getDescription(): string|Htmlable|null
+    {
+        return match ($this) {
+            self::GENERAL => 'Unstructured or general clinical documentation.',
+            self::PROGRESS => 'Interval update during an admission or course of care.',
+            self::ADMISSION => 'Documentation at the start of an encounter or admission.',
+            self::DISCHARGE => 'Summary and instructions at end of care.',
+            self::CONSULTATION => 'Specialist opinion or consult letter.',
+            self::NURSING => 'Nursing assessment, care plan, or shift note.',
+            self::PROCEDURE => 'Documentation of a procedure performed.',
+            self::SURGERY => 'Operative or perioperative documentation.',
+            self::RADIOLOGY => 'Imaging report or radiology communication.',
+            self::LAB => 'Laboratory result narrative or interpretation.',
+            self::MEDICATION => 'Medication-related documentation or reconciliation.',
+            self::REFERRAL => 'Referral request or response documentation.',
         };
     }
 

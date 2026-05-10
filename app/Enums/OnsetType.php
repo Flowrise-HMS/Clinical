@@ -2,16 +2,18 @@
 
 namespace Modules\Clinical\Enums;
 
+use Filament\Support\Contracts\HasColor;
 use Filament\Support\Contracts\HasDescription;
 use Filament\Support\Contracts\HasLabel;
+use Illuminate\Contracts\Support\Htmlable;
 
-enum OnsetType: string implements HasDescription, HasLabel
+enum OnsetType: string implements HasColor, HasDescription, HasLabel
 {
     case ACUTE = 'acute';
     case CHRONIC = 'chronic';
     case UNKNOWN = 'unknown';
 
-    public function getLabel(): ?string
+    public function getLabel(): string|Htmlable|null
     {
         return match ($this) {
             self::ACUTE => 'Acute',
@@ -20,7 +22,16 @@ enum OnsetType: string implements HasDescription, HasLabel
         };
     }
 
-    public function getDescription(): ?string
+    public function getColor(): string|array|null
+    {
+        return match ($this) {
+            self::ACUTE => 'danger',
+            self::CHRONIC => 'warning',
+            self::UNKNOWN => 'gray',
+        };
+    }
+
+    public function getDescription(): string|Htmlable|null
     {
         return match ($this) {
             self::ACUTE => 'Sudden onset of allergic reaction',

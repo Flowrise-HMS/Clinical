@@ -3,10 +3,11 @@
 namespace Modules\Clinical\Enums;
 
 use Filament\Support\Contracts\HasColor;
+use Filament\Support\Contracts\HasDescription;
 use Filament\Support\Contracts\HasLabel;
 use Illuminate\Contracts\Support\Htmlable;
 
-enum RequestItemStatus: string implements HasColor, HasLabel
+enum RequestItemStatus: string implements HasColor, HasDescription, HasLabel
 {
     case PENDING = 'pending';
     case IN_PROGRESS = 'in_progress';
@@ -30,6 +31,16 @@ enum RequestItemStatus: string implements HasColor, HasLabel
             self::IN_PROGRESS => 'primary',
             self::COMPLETED => 'success',
             self::CANCELLED => 'gray',
+        };
+    }
+
+    public function getDescription(): string|Htmlable|null
+    {
+        return match ($this) {
+            self::PENDING => 'Line item is queued for fulfillment.',
+            self::IN_PROGRESS => 'Work on this line item has started.',
+            self::COMPLETED => 'This line item was fulfilled and closed.',
+            self::CANCELLED => 'This line item was cancelled.',
         };
     }
 

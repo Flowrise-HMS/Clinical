@@ -3,10 +3,11 @@
 namespace Modules\Clinical\Enums;
 
 use Filament\Support\Contracts\HasColor;
+use Filament\Support\Contracts\HasDescription;
 use Filament\Support\Contracts\HasLabel;
 use Illuminate\Contracts\Support\Htmlable;
 
-enum SpO2Label: string implements HasColor, HasLabel
+enum SpO2Label: string implements HasColor, HasDescription, HasLabel
 {
     case NORMAL = 'normal';
     case LOW = 'low';
@@ -27,6 +28,15 @@ enum SpO2Label: string implements HasColor, HasLabel
             self::NORMAL => 'success',
             self::LOW => 'warning',
             self::CRITICAL => 'danger',
+        };
+    }
+
+    public function getDescription(): string|Htmlable|null
+    {
+        return match ($this) {
+            self::NORMAL => 'SpO₂ within expected range on documented oxygen.',
+            self::LOW => 'SpO₂ below target; may need review or oxygen titration.',
+            self::CRITICAL => 'SpO₂ critically low; urgent assessment required.',
         };
     }
 

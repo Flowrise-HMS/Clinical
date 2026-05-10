@@ -28,6 +28,8 @@ use Modules\Clinical\Filament\Widgets\CriticalPatientsWidget;
 use Modules\Clinical\Filament\Widgets\MyTasksWidget;
 use Modules\Clinical\Filament\Widgets\PatientTimelineWidget;
 use Modules\Clinical\Filament\Widgets\RecentPatientsWidget;
+use Modules\Clinical\Filament\Widgets\WorkspaceTodayAppointmentsWidget;
+use Modules\Core\Classes\Support\PageHeaderActionsRegistry;
 use Modules\Patient\Classes\Services\PatientSearchService;
 use Modules\Patient\Models\Patient;
 
@@ -70,8 +72,13 @@ class Patients extends Page implements HasActions, HasSchemas, HasTable
 
     public function getPatients()
     {
+        $relations = ['latestEncounter', 'activeEncounter', 'latestVitals', 'allergies'];
+        if ($this->hasAppointmentModule()) {
+            $relations[] = 'appointments';
+        }
+
         return Patient::query()
-            ->with(['latestEncounter', 'activeEncounter', 'latestVitals', 'allergies'])
+            ->with($relations)
             ->orderByDesc('updated_at');
     }
 
@@ -80,8 +87,13 @@ class Patients extends Page implements HasActions, HasSchemas, HasTable
         $actions = app(PatientActions::class);
 
         return $table
-            ->query(Patient::query()
-                ->with(['latestEncounter', 'activeEncounter', 'latestVitals', 'allergies']))
+            ->query(Patient::query()->with(array_filter([
+                'latestEncounter',
+                'activeEncounter',
+                'latestVitals',
+                'allergies',
+                $this->hasAppointmentModule() ? 'appointments' : null,
+            ])))
             ->defaultSort('updated_at', 'desc')
             ->paginationPageOptions([12, 24, 48])
             ->searchable(app(PatientSearchService::class)->getSearchableFields())
@@ -100,6 +112,10 @@ class Patients extends Page implements HasActions, HasSchemas, HasTable
                         Select::make('date_range')
                             ->options(fn () => $this->getDateRangeOptions())
                             ->placeholder('All Time'),
+                        Select::make('appointment_status')
+                            ->options(fn () => $this->getAppointmentStatusOptions())
+                            ->placeholder('All Appointments')
+                            ->visible(fn () => $this->hasAppointmentModule()),
                     ])
                     ->query(function ($query, array $data) {
                         $activeStatuses = array_filter($this->getEncounterTypeOptions(), fn ($value) => $value != 'all');
@@ -123,6 +139,11 @@ class Patients extends Page implements HasActions, HasSchemas, HasTable
                                 };
                                 if ($date) {
                                     $q->whereHas('encounters', fn ($q) => $q->where('created_at', '>=', $date));
+                                }
+                            })
+                            ->when(($data['appointment_status'] ?? 'all') !== 'all', function ($q) use ($data) {
+                                if ($this->hasAppointmentModule()) {
+                                    $q->whereHas('appointments', fn ($aq) => $aq->where('status', $data['appointment_status']));
                                 }
                             });
                     }),
@@ -225,13 +246,45 @@ class Patients extends Page implements HasActions, HasSchemas, HasTable
         ];
     }
 
+    public function getAppointmentStatusOptions(): array
+    {
+        if (! $this->hasAppointmentModule()) {
+            return ['all' => 'All Appointments'];
+        }
+
+        return [
+            'all' => 'All Appointments',
+            'booked' => 'Booked',
+            'arrived' => 'Arrived',
+            'cancelled' => 'Cancelled',
+            'noshow' => 'No-show',
+        ];
+    }
+
+    protected function hasAppointmentModule(): bool
+    {
+        return class_exists('Modules\\Appointment\\Models\\Appointment');
+    }
+
+    protected function getHeaderActions(): array
+    {
+        return app(PageHeaderActionsRegistry::class)->for(static::class, $this);
+    }
+
     protected function getHeaderWidgets(): array
     {
-        return [
+        $widgets = [
             CriticalPatientsWidget::class,
             MyTasksWidget::class,
-            PatientTimelineWidget::class,
-            RecentPatientsWidget::class,
         ];
+
+        if ($this->hasAppointmentModule()) {
+            $widgets[] = WorkspaceTodayAppointmentsWidget::class;
+        }
+
+        $widgets[] = PatientTimelineWidget::class;
+        $widgets[] = RecentPatientsWidget::class;
+
+        return $widgets;
     }
 }

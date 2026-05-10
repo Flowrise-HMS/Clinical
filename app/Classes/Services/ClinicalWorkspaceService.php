@@ -2,12 +2,15 @@
 
 namespace Modules\Clinical\Classes\Services;
 
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Str;
 use Modules\Clinical\Enums\TaskStatus;
 use Modules\Clinical\Models\ClinicalNote;
 use Modules\Clinical\Models\Encounter;
 use Modules\Clinical\Models\ServiceRequest;
+use Modules\Appointment\Filament\Clusters\Appointment\Resources\Appointments\AppointmentResource;
+use Modules\Appointment\Models\Appointment;
 use Modules\Clinical\Models\Task;
 use Modules\Clinical\Models\VitalSign;
 use Modules\Clinical\Policies\ServiceRequestPolicy;
@@ -59,7 +62,7 @@ class ClinicalWorkspaceService
         $events = collect();
         $patientId = $this->currentPatient->id;
         $encounterId = $this->currentEncounter?->id;
-        $normalizedType = in_array($type, ['encounter', 'vitals', 'note', 'order'], true) ? $type : null;
+        $normalizedType = in_array($type, ['encounter', 'vitals', 'note', 'order', 'appointment'], true) ? $type : null;
 
         if (! $normalizedType || $normalizedType === 'encounter') {
             $query = Encounter::query()
@@ -109,6 +112,20 @@ class ClinicalWorkspaceService
             }
         }
 
+        if (! $normalizedType || $normalizedType === 'appointment') {
+            $appointmentsQuery = $this->getAppointmentModelQuery();
+
+            if ($appointmentsQuery) {
+                foreach ($appointmentsQuery
+                    ->where('patient_id', $patientId)
+                    ->orderBy('start_at', 'desc')
+                    ->limit($limit)
+                    ->get() as $appointment) {
+                    $events->push($this->createAppointmentEvent($appointment));
+                }
+            }
+        }
+
         return $events
             ->sortBy([
                 ['occurred_at', 'desc'],
@@ -123,15 +140,15 @@ class ClinicalWorkspaceService
     {
         $patientId = $this->currentPatient?->id;
         if (! $patientId) {
-            return ['all' => 0, 'encounter' => 0, 'vitals' => 0, 'note' => 0, 'order' => 0];
+            return ['all' => 0, 'encounter' => 0, 'vitals' => 0, 'note' => 0, 'order' => 0, 'appointment' => 0];
         }
 
         $encounterId = $this->currentEncounter?->id;
 
         return [
             'all' => Encounter::where('patient_id', $patientId)
-                  ->when($encounterId, fn ($q) => $q->where('id', $encounterId))
-                  ->count()
+                ->when($encounterId, fn ($q) => $q->where('id', $encounterId))
+                ->count()
                   + VitalSign::where('patient_id', $patientId)
                       ->when($encounterId, fn ($q) => $q->where('encounter_id', $encounterId))
                       ->count()
@@ -140,7 +157,8 @@ class ClinicalWorkspaceService
                       ->count()
                   + ServiceRequest::where('patient_id', $patientId)
                       ->when($encounterId, fn ($q) => $q->where('encounter_id', $encounterId))
-                      ->count(),
+                      ->count()
+                  + $this->countAppointmentsForPatient($patientId),
             'encounter' => Encounter::where('patient_id', $patientId)
                 ->when($encounterId, fn ($q) => $q->where('id', $encounterId))
                 ->count(),
@@ -153,6 +171,45 @@ class ClinicalWorkspaceService
             'order' => ServiceRequest::where('patient_id', $patientId)
                 ->when($encounterId, fn ($q) => $q->where('encounter_id', $encounterId))
                 ->count(),
+            'appointment' => $this->countAppointmentsForPatient($patientId),
+        ];
+    }
+
+    protected function createAppointmentEvent(object $appointment): array
+    {
+        $status = data_get($appointment, 'status');
+        $statusLabel = is_object($status) && method_exists($status, 'getLabel')
+            ? (string) $status->getLabel()
+            : ucfirst((string) $status);
+        $appointmentType = data_get($appointment, 'appointment_type');
+        $typeLabel = is_object($appointmentType) && method_exists($appointmentType, 'getLabel')
+            ? (string) $appointmentType->getLabel()
+            : ((string) $appointmentType ?: 'N/A');
+
+        $url = null;
+        if ($appointment instanceof Appointment && Auth::check() && Auth::user()->can('view', $appointment)) {
+            $url = AppointmentResource::getUrl('view', ['record' => $appointment]);
+        }
+
+        return [
+            'id' => 'appointment_'.$appointment->id,
+            'type' => 'appointment',
+            'icon' => 'heroicon-o-calendar-days',
+            'title' => 'Appointment '.$statusLabel,
+            'description' => $appointment->reason_text ?: 'Scheduled patient appointment',
+            'occurred_at' => $appointment->start_at,
+            'creator' => null,
+            'is_critical' => in_array($appointment->priority, [0, 1], true),
+            'metadata' => [
+                'Status' => $statusLabel,
+                'Start' => optional($appointment->start_at)?->format('M j, Y g:i A'),
+                'End' => optional($appointment->end_at)?->format('M j, Y g:i A'),
+                'Type' => $typeLabel,
+            ],
+            'is_editable' => $appointment instanceof Appointment
+                && Auth::check()
+                && Auth::user()->can('update', $appointment),
+            'url' => $url,
         ];
     }
 
@@ -351,7 +408,54 @@ class ClinicalWorkspaceService
         return $patient->encounters()
             ->where('status', 'in_progress')
             ->whereHas('participants', fn ($q) => $q->where('user_id', $user->id))
+            ->exists()
+            || $this->hasActiveAppointmentsForPatient($patient);
+    }
+
+    public function getNextAppointmentForPatient(Patient $patient): ?object
+    {
+        $query = $this->getAppointmentModelQuery();
+        if (! $query) {
+            return null;
+        }
+
+        return $query
+            ->where('patient_id', $patient->id)
+            ->whereIn('status', ['proposed', 'pending', 'booked', 'arrived'])
+            ->orderBy('start_at')
+            ->first();
+    }
+
+    protected function hasActiveAppointmentsForPatient(Patient $patient): bool
+    {
+        $query = $this->getAppointmentModelQuery();
+        if (! $query) {
+            return false;
+        }
+
+        return $query->where('patient_id', $patient->id)
+            ->whereIn('status', ['pending', 'booked', 'arrived'])
             ->exists();
+    }
+
+    protected function countAppointmentsForPatient(string $patientId): int
+    {
+        $query = $this->getAppointmentModelQuery();
+        if (! $query) {
+            return 0;
+        }
+
+        return $query->where('patient_id', $patientId)->count();
+    }
+
+    protected function getAppointmentModelQuery(): ?Builder
+    {
+        $appointmentModel = 'Modules\\Appointment\\Models\\Appointment';
+        if (! class_exists($appointmentModel)) {
+            return null;
+        }
+
+        return $appointmentModel::query();
     }
 
     public function canCreateClinicalNote(): bool

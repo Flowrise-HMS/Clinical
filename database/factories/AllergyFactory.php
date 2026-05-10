@@ -1,6 +1,6 @@
 <?php
 
-namespace Database\Factories;
+namespace Modules\Clinical\Database\Factories;
 
 use Illuminate\Database\Eloquent\Factories\Factory;
 use Modules\Clinical\Enums\AllergenType;

@@ -3,13 +3,14 @@
 namespace Modules\Clinical\Models;
 
 use App\Models\User;
-use Database\Factories\AllergyFactory;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
+use Illuminate\Database\Eloquent\Factories\Factory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use Modules\Clinical\Database\Factories\AllergyFactory;
 use Modules\Clinical\Enums\AllergenType;
 use Modules\Clinical\Enums\AllergySeverity;
 use Modules\Clinical\Enums\AllergyVerificationStatus;
@@ -57,6 +58,11 @@ class Allergy extends Model
         'is_active' => true,
         'verification_status' => 'unverified',
     ];
+
+    protected static function newFactory(): Factory
+    {
+        return AllergyFactory::new();
+    }
 
     public function patient(): BelongsTo
     {

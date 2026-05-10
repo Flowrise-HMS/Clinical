@@ -9,6 +9,7 @@ use Illuminate\Support\Collection;
 use Modules\Clinical\Classes\Actions\PatientActions;
 use Modules\Clinical\Classes\Services\ClinicalWorkspaceService;
 use Modules\Clinical\Filament\Clusters\Workspace\WorkspaceCluster;
+use Modules\Core\Classes\Support\PageHeaderActionsRegistry;
 
 class Timeline extends Page
 {
@@ -48,7 +49,6 @@ class Timeline extends Page
         $this->loadTimelineData();
     }
 
-
     public function mount(): void
     {
         $this->mountHasPatientContext();
@@ -62,7 +62,10 @@ class Timeline extends Page
 
         $actions = PatientActions::make()->forPatient($this->currentPatient);
 
-        return $actions->timelineQuickActions();
+        return [
+            ...$actions->timelineQuickActions(),
+            ...app(PageHeaderActionsRegistry::class)->for(static::class, $this),
+        ];
     }
 
     protected function loadTimelineData(): void
@@ -98,7 +101,7 @@ class Timeline extends Page
     {
         if (! $this->currentPatient) {
             return [
-                'all' => 0, 'encounter' => 0, 'vitals' => 0, 'note' => 0, 'order' => 0
+                'all' => 0, 'encounter' => 0, 'vitals' => 0, 'note' => 0, 'order' => 0, 'appointment' => 0,
             ];
         }
 
@@ -119,7 +122,7 @@ class Timeline extends Page
 
     protected function normalizeFilter(?string $filter): string
     {
-        $allowed = ['all', 'encounter', 'vitals', 'note', 'order'];
+        $allowed = ['all', 'encounter', 'vitals', 'note', 'order', 'appointment'];
 
         return in_array($filter, $allowed, true) ? $filter : 'all';
     }

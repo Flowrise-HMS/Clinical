@@ -5,12 +5,10 @@ namespace Modules\Clinical\Filament\Clusters\Workspace\Pages;
 use Filament\Infolists\Components\ImageEntry;
 use Filament\Infolists\Components\TextEntry;
 use Filament\Infolists\Concerns\InteractsWithInfolists;
-use Filament\Infolists\Contracts\HasInfolists;
 use Filament\Schemas\Components\Grid;
 use Filament\Support\Enums\TextSize;
 use Livewire\Attributes\Url;
 use Modules\Clinical\Classes\Services\ClinicalWorkspaceService;
-use Modules\Clinical\Filament\Clusters\Workspace\Pages\PatientContextEntries;
 use Modules\Clinical\Models\Encounter;
 use Modules\Patient\Models\Patient;
 
@@ -26,6 +24,8 @@ trait HasPatientContext
     public ?Encounter $currentEncounter = null;
 
     public ?object $latestVitals = null;
+
+    public ?object $nextAppointment = null;
 
     protected ?ClinicalWorkspaceService $workspaceService = null;
 
@@ -53,6 +53,7 @@ trait HasPatientContext
                 $this->workspaceService->setPatient($this->currentPatient);
                 $this->currentEncounter = $this->currentPatient->latestEncounter;
                 $this->latestVitals = $this->workspaceService->getLatestVitals();
+                $this->nextAppointment = $this->workspaceService->getNextAppointmentForPatient($this->currentPatient);
             }
         }
     }
@@ -75,7 +76,7 @@ trait HasPatientContext
                     ->weight('bold')
                     ->hiddenLabel()
                     ->size(TextSize::Large)
-                    ->formatStateUsing(fn($record) => $record->full_name.'('.$record->mrn.')')
+                    ->formatStateUsing(fn ($record) => $record->full_name.'('.$record->mrn.')')
                     ->alignCenter(),
 
                 Grid::make(4)
@@ -84,7 +85,7 @@ trait HasPatientContext
                             ->label('Age')
                             ->size(TextSize::Small)
                             ->color('gray')
-                            ->formatStateUsing(fn ($record) => $record->age . ' yrs'),
+                            ->formatStateUsing(fn ($record) => $record->age.' yrs'),
 
                         TextEntry::make('gender')
                             ->label('Gender')
@@ -103,12 +104,12 @@ trait HasPatientContext
                             ->formatStateUsing(fn () => $this->latestVitals->blood_pressure),
                         TextEntry::make('hr')
                             ->label('Heart Rate')
-                            ->visible(isset($this->latestVitals) && !empty($this->latestVitals?->heart_rate))
-                            ->formatStateUsing(fn () => $this->latestVitals->heart_rate . ' bpm'),
+                            ->visible(isset($this->latestVitals) && ! empty($this->latestVitals?->heart_rate))
+                            ->formatStateUsing(fn () => $this->latestVitals->heart_rate.' bpm'),
                         TextEntry::make('spo2')
                             ->label('SpO2')
-                            ->visible(isset($this->latestVitals) && !empty($this->latestVitals?->spo2))
-                            ->formatStateUsing(fn () => $this->latestVitals->spo2 . '%'),
+                            ->visible(isset($this->latestVitals) && ! empty($this->latestVitals?->spo2))
+                            ->formatStateUsing(fn () => $this->latestVitals->spo2.'%'),
                         TextEntry::make('encounter_type')
                             ->label('Type')
                             ->formatStateUsing(fn () => $this->currentEncounter?->type?->getLabel() ?? '-'),
@@ -116,7 +117,10 @@ trait HasPatientContext
                         TextEntry::make('encounter_status')
                             ->label('Status')
                             ->formatStateUsing(fn () => $this->currentEncounter?->status?->getLabel() ?? '-'),
-                    ])
+                        TextEntry::make('next_appointment')
+                            ->label('Next Appointment')
+                            ->formatStateUsing(fn () => $this->nextAppointment?->start_at?->format('M j, g:i A') ?? '-'),
+                    ]),
             ]);
     }
 }

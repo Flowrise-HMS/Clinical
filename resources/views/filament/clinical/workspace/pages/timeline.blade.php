@@ -46,6 +46,14 @@
                         Orders
                         <x-slot name="badge">{{ $eventCounts['order'] }}</x-slot>
                     </x-filament::tabs.item>
+
+                    <x-filament::tabs.item
+                        alpine-active="activeTab === 'appointment'"
+                        x-on:click="activeTab = 'appointment'; window.location = '{{ URL::current() }}?filter=appointment'"
+                    >
+                        Appointments
+                        <x-slot name="badge">{{ $eventCounts['appointment'] }}</x-slot>
+                    </x-filament::tabs.item>
                 </x-filament::tabs>
             </div>
 
@@ -88,6 +96,7 @@
                             'vitals' => ['dot' => 'bg-pink-500', 'card' => 'border-l-pink-500', 'iconWrap' => 'bg-pink-100 dark:bg-pink-900/40', 'icon' => 'text-pink-600 dark:text-pink-400'],
                             'note' => ['dot' => 'bg-amber-500', 'card' => 'border-l-amber-500', 'iconWrap' => 'bg-amber-100 dark:bg-amber-900/40', 'icon' => 'text-amber-600 dark:text-amber-400'],
                             'order' => ['dot' => 'bg-blue-500', 'card' => 'border-l-blue-500', 'iconWrap' => 'bg-blue-100 dark:bg-blue-900/40', 'icon' => 'text-blue-600 dark:text-blue-400'],
+                            'appointment' => ['dot' => 'bg-indigo-500', 'card' => 'border-l-indigo-500', 'iconWrap' => 'bg-indigo-100 dark:bg-indigo-900/40', 'icon' => 'text-indigo-600 dark:text-indigo-400'],
                             'other' => ['dot' => 'bg-gray-500', 'card' => 'border-l-gray-500', 'iconWrap' => 'bg-gray-100 dark:bg-gray-800', 'icon' => 'text-gray-600 dark:text-gray-300'],
                         ];
 
@@ -101,7 +110,7 @@
 
                         @if($isAllFilter)
                             @php
-                                $preferredTypeOrder = ['note', 'encounter', 'order', 'vitals'];
+                                $preferredTypeOrder = ['appointment', 'note', 'encounter', 'order', 'vitals'];
                                 $groupedEvents = $events
                                     ->groupBy(fn ($event) => $event['type'] ?? 'other')
                                     ->map(function ($items, $type) use ($toCarbon) {
@@ -141,6 +150,7 @@
                                         'vitals' => 'Vitals',
                                         'note' => 'Notes',
                                         'order' => 'Orders',
+                                        'appointment' => 'Appointments',
                                         default => ucfirst($type),
                                     };
                                     $headerEvent = $group['events']->first();
@@ -191,6 +201,11 @@
                                                                 @endif
                                                             </div>
                                                             <p class="mt-1 text-sm text-gray-600 dark:text-gray-300">{{ $headerEvent['description'] }}</p>
+                                                            @if(! empty($headerEvent['url']))
+                                                                <div class="mt-2 {{ $isLeft ? 'md:text-right' : '' }}">
+                                                                    <a href="{{ $headerEvent['url'] }}" class="text-xs font-medium text-primary-600 hover:text-primary-500 dark:text-primary-400">{{ __('Open record') }}</a>
+                                                                </div>
+                                                            @endif
                                                         </div>
                                                     </div>
                                                 </x-filament::section>
@@ -238,6 +253,11 @@
                                                                         @endif
                                                                         <time datetime="{{ $occurredAt->toIso8601String() }}">{{ $occurredAt->format('M j, Y g:i A') }}</time>
                                                                     </div>
+                                                                    @if(! empty($event['url']))
+                                                                        <div class="mt-1">
+                                                                            <a href="{{ $event['url'] }}" class="text-2xs font-medium text-primary-600 hover:text-primary-500 dark:text-primary-400">{{ __('Open record') }}</a>
+                                                                        </div>
+                                                                    @endif
 
                                                                     @if($hasMetadata)
                                                                         <div class="mt-1.5">
@@ -316,6 +336,11 @@
                                                         @endif
                                                         <time datetime="{{ $occurredAt->toIso8601String() }}">{{ $occurredAt->format('M j, Y g:i A') }}</time>
                                                     </div>
+                                                    @if(! empty($event['url']))
+                                                        <div class="mt-2 {{ $isLeft ? 'md:text-right' : '' }}">
+                                                            <a href="{{ $event['url'] }}" class="text-xs font-medium text-primary-600 hover:text-primary-500 dark:text-primary-400">{{ __('Open record') }}</a>
+                                                        </div>
+                                                    @endif
 
                                                     @if($hasMetadata)
                                                         <div class="mt-3">

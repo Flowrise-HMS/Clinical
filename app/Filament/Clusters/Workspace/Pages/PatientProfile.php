@@ -3,7 +3,6 @@
 namespace Modules\Clinical\Filament\Clusters\Workspace\Pages;
 
 use CodeWithDennis\FilamentLucideIcons\Enums\LucideIcon;
-use Filament\Actions\Action;
 use Filament\Actions\Concerns\InteractsWithActions;
 use Filament\Actions\Contracts\HasActions;
 use Filament\Forms\Concerns\InteractsWithForms;
@@ -20,15 +19,13 @@ use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
 use Illuminate\Database\Eloquent\Collection;
 use Modules\Clinical\Classes\Actions\PatientActions;
-use Modules\Clinical\Filament\Clusters\Workspace\Pages\Notes;
-use Modules\Clinical\Filament\Clusters\Workspace\Pages\Orders;
-use Modules\Clinical\Filament\Clusters\Workspace\Pages\Vitals;
 use Modules\Clinical\Filament\Clusters\Workspace\WorkspaceCluster;
 use Modules\Clinical\Models\Allergy;
 use Modules\Clinical\Models\ClinicalNote;
 use Modules\Clinical\Models\Encounter;
 use Modules\Clinical\Models\ServiceRequest;
 use Modules\Clinical\Models\VitalSign;
+use Modules\Core\Classes\Support\PageHeaderActionsRegistry;
 use Modules\Patient\Models\Patient;
 use Ysfkaya\FilamentPhoneInput\Infolists\PhoneEntry;
 
@@ -213,7 +210,8 @@ class PatientProfile extends Page implements HasActions, HasForms, HasInfolists
 
         return [
             $actions->timelineAction(),
-            $actions->patientActionGroups()
+            $actions->patientActionGroups(),
+            ...app(PageHeaderActionsRegistry::class)->for(static::class, $this),
         ];
 
     }

@@ -3,10 +3,11 @@
 namespace Modules\Clinical\Enums;
 
 use Filament\Support\Contracts\HasColor;
+use Filament\Support\Contracts\HasDescription;
 use Filament\Support\Contracts\HasLabel;
 use Illuminate\Contracts\Support\Htmlable;
 
-enum PatientPosition: string implements HasColor, HasLabel
+enum PatientPosition: string implements HasColor, HasDescription, HasLabel
 {
     case SITTING = 'sitting';
     case STANDING = 'standing';
@@ -36,6 +37,18 @@ enum PatientPosition: string implements HasColor, HasLabel
             self::PRONE => 'warning',
             self::LATERAL => 'secondary',
             self::FOWLERS => 'gray',
+        };
+    }
+
+    public function getDescription(): string|Htmlable|null
+    {
+        return match ($this) {
+            self::SITTING => 'Patient seated for measurement.',
+            self::STANDING => 'Patient standing; note orthostatic effect on vitals.',
+            self::SUPINE => 'Patient lying face up.',
+            self::PRONE => 'Patient lying face down.',
+            self::LATERAL => 'Patient lying on left or right side.',
+            self::FOWLERS => 'Head of bed elevated, semi-sitting position.',
         };
     }
 

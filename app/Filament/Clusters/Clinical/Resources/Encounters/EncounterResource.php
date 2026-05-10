@@ -49,12 +49,18 @@ class EncounterResource extends Resource
 
     public static function getRelations(): array
     {
-        return [
+        $relations = [
             EncounterParticipantsRelationManager::class,
             VitalSignsRelationManager::class,
             ClinicalNotesRelationManager::class,
             ServiceRequestsRelationManager::class,
         ];
+
+        if (class_exists(\Modules\Billing\Filament\RelationManagers\EncounterInvoicesRelationManager::class)) {
+            $relations[] = \Modules\Billing\Filament\RelationManagers\EncounterInvoicesRelationManager::class;
+        }
+
+        return $relations;
     }
 
     public static function getPages(): array

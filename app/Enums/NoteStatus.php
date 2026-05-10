@@ -3,10 +3,11 @@
 namespace Modules\Clinical\Enums;
 
 use Filament\Support\Contracts\HasColor;
+use Filament\Support\Contracts\HasDescription;
 use Filament\Support\Contracts\HasLabel;
 use Illuminate\Contracts\Support\Htmlable;
 
-enum NoteStatus: string implements HasColor, HasLabel
+enum NoteStatus: string implements HasColor, HasDescription, HasLabel
 {
     case DRAFT = 'draft';
     case SIGNED = 'signed';
@@ -27,6 +28,15 @@ enum NoteStatus: string implements HasColor, HasLabel
             self::DRAFT => 'gray',
             self::SIGNED => 'success',
             self::AMENDED => 'warning',
+        };
+    }
+
+    public function getDescription(): string|Htmlable|null
+    {
+        return match ($this) {
+            self::DRAFT => 'Note can still be edited before signing.',
+            self::SIGNED => 'Note has been finalized by the author.',
+            self::AMENDED => 'Note was changed after signing with an amendment trail.',
         };
     }
 
