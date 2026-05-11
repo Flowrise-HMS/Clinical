@@ -28,7 +28,6 @@ use Modules\Clinical\Models\ServiceRequest;
 use Modules\Clinical\Models\VitalSign;
 use Modules\Patient\Models\Patient;
 use Modules\Patient\Policies\PatientPolicy;
-use Modules\Pharmacy\Classes\Actions\MedicationOrderAction;
 
 class PatientActions
 {
@@ -212,7 +211,9 @@ class PatientActions
 
     public function medicationOrder(): Action
     {
-        if (! class_exists(MedicationOrderAction::class)) {
+        $medicationOrderAction = 'Modules\\Pharmacy\\Classes\\Actions\\MedicationOrderAction';
+
+        if (! class_exists($medicationOrderAction)) {
             return Action::make('medication_order')
                 ->label('Medication Order')
                 ->icon('heroicon-m-beaker')
@@ -220,7 +221,7 @@ class PatientActions
                 ->tooltip('Pharmacy module is not available.');
         }
 
-        return MedicationOrderAction::make($this->patient, $this->encounterId);
+        return $medicationOrderAction::make($this->patient, $this->encounterId);
     }
 
     public function printHospitalCardAction(): Action
