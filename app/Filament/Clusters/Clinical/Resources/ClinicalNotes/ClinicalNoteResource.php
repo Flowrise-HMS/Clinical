@@ -5,7 +5,6 @@ namespace Modules\Clinical\Filament\Clusters\Clinical\Resources\ClinicalNotes;
 use BackedEnum;
 use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
-use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Table;
 use Modules\Clinical\Filament\Clusters\Clinical\ClinicalCluster;
 use Modules\Clinical\Filament\Clusters\Clinical\Resources\ClinicalNotes\Pages\CreateClinicalNote;
@@ -23,7 +22,8 @@ class ClinicalNoteResource extends Resource
     protected static ?string $model = ClinicalNote::class;
 
     protected static string|BackedEnum|null $navigationIcon = null;
-     protected static string|\UnitEnum|null $navigationGroup = NavigationGroup::CLINICAL;
+
+    protected static string|\UnitEnum|null $navigationGroup = NavigationGroup::CLINICAL;
 
     protected static ?string $cluster = ClinicalCluster::class;
 

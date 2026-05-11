@@ -5,6 +5,7 @@ namespace Modules\Clinical\Filament\Clusters\Clinical\Resources\Encounters;
 use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
 use Filament\Tables\Table;
+use Modules\Billing\Filament\RelationManagers\EncounterInvoicesRelationManager;
 use Modules\Clinical\Filament\Clusters\Clinical\ClinicalCluster;
 use Modules\Clinical\Filament\Clusters\Clinical\Resources\Encounters\Pages\CreateEncounter;
 use Modules\Clinical\Filament\Clusters\Clinical\Resources\Encounters\Pages\EditEncounter;
@@ -56,8 +57,8 @@ class EncounterResource extends Resource
             ServiceRequestsRelationManager::class,
         ];
 
-        if (class_exists(\Modules\Billing\Filament\RelationManagers\EncounterInvoicesRelationManager::class)) {
-            $relations[] = \Modules\Billing\Filament\RelationManagers\EncounterInvoicesRelationManager::class;
+        if (class_exists(EncounterInvoicesRelationManager::class)) {
+            $relations[] = EncounterInvoicesRelationManager::class;
         }
 
         return $relations;

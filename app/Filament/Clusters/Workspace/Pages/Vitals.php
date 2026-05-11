@@ -10,16 +10,15 @@ use Filament\Support\Enums\Width;
 use Filament\Tables\Concerns\InteractsWithTable;
 use Filament\Tables\Contracts\HasTable;
 use Filament\Tables\Table;
-use Illuminate\Database\Eloquent\Collection;
 use Modules\Clinical\Classes\Actions\PatientActions;
 use Modules\Clinical\Filament\Clusters\Clinical\Resources\VitalSigns\Schemas\VitalSignInfolist;
 use Modules\Clinical\Filament\Clusters\Clinical\Resources\VitalSigns\Tables\VitalSignsTable;
 use Modules\Clinical\Filament\Clusters\Workspace\WorkspaceCluster;
 use Modules\Clinical\Models\VitalSign;
 
-class Vitals extends Page implements HasTable, HasInfolists
+class Vitals extends Page implements HasInfolists, HasTable
 {
-    use HasPatientContext, InteractsWithTable, InteractsWithInfolists;
+    use HasPatientContext, InteractsWithInfolists, InteractsWithTable;
 
     protected static ?string $title = 'Vitals';
 
@@ -30,7 +29,6 @@ class Vitals extends Page implements HasTable, HasInfolists
     protected static ?string $slug = 'patient/{patient}/vitals';
 
     protected static string|\BackedEnum|null $navigationIcon = LucideIcon::Heart;
-
 
     protected string $view = 'clinical::clinical.workspace.pages.vitals';
 
@@ -71,7 +69,6 @@ class Vitals extends Page implements HasTable, HasInfolists
     {
         return app(PatientActions::class)->forPatient($this->currentPatient)->timelineSubQuickActions();
     }
-
 
     public function getMaxContentWidth(): Width
     {

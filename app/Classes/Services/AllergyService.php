@@ -3,10 +3,7 @@
 namespace Modules\Clinical\Classes\Services;
 
 use Illuminate\Support\Facades\DB;
-use Modules\Clinical\Enums\AllergenType;
-use Modules\Clinical\Enums\AllergySeverity;
 use Modules\Clinical\Enums\AllergyVerificationStatus;
-use Modules\Clinical\Enums\OnsetType;
 use Modules\Clinical\Models\Allergy;
 use Modules\Patient\Models\Patient;
 

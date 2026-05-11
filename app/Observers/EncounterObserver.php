@@ -8,6 +8,7 @@ use Modules\Clinical\Events\EncounterFinished;
 use Modules\Clinical\Models\Encounter;
 use Modules\Clinical\Notifications\PatientAdmittedNotification;
 use Modules\Clinical\Notifications\PatientDischargedNotification;
+use Modules\Patient\Models\EmergencyContact;
 use Modules\Patient\Models\Patient;
 
 class EncounterObserver
@@ -78,7 +79,7 @@ class EncounterObserver
     }
 
     /**
-     * @return array<int, \Modules\Patient\Models\Patient|\Modules\Patient\Models\EmergencyContact>
+     * @return array<int, Patient|EmergencyContact>
      */
     protected function encounterAudience(Patient $patient): array
     {

@@ -12,7 +12,7 @@ class VitalSignInfolist
         return $schema
             ->components([
                 TextEntry::make('recorded_at')
-                    ->state(fn($record) => $record->recorded_at?->diffForHumans() ?? 'Unknown')
+                    ->state(fn ($record) => $record->recorded_at?->diffForHumans() ?? 'Unknown')
                     ->placeholder('-'),
                 TextEntry::make('blood_pressure')
                     ->suffix('mmHg')
@@ -25,13 +25,13 @@ class VitalSignInfolist
                     ->placeholder('-'),
                 TextEntry::make('spo2')
                     ->suffix('%')
-                    ->color(fn($record) => $record->isLowOxygenSaturation() ? 'warning' : 'ray')
+                    ->color(fn ($record) => $record->isLowOxygenSaturation() ? 'warning' : 'ray')
                     ->placeholder('-'),
                 TextEntry::make('respiratory_rate')
                     ->suffix('/min')
                     ->placeholder('-'),
                 TextEntry::make('bmi')
-                    ->suffix(fn($record) => $record?->bmi_category)
+                    ->suffix(fn ($record) => $record?->bmi_category)
                     ->placeholder('-'),
 
             ]);

@@ -5,7 +5,6 @@ namespace Modules\Clinical\Filament\Clusters\Clinical\Resources\VitalSigns;
 use BackedEnum;
 use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
-use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Table;
 use Modules\Clinical\Filament\Clusters\Clinical\ClinicalCluster;
 use Modules\Clinical\Filament\Clusters\Clinical\Resources\VitalSigns\Pages\CreateVitalSign;
@@ -23,7 +22,9 @@ class VitalSignResource extends Resource
     protected static ?string $model = VitalSign::class;
 
     protected static string|BackedEnum|null $navigationIcon = null;
-     protected static string|\UnitEnum|null $navigationGroup = NavigationGroup::CLINICAL;
+
+    protected static string|\UnitEnum|null $navigationGroup = NavigationGroup::CLINICAL;
+
     protected static ?string $cluster = ClinicalCluster::class;
 
     public static function form(Schema $schema): Schema

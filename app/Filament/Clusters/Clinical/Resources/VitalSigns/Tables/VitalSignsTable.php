@@ -20,7 +20,7 @@ class VitalSignsTable
                 TextColumn::make('recorded_at')->label('Date/Time')->dateTime()->sortable(),
                 TextColumn::make('blood_pressure')
                     ->suffix('mmHg')
-                    ->color(fn($record) => $record->isAbnormalBloodPressure() ? 'text-warning-600 font-medium' : 'text-gray-900'),
+                    ->color(fn ($record) => $record->isAbnormalBloodPressure() ? 'text-warning-600 font-medium' : 'text-gray-900'),
                 TextColumn::make('heart_rate')->suffix('bpm'),
                 TextColumn::make('temperature'),
                 TextColumn::make('spo2'),
