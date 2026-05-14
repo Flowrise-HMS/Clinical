@@ -107,6 +107,7 @@ class ServiceRequestForm
             Section::make('Service Items')
                 ->description('Add services to be requested. Use the "Add Item" button below.')
                 ->collapsible()
+                ->visible(fn($record) => !empty($record) && ($record?->items?->count() > 0))
                 ->collapsed(fn ($record) => $record && $record->items->isEmpty())
                 ->schema([
                     TextEntry::make('items_summary')

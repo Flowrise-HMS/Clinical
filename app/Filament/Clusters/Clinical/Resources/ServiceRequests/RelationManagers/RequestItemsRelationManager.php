@@ -6,12 +6,15 @@ use Filament\Actions\ActionGroup;
 use Filament\Actions\CreateAction;
 use Filament\Actions\DeleteAction;
 use Filament\Actions\EditAction;
-use Filament\Forms\Components\Grid;
 use Filament\Forms\Components\Placeholder;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
+use Filament\Infolists\Components\TextEntry;
 use Filament\Resources\RelationManagers\RelationManager;
+use Filament\Schemas\Components\Grid;
+use Filament\Schemas\Components\Utilities\Get;
+use Filament\Schemas\Components\Utilities\Set;
 use Filament\Schemas\Schema;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\SelectFilter;
@@ -41,7 +44,7 @@ class RequestItemsRelationManager extends RelationManager
 
                         Select::make('service_variant_id')
                             ->label('Variant')
-                            ->options(function (callable $get) {
+                            ->options(function (Get $get) {
                                 $serviceId = $get('service_id');
                                 if (! $serviceId) {
                                     return [];
@@ -57,7 +60,7 @@ class RequestItemsRelationManager extends RelationManager
                             ->preload()
                             ->nullable()
                             ->reactive()
-                            ->afterStateUpdated(function ($state, callable $set, callable $get) {
+                            ->afterStateUpdated(function ($state, Set $set, Get $get) {
                                 if ($state) {
                                     $variant = ServiceVariant::find($state);
                                     if ($variant) {
@@ -84,36 +87,36 @@ class RequestItemsRelationManager extends RelationManager
                         TextInput::make('unit_price')
                             ->label('Unit Price')
                             ->numeric()
-                            ->prefix('$')
+                            ->prefix(config('core.default_currency_symbol'))
                             ->required(),
                     ]),
 
                 Grid::make(3)
                     ->schema([
-                        Placeholder::make('subtotal')
+                        TextEntry::make('subtotal')
                             ->label('Subtotal')
-                            ->content(function (callable $get) {
+                            ->state(function (Get $get) {
                                 $quantity = $get('quantity') ?? 1;
                                 $unitPrice = $get('unit_price') ?? 0;
 
-                                return '$'.number_format($quantity * $unitPrice, 2);
-                            }),
+                                return number_format($quantity * $unitPrice, 2);
+                            })->prefix(config('core.default_currency_symbol')),
 
                         TextInput::make('discount_amount')
                             ->label('Discount')
                             ->numeric()
-                            ->prefix('$')
+                            ->prefix(config('core.default_currency_symbol'))
                             ->default(0),
 
-                        Placeholder::make('total')
+                        TextEntry::make('total')
                             ->label('Total')
-                            ->content(function (callable $get) {
+                            ->state(function (Get $get) {
                                 $quantity = $get('quantity') ?? 1;
                                 $unitPrice = $get('unit_price') ?? 0;
                                 $discount = $get('discount_amount') ?? 0;
 
-                                return '$'.number_format(($quantity * $unitPrice) - $discount, 2);
-                            }),
+                                return number_format(($quantity * $unitPrice) - $discount, 2);
+                            })->prefix(config('core.default_currency_symbol')),
                     ]),
 
                 Select::make('status')
