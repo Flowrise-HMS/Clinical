@@ -29,8 +29,20 @@
                                             {{ $request->status?->getLabel() ?? 'Pending' }}
                                         </span>
                                     </div>
-                                    <div class="text-sm text-gray-500">
-                                        {{ $request->created_at?->format('M d, Y H:i') ?? '' }}
+                                    <div class="flex items-center gap-2">
+                                        @if(!$request->isCompleted() && $request->status?->value !== 'cancelled')
+                                            <x-filament::button
+                                                wire:click="mountAction('addItem', { service_request_id: '{{ $request->id }}' })"
+                                                size="sm"
+                                                color="primary"
+                                                icon="heroicon-m-plus"
+                                            >
+                                                Add Item
+                                            </x-filament::button>
+                                        @endif
+                                        <span class="text-sm text-gray-500">
+                                            {{ $request->created_at?->format('M d, Y H:i') ?? '' }}
+                                        </span>
                                     </div>
                                 </div>
 
@@ -78,7 +90,7 @@
 
                                     @if($request->notes)
                                         <div class="mt-3 pt-3 border-t">
-                                            <p class="text-sm text-gray-600">{{ $request->notes }}</p>
+                                            <p>{!! $request->notes !!}</p>
                                         </div>
                                     @endif
                                 </div>

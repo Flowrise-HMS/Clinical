@@ -140,6 +140,16 @@ class Encounter extends BaseModel
         return $this->hasMany(EncounterParticipant::class);
     }
 
+    public function vitalSigns()
+    {
+        return $this->hasMany(VitalSign::class, 'encounter_id');
+    }
+
+    public function clinicalNotes()
+    {
+        return $this->hasMany(ClinicalNote::class, 'encounter_id');
+    }
+
     public function activeParticipants(): HasMany
     {
         return $this->hasMany(EncounterParticipant::class)->where('status', ParticipantStatus::ACTIVE);

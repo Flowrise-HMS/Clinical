@@ -26,6 +26,11 @@ use Modules\Clinical\Models\ClinicalNote;
 use Modules\Clinical\Models\Encounter;
 use Modules\Clinical\Models\ServiceRequest;
 use Modules\Clinical\Models\VitalSign;
+use Modules\Clinical\Policies\AllergyPolicy;
+use Modules\Clinical\Policies\ClinicalNotePolicy;
+use Modules\Clinical\Policies\EncounterPolicy;
+use Modules\Clinical\Policies\ServiceRequestPolicy;
+use Modules\Clinical\Policies\VitalSignPolicy;
 use Modules\Patient\Models\Patient;
 use Modules\Patient\Policies\PatientPolicy;
 
@@ -117,6 +122,7 @@ class PatientActions
             ->slideOver()
             ->schema(fn ($schema) => AllergyForm::quickElements())
             ->mutateDataUsing(fn (array $data): array => $this->injectAllergyData($data))
+            ->visible(fn() => app(AllergyPolicy::class)->create(Auth::user()))
             ->action(fn (array $data) => $this->allergyService->record(
                 $this->patient,
                 $data
@@ -132,6 +138,7 @@ class PatientActions
             ->model(VitalSign::class)
             ->slideOver()
             ->schema(fn ($schema) => VitalSignForm::quickElements())
+            ->visible(fn() => app(VitalSignPolicy::class)->create(Auth::user()))
             ->mutateDataUsing(fn (array $data): array => $this->injectVitalSignData($data))
             ->action(fn (array $data) => $this->vitalSignService->record(
                 $this->patient,
@@ -147,6 +154,7 @@ class PatientActions
             ->label('View Full Profile')
             ->icon('heroicon-m-user-circle')
             ->record($this->patient)
+            ->visible(fn($record) => app(PatientPolicy::class)->view(Auth::user(), $record))
             ->url(fn ($record) => PatientProfile::getUrl(['patient' => $record?->id]), shouldOpenInNewTab: true)
             ->color('gray');
     }
@@ -158,6 +166,7 @@ class PatientActions
             ->icon('heroicon-m-clock')
             ->color('gray')
             ->record($this->patient)
+            ->visible(fn($record) => app(PatientPolicy::class)->view(Auth::user(), $record))
             ->url(fn ($record) => Timeline::getUrl(['patient' => $record?->id]), shouldOpenInNewTab: true);
     }
 
@@ -183,6 +192,7 @@ class PatientActions
             ->model(ClinicalNote::class)
             ->slideOver()
             ->schema(fn ($schema) => ClinicalNoteForm::quickElements())
+            ->visible(fn($record) => app(ClinicalNotePolicy::class)->create(Auth::user()))
             ->mutateDataUsing(fn (array $data): array => $this->injectClinicalNoteData($data))
             ->action(fn (array $data) => $this->clinicalNoteService->record(
                 $this->patient,
@@ -201,6 +211,7 @@ class PatientActions
             ->model(ServiceRequest::class)
             ->schema(fn ($schema) => ServiceRequestForm::quickElements())
             ->mutateDataUsing(fn (array $data): array => $this->injectServiceRequestData($data))
+            ->visible(fn($record) => app(ServiceRequestPolicy::class)->create(Auth::user()))
             ->action(fn (array $data) => $this->serviceRequestService->record(
                 $this->patient,
                 $data,
@@ -288,6 +299,7 @@ class PatientActions
             ->model(Encounter::class)
             ->slideOver()
             ->schema(fn ($schema) => EncounterForm::quickElements())
+            ->visible(fn($record) => app(EncounterPolicy::class)->create(Auth::user()))
             ->mutateDataUsing(fn (array $data): array => $this->injectEncounterData($data))
             ->action(fn (array $data) => $this->createEncounter($data))
             ->successNotificationTitle('Encounter created successfully');

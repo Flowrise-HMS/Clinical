@@ -2,6 +2,7 @@
 
 namespace Modules\Clinical\Filament\Clusters\Clinical\Resources\ServiceRequests\Schemas;
 
+use Filament\Forms\Components\Repeater;
 use Filament\Forms\Components\RichEditor;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
@@ -62,11 +63,12 @@ class ServiceRequestForm
                     Grid::make(3)
                         ->schema([
                             Select::make('encounter_id')
-                                ->relationship('encounter', 'encounter_number')
+                                ->relationship('encounter', 'encounter_number', fn ($query) => $query?->latest())
                                 ->getOptionLabelFromRecordUsing(fn ($record) => $record ? "{$record->encounter_number} - {$record->display_name}" : 'Select encounter')
                                 ->searchable()
                                 ->preload()
                                 ->nullable()
+                                ->helperText('Leave empty to continue with the recent active encounter')
                                 ->label('Linked Encounter'),
 
                             Select::make('priority')
@@ -105,22 +107,18 @@ class ServiceRequestForm
                 ]),
 
             Section::make('Service Items')
-                ->description('Add services to be requested. Use the "Add Item" button below.')
+                ->description('Add the services to be requested')
                 ->collapsible()
-                ->visible(fn($record) => !empty($record) && ($record?->items?->count() > 0))
-                ->collapsed(fn ($record) => $record && $record->items->isEmpty())
+                ->columnSpanFull()
                 ->schema([
-                    TextEntry::make('items_summary')
-                        ->label('Current Items')
-                        ->state(function ($record) {
-                            if (! $record) {
-                                return 'No items added yet';
-                            }
-                            $count = $record->items->count();
-                            $total = $record->total_amount;
-
-                            return "{$count} item(s) - Total: $".number_format($total, 2);
-                        }),
+                    Repeater::make('items')
+                        ->relationship('items')
+                        ->columnSpanFull()
+                        ->schema(fn (Schema $schema) => RequestItemForm::configure($schema))
+                        ->addActionLabel('Add Service Item')
+                        ->defaultItems(0)
+                        ->minItems(0)
+                        ->collapsible(),
                 ]),
         ];
     }

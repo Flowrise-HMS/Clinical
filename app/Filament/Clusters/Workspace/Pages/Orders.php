@@ -3,16 +3,22 @@
 namespace Modules\Clinical\Filament\Clusters\Workspace\Pages;
 
 use CodeWithDennis\FilamentLucideIcons\Enums\LucideIcon;
+use Filament\Actions\Action;
+use Filament\Actions\Concerns\InteractsWithActions;
+use Filament\Actions\Contracts\HasActions;
 use Filament\Pages\Page;
 use Filament\Support\Enums\Width;
 use Illuminate\Database\Eloquent\Collection;
 use Modules\Clinical\Classes\Actions\PatientActions;
+use Modules\Clinical\Classes\Services\ServiceRequestService;
+use Modules\Clinical\Filament\Clusters\Clinical\Resources\ServiceRequests\Schemas\RequestItemForm;
 use Modules\Clinical\Filament\Clusters\Workspace\WorkspaceCluster;
 use Modules\Clinical\Models\ServiceRequest;
 
-class Orders extends Page
+class Orders extends Page implements HasActions
 {
     use HasPatientContext;
+    use InteractsWithActions;
 
     protected static ?string $title = 'Orders';
 
@@ -30,12 +36,7 @@ class Orders extends Page
 
     protected static bool $shouldRegisterNavigation = false;
 
-    public function boot(): void
-    {
-        $this->patientId = request()->route('patient');
-        $this->bootHasPatientContext();
-        $this->loadOrdersData();
-    }
+    protected ServiceRequestService $serviceRequestService;
 
     public function mount(): void
     {
@@ -44,7 +45,9 @@ class Orders extends Page
 
     protected function getHeaderActions(): array
     {
-        return app(PatientActions::class)->forPatient($this->currentPatient)->timelineSubQuickActions();
+        return app(PatientActions::class)->forPatient($this->currentPatient)
+            ->withEncounter($this->currentEncounter)
+            ->timelineSubQuickActions();
     }
 
     protected function loadOrdersData(): void
@@ -60,6 +63,14 @@ class Orders extends Page
         }
     }
 
+    public function boot(): void
+    {
+        $this->patientId = request()->route('patient');
+        $this->bootHasPatientContext();
+        $this->serviceRequestService = app(ServiceRequestService::class);
+        $this->loadOrdersData();
+    }
+
     public function getMaxContentWidth(): Width
     {
         return Width::Full;
@@ -70,5 +81,31 @@ class Orders extends Page
         return $this->currentPatient
             ? 'Orders - '.$this->currentPatient->full_name
             : 'Orders';
+    }
+
+    public function addItemAction(): Action
+    {
+        return Action::make('addItem')
+            ->label('Add Item')
+            ->icon('heroicon-m-plus')
+            ->slideOver()
+            ->schema(RequestItemForm::getItemFields())
+            ->action(function (array $data, array $arguments) {
+                $request = ServiceRequest::findOrFail($arguments['service_request_id']);
+
+                if ($request->isCompleted() || $request->status?->value === 'cancelled') {
+                    return;
+                }
+
+                $this->serviceRequestService->addItem(
+                    $request,
+                    $data['service_id'],
+                    $data['service_variant_id'] ?? null,
+                    $data['quantity'] ?? 1
+                );
+
+                $this->loadOrdersData();
+            })
+            ->successNotificationTitle('Item added to request');
     }
 }

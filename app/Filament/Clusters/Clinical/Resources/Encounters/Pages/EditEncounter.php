@@ -4,7 +4,7 @@ namespace Modules\Clinical\Filament\Clusters\Clinical\Resources\Encounters\Pages
 
 use Filament\Actions\Action;
 use Filament\Forms\Components\Select;
-use Filament\Forms\Components\TextArea;
+use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
 use Filament\Resources\Pages\EditRecord;
 use Modules\Clinical\Classes\Services\EncounterService;
@@ -84,7 +84,7 @@ class EditEncounter extends EditRecord
                 ->color('gray')
                 ->visible(fn () => ! $record->isCompleted())
                 ->schema([
-                    TextArea::make('reason')
+                    Textarea::make('reason')
                         ->label('Reason for Cancellation')
                         ->required(),
                 ])
