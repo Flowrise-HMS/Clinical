@@ -66,13 +66,7 @@ class ClinicalNoteForm
 
                     RichEditor::make('content')
                         ->label('Note Content')
-                        ->toolbarButtons([
-                            'bold',
-                            'italic',
-                            'underline',
-                            'bulletList',
-                            'orderedList',
-                        ])
+
                         ->fileAttachmentsDisk('local')
                         ->fileAttachmentsDirectory('notes'),
                 ]),

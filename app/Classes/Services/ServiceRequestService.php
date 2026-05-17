@@ -26,27 +26,42 @@ class ServiceRequestService
         ?string $encounterId = null,
         ?int $orderedBy = null
     ): ServiceRequest {
-        $data = [
-            'patient_id' => $patient->id,
-            'encounter_id' => $encounterId,
-            'branch_id' => $patient->branch_id,
-            'ordered_by' => $orderedBy ?? auth()->id(),
-            'created_by' => $orderedBy ?? auth()->id(),
-        ];
+        return DB::transaction(function () use ($patient, $requestData, $encounterId, $orderedBy) {
+            $data = [
+                'patient_id' => $patient->id,
+                'encounter_id' => $encounterId,
+                'branch_id' => $patient->branch_id ?? $this->branchService->getDefaultBranchId(),
+                'ordered_by' => $orderedBy ?? auth()->id(),
+                'created_by' => $orderedBy ?? auth()->id(),
+            ];
 
-        $optionalFields = [
-            'status', 'priority', 'notes',
-            'guest_name', 'guest_phone', 'guest_email',
-            'metadata',
-        ];
+            $optionalFields = [
+                'status', 'priority', 'notes',
+                'guest_name', 'guest_phone', 'guest_email',
+                'metadata',
+            ];
 
-        foreach ($optionalFields as $field) {
-            if (isset($requestData[$field])) {
-                $data[$field] = $requestData[$field];
+            foreach ($optionalFields as $field) {
+                if (isset($requestData[$field])) {
+                    $data[$field] = $requestData[$field];
+                }
             }
-        }
 
-        return ServiceRequest::create($data);
+            $request = ServiceRequest::create($data);
+
+            if (! empty($requestData['items'])) {
+                foreach ($requestData['items'] as $itemData) {
+                    $this->addItem(
+                        $request,
+                        $itemData['service_id'],
+                        $itemData['service_variant_id'] ?? null,
+                        $itemData['quantity'] ?? 1
+                    );
+                }
+            }
+
+            return $request->load('items.service');
+        });
     }
 
     public function createForPatient(
@@ -61,7 +76,7 @@ class ServiceRequestService
             $request = ServiceRequest::create([
                 'patient_id' => $patient->id,
                 'encounter_id' => $encounterId,
-                'branch_id' => $patient->branch_id,
+                'branch_id' => $patient->branch_id ?? $this->branchService->getDefaultBranchId(),
                 'priority' => $priority ?? RequestPriority::default(),
                 'notes' => $notes,
                 'ordered_by' => $orderedBy ?? auth()->id(),

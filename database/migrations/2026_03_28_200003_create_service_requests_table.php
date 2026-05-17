@@ -20,6 +20,7 @@ return new class extends Migration
                 ->constrained()
                 ->cascadeOnDelete();
             $table->foreignUuid('branch_id')
+                ->nullable()
                 ->constrained()
                 ->cascadeOnDelete();
             $table->string('status')->default('active');

@@ -2,6 +2,7 @@
 
 namespace Modules\Clinical\Filament\Clusters\Workspace\Pages;
 
+use BezhanSalleh\FilamentShield\Traits\HasPageShield;
 use CodeWithDennis\FilamentLucideIcons\Enums\LucideIcon;
 use Filament\Pages\Page;
 use Filament\Support\Enums\Width;
@@ -13,6 +14,8 @@ use Modules\Core\Classes\Support\PageHeaderActionsRegistry;
 
 class Timeline extends Page
 {
+    use HasPageShield;
+    
     use HasPatientContext;
 
     protected static ?string $title = 'Timeline';

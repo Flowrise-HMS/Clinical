@@ -20,6 +20,7 @@ class ServiceRequestsTable
     {
         return $table
             ->columns([
+                TextColumn::make('#')->rowIndex(),
                 TextColumn::make('request_number')
                     ->label('Number')
                     ->searchable()

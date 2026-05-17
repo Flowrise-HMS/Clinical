@@ -39,7 +39,7 @@ class Notes extends Page
 
     protected function getHeaderActions(): array
     {
-        return app(PatientActions::class)->forPatient($this->currentPatient)->timelineSubQuickActions();
+        return app(PatientActions::class)->forPatient($this->currentPatient)->withEncounter($this->currentEncounter)->timelineSubQuickActions();
     }
 
     public function mount(): void
