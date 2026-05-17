@@ -45,13 +45,14 @@ trait HasPatientContext
         if ($this->patientId) {
             $this->currentPatient = Patient::with([
                 'allergies',
+                'activeEncounter',
                 'latestEncounter',
                 'latestVitals',
             ])->find($this->patientId);
 
             if ($this->currentPatient) {
                 $this->workspaceService->setPatient($this->currentPatient);
-                $this->currentEncounter = $this->currentPatient->latestEncounter;
+                $this->currentEncounter = $this->currentPatient->activeEncounter ?? $this->currentPatient->latestEncounter;
                 $this->latestVitals = $this->workspaceService->getLatestVitals();
                 $this->nextAppointment = $this->workspaceService->getNextAppointmentForPatient($this->currentPatient);
             }

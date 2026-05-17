@@ -27,13 +27,14 @@ use Modules\Clinical\Filament\Clusters\Workspace\WorkspaceCluster;
 use Modules\Clinical\Filament\Widgets\CriticalPatientsWidget;
 use Modules\Clinical\Filament\Widgets\MyTasksWidget;
 use Modules\Clinical\Filament\Widgets\PatientTimelineWidget;
+use Modules\Clinical\Filament\Widgets\PendingFulfillmentsWidget;
 use Modules\Clinical\Filament\Widgets\RecentPatientsWidget;
 use Modules\Clinical\Filament\Widgets\WorkspaceTodayAppointmentsWidget;
 use Modules\Core\Classes\Support\PageHeaderActionsRegistry;
 use Modules\Patient\Classes\Services\PatientSearchService;
 use Modules\Patient\Models\Patient;
 
-class Patients extends Page implements HasActions, HasSchemas, HasTable
+class PatientWorkspace extends Page implements HasActions, HasSchemas, HasTable
 {
     use HasPageShield;
     use InteractsWithActions, InteractsWithSchemas, InteractsWithTable;
@@ -286,5 +287,12 @@ class Patients extends Page implements HasActions, HasSchemas, HasTable
         $widgets[] = RecentPatientsWidget::class;
 
         return $widgets;
+    }
+
+    protected function getFooterWidgets(): array
+    {
+        return [
+            PendingFulfillmentsWidget::class,
+        ];
     }
 }

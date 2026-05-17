@@ -20,6 +20,7 @@ use Filament\Schemas\Schema;
 use Illuminate\Database\Eloquent\Collection;
 use Modules\Clinical\Classes\Actions\PatientActions;
 use Modules\Clinical\Filament\Clusters\Workspace\WorkspaceCluster;
+use Modules\Clinical\Filament\Widgets\PendingFulfillmentsWidget;
 use Modules\Clinical\Models\Allergy;
 use Modules\Clinical\Models\ClinicalNote;
 use Modules\Clinical\Models\Encounter;
@@ -80,6 +81,14 @@ class PatientProfile extends Page implements HasActions, HasForms, HasInfolists
                 ->icon(Vitals::getActiveNavigationIcon())
                 ->url(fn () => Vitals::getUrl(['patient' => $this->currentPatient]), shouldOpenInNewTab: true),
         ];
+    }
+
+    protected function getFooterWidgets(): array
+    {
+        $widgets = [
+            PendingFulfillmentsWidget::make(['patientId' => $this->currentPatient->id]),
+        ];
+        return $widgets;
     }
 
     public function patientInfoList(Patient $patient): Schema

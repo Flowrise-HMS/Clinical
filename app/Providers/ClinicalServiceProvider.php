@@ -58,6 +58,12 @@ class ClinicalServiceProvider extends ModuleServiceProvider
 
         Encounter::observe(EncounterObserver::class);
         RequestItem::observe(RequestItemObserver::class);
+
+        if (class_exists(\Modules\Patient\Models\Patient::class)) {
+            \Modules\Patient\Models\Patient::resolveRelationUsing('serviceRequests', function ($patient) {
+                return $patient->hasMany(\Modules\Clinical\Models\ServiceRequest::class);
+            });
+        }
     }
 
     /**

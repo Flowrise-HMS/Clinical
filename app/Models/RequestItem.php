@@ -89,6 +89,11 @@ class RequestItem extends Model
         return $this->hasOne(\Modules\Pharmacy\Models\PrescriptionDetail::class, 'request_item_id');
     }
 
+    public function medicationAdministrations(): HasMany
+    {
+        return $this->hasMany(MedicationAdministration::class);
+    }
+
     public function scopePending(Builder $query): Builder
     {
         return $query->where('status', RequestItemStatus::PENDING);

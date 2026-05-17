@@ -18,7 +18,7 @@ class MyAgenda extends Page
 
     protected static ?string $navigationLabel = 'My agenda';
 
-    protected static ?string $cluster = WorkspaceCluster::class;
+    // protected static ?string $cluster = WorkspaceCluster::class;
 
     protected static string|\BackedEnum|null $navigationIcon = LucideIcon::Calendar;
 
