@@ -16,6 +16,7 @@ use Filament\Forms\Components\TimePicker;
 use Filament\Notifications\Notification;
 use Illuminate\Support\Facades\Auth;
 use Modules\Clinical\Classes\Services\AllergyService;
+use Modules\Clinical\Classes\Services\BedAssignmentService;
 use Modules\Clinical\Classes\Services\ClinicalNoteService;
 use Modules\Clinical\Classes\Services\EncounterService;
 use Modules\Clinical\Classes\Services\FulfillmentService;
@@ -24,6 +25,7 @@ use Modules\Clinical\Classes\Services\ServiceRequestService;
 use Modules\Clinical\Classes\Services\VitalSignService;
 use Modules\Clinical\Enums\DischargeDisposition;
 use Modules\Clinical\Enums\EncounterStatus;
+use Modules\Clinical\Enums\EncounterType;
 use Modules\Clinical\Filament\Clusters\Clinical\Resources\Allergies\Schemas\AllergyForm;
 use Modules\Clinical\Filament\Clusters\Clinical\Resources\ClinicalNotes\Schemas\ClinicalNoteForm;
 use Modules\Clinical\Filament\Clusters\Clinical\Resources\Encounters\Schemas\EncounterForm;
@@ -54,7 +56,8 @@ class PatientActions
         protected ServiceRequestService $serviceRequestService,
         protected EncounterService $encounterService,
         protected FulfillmentService $fulfillmentService,
-        protected MedicationAdministrationService $medicationAdminService
+        protected MedicationAdministrationService $medicationAdminService,
+        protected BedAssignmentService $bedAssignmentService
     ) {}
 
     protected ?Patient $patient = null;
@@ -70,7 +73,8 @@ class PatientActions
             app(ServiceRequestService::class),
             app(EncounterService::class),
             app(FulfillmentService::class),
-            app(MedicationAdministrationService::class)
+            app(MedicationAdministrationService::class),
+            app(BedAssignmentService::class)
         );
     }
 
@@ -103,6 +107,7 @@ class PatientActions
             $this->printHospitalCardAction(),
             $this->encounter(),
             $this->cancelEncounterAction(),
+            $this->assignToWardAction(),
             $this->medicationAdminAction(),
             $this->fulfillServiceAction(),
             $this->note(),
@@ -125,8 +130,12 @@ class PatientActions
         return $this;
     }
 
-    public function withEncounter(int|string|null $encounterId): static
+    public function withEncounter(object|string|null $encounterId): static
     {
+        if(is_object($encounterId) &&  $encounterId instanceof Encounter){
+            $this->encounterId = $encounterId?->id;
+            return $this;
+        }
         $this->encounterId = $encounterId;
 
         return $this;
@@ -156,7 +165,7 @@ class PatientActions
             ->icon('heroicon-m-heart')
             ->model(VitalSign::class)
             ->slideOver()
-            ->schema(fn ($schema) => VitalSignForm::quickElements())
+            ->schema(fn () => VitalSignForm::quickElements())
             ->visible(fn() => app(VitalSignPolicy::class)->create(Auth::user()))
             ->mutateDataUsing(fn (array $data): array => $this->injectVitalSignData($data))
             ->action(fn (array $data) => $this->vitalSignService->record(
@@ -471,6 +480,7 @@ class PatientActions
             ->icon('heroicon-m-arrow-left-end-on-rectangle')
             ->color('danger')
             ->slideOver()
+            ->modalDescription(__('Discharge the patient from the current encounter. This will finalize their stay, free up the assigned bed, and generate any pending invoices for settlement.'))
             ->schema([
                 Select::make('discharge_disposition')
                     ->label('Disposition')
@@ -535,6 +545,7 @@ class PatientActions
                     ->label('Reason for cancellation')
                     ->required(),
             ])
+            ->modalDescription(__('This will cancel the current encounter, freeing up the bed and generating any pending invoices for services rendered.'))
             ->visible(function (): bool {
                 $encounter = $this->patient?->activeEncounter()->first();
 
@@ -550,6 +561,58 @@ class PatientActions
                 $this->encounterService->cancelEncounter($encounter, $data['reason']);
             })
             ->successNotificationTitle('Encounter cancelled');
+    }
+
+    public function assignToWardAction(): Action
+    {
+        return Action::make('assign_to_ward')
+            ->label('Assign to Ward / Bed')
+            ->icon('heroicon-m-building-office')
+            ->color('success')
+            ->slideOver()
+            ->modalHeading(__('Assign to Ward / Bed'))
+            ->modalDescription(__('Select a ward and bed for this patient. If the encounter is still in Planned status, it will be admitted automatically. The bed must not be occupied by another active patient.'))
+            ->visible(function (): bool {
+                if (! $this->patient) {
+                    return false;
+                }
+
+                $encounter = $this->patient->activeEncounter()->first();
+
+                return $encounter !== null
+                    && $encounter->type === EncounterType::INPATIENT
+                    && ($encounter->canTransitionTo(EncounterStatus::ARRIVED) || $encounter->status->isActive())
+                    && Auth::user()->can('update', $encounter);
+            })
+            ->schema([
+                Select::make('ward_id')
+                    ->label('Ward / Room')
+                    ->options(fn (): array => $this->bedAssignmentService->getWardsForBranch($this->patient->branch_id)->toArray())
+                    ->searchable()
+                    ->live()
+                    ->afterStateUpdated(fn ($state, callable $set) => $set('bed_id', null)),
+                Select::make('bed_id')
+                    ->label('Bed')
+                    ->options(fn (callable $get): array => $get('ward_id')
+                        ? $this->bedAssignmentService->getAvailableBeds($get('ward_id'))->toArray()
+                        : [])
+                    ->searchable()
+                    ->required()
+                    ->disabled(fn (callable $get) => blank($get('ward_id'))),
+            ])
+            ->action(function (array $data): void {
+                $encounter = $this->patient?->activeEncounter()->first();
+                if ($encounter === null) {
+                    return;
+                }
+
+                $this->bedAssignmentService->assignBed(
+                    $encounter,
+                    $data['bed_id'],
+                    Auth::id()
+                );
+            })
+            ->successNotificationTitle('Patient assigned to ward/bed successfully');
     }
 
     protected function injectEncounterData(array $data): array

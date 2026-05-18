@@ -7,6 +7,7 @@ use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
 use Filament\Resources\Pages\EditRecord;
+use Modules\Clinical\Classes\Services\BedAssignmentService;
 use Modules\Clinical\Classes\Services\EncounterService;
 use Modules\Clinical\Enums\DischargeDisposition;
 use Modules\Clinical\Enums\EncounterPriority;
@@ -27,9 +28,31 @@ class EditEncounter extends EditRecord
                 ->icon('heroicon-m-arrow-right-start-on-rectangle')
                 ->color('success')
                 ->visible(fn () => $record->canTransitionTo(EncounterStatus::ARRIVED))
-                ->action(function () {
-                    app(EncounterService::class)->admitPatient($this->getRecord());
-                    $this->refreshFormData(['status']);
+                ->modalHeading(__('Admit Patient'))
+                ->modalDescription(__('Admit the patient to a ward and bed. This will mark the encounter as Arrived and assign the selected bed. Only beds not currently occupied by another active patient are shown.'))
+                ->slideOver()
+                ->schema([
+                    Select::make('ward_id')
+                        ->label('Ward / Room')
+                        ->options(fn () => app(BedAssignmentService::class)->getWardsForBranch($record->branch_id))
+                        ->searchable()
+                        ->live()
+                        ->afterStateUpdated(fn ($state, callable $set) => $set('bed_id', null)),
+                    Select::make('bed_id')
+                        ->label('Bed')
+                        ->options(fn (callable $get) => $get('ward_id')
+                            ? app(BedAssignmentService::class)->getAvailableBeds($get('ward_id'))
+                            : [])
+                        ->searchable()
+                        ->required()
+                        ->disabled(fn (callable $get) => blank($get('ward_id'))),
+                ])
+                ->action(function (array $data) {
+                    app(EncounterService::class)->admitPatient(
+                        $this->getRecord(),
+                        bedId: $data['bed_id'] ?? null
+                    );
+                    $this->refreshFormData(['status', 'bed_id']);
                     $this->notify('success', 'Patient admitted successfully');
                 }),
 
@@ -58,6 +81,8 @@ class EditEncounter extends EditRecord
                 ->icon('heroicon-m-arrow-left-end-on-rectangle')
                 ->color('danger')
                 ->visible(fn () => $record->canTransitionTo(EncounterStatus::FINISHED))
+                ->modalHeading(__('Discharge Patient'))
+                ->modalDescription(__('Discharge the patient from this encounter. This will finalize their stay, free up the assigned bed, and generate any pending invoices for settlement.'))
                 ->schema([
                     Select::make('discharge_disposition')
                         ->label('Disposition')
@@ -83,6 +108,8 @@ class EditEncounter extends EditRecord
                 ->icon('heroicon-m-x-circle')
                 ->color('gray')
                 ->visible(fn () => ! $record->isCompleted())
+                ->modalHeading(__('Cancel Encounter'))
+                ->modalDescription(__('Cancel this encounter. This will free up the assigned bed and generate any pending invoices for services rendered so far.'))
                 ->schema([
                     Textarea::make('reason')
                         ->label('Reason for Cancellation')

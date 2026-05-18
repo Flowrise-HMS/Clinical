@@ -215,7 +215,9 @@ class PatientProfile extends Page implements HasActions, HasForms, HasInfolists
             return [];
         }
 
-        $actions = PatientActions::make()->forPatient($this->currentPatient);
+        $actions = PatientActions::make()
+            ->forPatient($this->currentPatient)
+            ->withEncounter($this->currentEncounter);
 
         return [
             $actions->timelineAction(),

@@ -10,6 +10,8 @@ use Modules\Clinical\Enums\EncounterStatus;
 use Modules\Clinical\Enums\EncounterType;
 use Modules\Clinical\Enums\ParticipantRole;
 use Modules\Clinical\Enums\ParticipantStatus;
+use Modules\Clinical\Events\EncounterCancelled;
+use Modules\Clinical\Events\EncounterFinished;
 use Modules\Clinical\Models\Encounter;
 use Modules\Clinical\Models\EncounterParticipant;
 use Modules\Core\Classes\Services\BranchService;
@@ -171,6 +173,7 @@ class EncounterService
             'discharged_by' => $dischargedBy ?? auth()->id(),
             'discharged_at' => now(),
             'discharge_disposition' => $disposition ?? DischargeDisposition::COMPLETED,
+            'bed_id' => null,
         ];
 
         if ($transferDestination) {
@@ -186,6 +189,8 @@ class EncounterService
                 'left_at' => now(),
             ]);
 
+        EncounterFinished::dispatch($encounter);
+
         return $encounter->fresh();
     }
 
@@ -197,6 +202,7 @@ class EncounterService
 
         $encounter->update([
             'status' => EncounterStatus::CANCELLED,
+            'bed_id' => null,
             'metadata' => array_merge($encounter->metadata ?? [], ['cancel_reason' => $reason]),
         ]);
 
@@ -206,6 +212,8 @@ class EncounterService
                 'status' => ParticipantStatus::COMPLETED,
                 'left_at' => now(),
             ]);
+
+        EncounterCancelled::dispatch($encounter);
 
         return $encounter->fresh();
     }

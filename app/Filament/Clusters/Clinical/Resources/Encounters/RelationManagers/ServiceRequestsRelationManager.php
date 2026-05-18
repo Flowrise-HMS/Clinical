@@ -8,6 +8,7 @@ use Filament\Actions\CreateAction;
 use Filament\Actions\DeleteAction;
 use Filament\Actions\DetachAction;
 use Filament\Actions\EditAction;
+use Filament\Actions\ViewAction;
 use Filament\Resources\RelationManagers\RelationManager;
 use Filament\Schemas\Schema;
 use Filament\Tables\Columns\TextColumn;
@@ -15,6 +16,7 @@ use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
 use Modules\Clinical\Enums\RequestPriority;
 use Modules\Clinical\Enums\RequestStatus;
+use Modules\Clinical\Filament\Clusters\Clinical\Resources\ServiceRequests\Schemas\ServiceRequestInfolist;
 
 class ServiceRequestsRelationManager extends RelationManager
 {
@@ -91,6 +93,9 @@ class ServiceRequestsRelationManager extends RelationManager
                     ->label('Link Existing'),
             ])
             ->recordActions([
+                ViewAction::make()
+                    ->infolist(fn (Schema $schema) => ServiceRequestInfolist::configure($schema))
+                    ->slideOver(),
                 ActionGroup::make([
                     EditAction::make(),
                     DetachAction::make(),
