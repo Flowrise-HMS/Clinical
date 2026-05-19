@@ -163,6 +163,7 @@ class Encounter extends BaseModel
     public function scopeActive(Builder $query): Builder
     {
         return $query->whereIn('status', [
+            EncounterStatus::PLANNED->value,
             EncounterStatus::ARRIVED->value,
             EncounterStatus::TRIAGED->value,
             EncounterStatus::IN_PROGRESS->value,

@@ -13,6 +13,7 @@ use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\TimePicker;
+use Filament\Infolists\Components\TextEntry;
 use Filament\Notifications\Notification;
 use Illuminate\Support\Facades\Auth;
 use Modules\Clinical\Classes\Services\AllergyService;
@@ -23,7 +24,6 @@ use Modules\Clinical\Classes\Services\FulfillmentService;
 use Modules\Clinical\Classes\Services\MedicationAdministrationService;
 use Modules\Clinical\Classes\Services\ServiceRequestService;
 use Modules\Clinical\Classes\Services\VitalSignService;
-use Modules\Clinical\Enums\DischargeDisposition;
 use Modules\Clinical\Enums\EncounterStatus;
 use Modules\Clinical\Enums\EncounterType;
 use Modules\Clinical\Filament\Clusters\Clinical\Resources\Allergies\Schemas\AllergyForm;
@@ -237,7 +237,7 @@ class PatientActions
             ->icon('heroicon-m-clipboard-document-list')
             ->slideOver()
             ->model(ServiceRequest::class)
-            ->schema(fn ($schema) => ServiceRequestForm::quickElements())
+            ->schema(fn ($schema) => ServiceRequestForm::quickElements(hidenEncounter: true))
             ->mutateDataUsing(fn (array $data): array => $this->injectServiceRequestData($data))
             ->visible(fn($record) => app(ServiceRequestPolicy::class)->create(Auth::user()))
             ->action(fn (array $data) => $this->serviceRequestService->record(
@@ -294,13 +294,14 @@ class PatientActions
                 $contextHtml = view('clinical::clinical.fulfillment-context', $context)->render();
 
                 return [
-                    \Filament\Forms\Components\Placeholder::make('context')
-                        ->label('')
+                    TextEntry::make('context')
+                        ->hiddenLabel()
+                        ->html()
                         ->content($contextHtml),
                     Repeater::make('administrations')
                         ->schema([
-                            \Filament\Forms\Components\Hidden::make('request_item_id'),
-                            \Filament\Forms\Components\Checkbox::make('selected')
+                            Hidden::make('request_item_id'),
+                            Checkbox::make('selected')
                                 ->default(true)
                                 ->label(fn ($get) => $get('medication_info'))
                                 ->inline(),
@@ -475,45 +476,17 @@ class PatientActions
 
     public function dischargeAction(): Action
     {
-        return Action::make('discharge_patient')
+        $encounter = $this->patient?->activeEncounter()->first();
+
+        if (! $encounter) {
+            return Action::make('discharge_patient')->hidden();
+        }
+
+        return EncounterActions::discharge($encounter)
+            ->name('discharge_patient')
             ->label('Discharge patient')
-            ->icon('heroicon-m-arrow-left-end-on-rectangle')
-            ->color('danger')
-            ->slideOver()
-            ->modalDescription(__('Discharge the patient from the current encounter. This will finalize their stay, free up the assigned bed, and generate any pending invoices for settlement.'))
-            ->schema([
-                Select::make('discharge_disposition')
-                    ->label('Disposition')
-                    ->options(DischargeDisposition::class)
-                    ->default(DischargeDisposition::COMPLETED->value)
-                    ->required(),
-                TextInput::make('transfer_destination')
-                    ->label('Transfer destination')
-                    ->visible(fn (callable $get) => $get('discharge_disposition') === DischargeDisposition::TRANSFERRED->value),
-            ])
-            ->visible(function (): bool {
-                if (! $this->patient) {
-                    return false;
-                }
-
-                $encounter = $this->patient->activeEncounter()->first();
-
-                return $encounter !== null
-                    && $encounter->canTransitionTo(EncounterStatus::FINISHED)
-                    && (Auth::user()?->can('discharge_patient') ?? false);
-            })
-            ->action(function (array $data): void {
-                $encounter = $this->patient?->activeEncounter()->first();
-                if ($encounter === null || ! ($this->patient instanceof Patient)) {
-                    return;
-                }
-
-                $this->encounterService->discharge(
-                    $encounter,
-                    DischargeDisposition::from($data['discharge_disposition']),
-                    $data['transfer_destination'] ?? null
-                );
-            })
+            ->visible(fn () => $encounter->canTransitionTo(EncounterStatus::FINISHED)
+                && (Auth::user()?->can('discharge_patient') ?? false))
             ->successNotificationTitle('Patient discharged successfully');
     }
 
@@ -535,83 +508,36 @@ class PatientActions
 
     public function cancelEncounterAction(): Action
     {
-        return Action::make('cancel_encounter')
+        $encounter = $this->patient?->activeEncounter()->first();
+
+        if (! $encounter) {
+            return Action::make('cancel_encounter')->hidden();
+        }
+
+        return EncounterActions::cancel($encounter)
+            ->name('cancel_encounter')
             ->label('Cancel Encounter')
-            ->icon('heroicon-m-x-circle')
-            ->color('gray')
-            ->slideOver()
-            ->schema([
-                TextInput::make('reason')
-                    ->label('Reason for cancellation')
-                    ->required(),
-            ])
-            ->modalDescription(__('This will cancel the current encounter, freeing up the bed and generating any pending invoices for services rendered.'))
-            ->visible(function (): bool {
-                $encounter = $this->patient?->activeEncounter()->first();
-
-                return $encounter !== null
-                    && $encounter->canTransitionTo(EncounterStatus::CANCELLED);
-            })
-            ->action(function (array $data): void {
-                $encounter = $this->patient?->activeEncounter()->first();
-                if ($encounter === null || ! ($this->patient instanceof Patient)) {
-                    return;
-                }
-
-                $this->encounterService->cancelEncounter($encounter, $data['reason']);
-            })
+            ->visible(fn () => $encounter->canTransitionTo(EncounterStatus::CANCELLED))
             ->successNotificationTitle('Encounter cancelled');
     }
 
     public function assignToWardAction(): Action
     {
-        return Action::make('assign_to_ward')
+        $encounter = $this->patient?->activeEncounter()->first();
+
+        if (! $encounter) {
+            return Action::make('assign_to_ward')->hidden();
+        }
+
+        return EncounterActions::assignToWard(
+            $encounter,
+            $this->bedAssignmentService,
+        )
+            ->name('assign_to_ward')
             ->label('Assign to Ward / Bed')
-            ->icon('heroicon-m-building-office')
-            ->color('success')
-            ->slideOver()
-            ->modalHeading(__('Assign to Ward / Bed'))
-            ->modalDescription(__('Select a ward and bed for this patient. If the encounter is still in Planned status, it will be admitted automatically. The bed must not be occupied by another active patient.'))
-            ->visible(function (): bool {
-                if (! $this->patient) {
-                    return false;
-                }
-
-                $encounter = $this->patient->activeEncounter()->first();
-
-                return $encounter !== null
-                    && $encounter->type === EncounterType::INPATIENT
-                    && ($encounter->canTransitionTo(EncounterStatus::ARRIVED) || $encounter->status->isActive())
-                    && Auth::user()->can('update', $encounter);
-            })
-            ->schema([
-                Select::make('ward_id')
-                    ->label('Ward / Room')
-                    ->options(fn (): array => $this->bedAssignmentService->getWardsForBranch($this->patient->branch_id)->toArray())
-                    ->searchable()
-                    ->live()
-                    ->afterStateUpdated(fn ($state, callable $set) => $set('bed_id', null)),
-                Select::make('bed_id')
-                    ->label('Bed')
-                    ->options(fn (callable $get): array => $get('ward_id')
-                        ? $this->bedAssignmentService->getAvailableBeds($get('ward_id'))->toArray()
-                        : [])
-                    ->searchable()
-                    ->required()
-                    ->disabled(fn (callable $get) => blank($get('ward_id'))),
-            ])
-            ->action(function (array $data): void {
-                $encounter = $this->patient?->activeEncounter()->first();
-                if ($encounter === null) {
-                    return;
-                }
-
-                $this->bedAssignmentService->assignBed(
-                    $encounter,
-                    $data['bed_id'],
-                    Auth::id()
-                );
-            })
+            ->visible(fn () => $encounter->type === EncounterType::INPATIENT
+                && ($encounter->canTransitionTo(EncounterStatus::ARRIVED) || $encounter?->status?->isActive())
+                && Auth::user()->can('update', $encounter))
             ->successNotificationTitle('Patient assigned to ward/bed successfully');
     }
 

@@ -12,7 +12,6 @@ use Filament\Infolists\Components\ImageEntry;
 use Filament\Infolists\Components\TextEntry;
 use Filament\Infolists\Concerns\InteractsWithInfolists;
 use Filament\Infolists\Contracts\HasInfolists;
-use Filament\Navigation\NavigationItem;
 use Filament\Pages\Page;
 use Filament\Schemas\Components\Grid;
 use Filament\Schemas\Components\Section;
@@ -20,12 +19,13 @@ use Filament\Schemas\Schema;
 use Illuminate\Database\Eloquent\Collection;
 use Modules\Clinical\Classes\Actions\PatientActions;
 use Modules\Clinical\Filament\Clusters\Workspace\WorkspaceCluster;
+use Modules\Clinical\Filament\Widgets\PatientNotesWidget;
+use Modules\Clinical\Filament\Widgets\PatientOrdersWidget;
+use Modules\Clinical\Filament\Widgets\PatientVitalsChartWidget;
+use Modules\Clinical\Filament\Widgets\PatientVitalsHistoryWidget;
+use Modules\Clinical\Filament\Widgets\PatientVitalsOverviewWidget;
 use Modules\Clinical\Filament\Widgets\PendingFulfillmentsWidget;
 use Modules\Clinical\Models\Allergy;
-use Modules\Clinical\Models\ClinicalNote;
-use Modules\Clinical\Models\Encounter;
-use Modules\Clinical\Models\ServiceRequest;
-use Modules\Clinical\Models\VitalSign;
 use Modules\Core\Classes\Support\PageHeaderActionsRegistry;
 use Modules\Patient\Models\Patient;
 use Ysfkaya\FilamentPhoneInput\Infolists\PhoneEntry;
@@ -46,14 +46,6 @@ class PatientProfile extends Page implements HasActions, HasForms, HasInfolists
 
     public Collection|array $allergies = [];
 
-    public Collection|array $vitalsHistory = [];
-
-    public Collection|array $clinicalNotes = [];
-
-    public Collection|array $serviceRequests = [];
-
-    public Collection|array $encounters = [];
-
     protected string $view = 'clinical::clinical.workspace.patient-profile';
 
     public function boot(): void
@@ -68,27 +60,31 @@ class PatientProfile extends Page implements HasActions, HasForms, HasInfolists
         $this->mountHasPatientContext();
     }
 
-    public function getSubNavigation(): array
-    {
-        return [
-            NavigationItem::make('Notes')
-                ->icon(Notes::getActiveNavigationIcon())
-                ->url(fn () => Notes::getUrl(['patient' => $this->currentPatient]), shouldOpenInNewTab: true),
-            NavigationItem::make('Orders')
-                ->icon(Orders::getActiveNavigationIcon())
-                ->url(fn () => Orders::getUrl(['patient' => $this->currentPatient]), shouldOpenInNewTab: true),
-            NavigationItem::make('Vitals')
-                ->icon(Vitals::getActiveNavigationIcon())
-                ->url(fn () => Vitals::getUrl(['patient' => $this->currentPatient]), shouldOpenInNewTab: true),
-        ];
-    }
-
     protected function getFooterWidgets(): array
     {
-        $widgets = [
+        return [
+            PatientVitalsOverviewWidget::make([
+                'patientId' => $this->currentPatient->id,
+                'encounterId' => $this->currentEncounter?->id,
+            ]),
+            PatientVitalsChartWidget::make([
+                'patientId' => $this->currentPatient->id,
+                'encounterId' => $this->currentEncounter?->id,
+            ]),
+            PatientVitalsHistoryWidget::make([
+                'patientId' => $this->currentPatient->id,
+                'encounterId' => $this->currentEncounter?->id,
+            ]),
+            PatientNotesWidget::make([
+                'patientId' => $this->currentPatient->id,
+                'encounterId' => $this->currentEncounter?->id,
+            ]),
+            PatientOrdersWidget::make([
+                'patientId' => $this->currentPatient->id,
+                'encounterId' => $this->currentEncounter?->id,
+            ]),
             PendingFulfillmentsWidget::make(['patientId' => $this->currentPatient->id]),
         ];
-        return $widgets;
     }
 
     public function patientInfoList(Patient $patient): Schema
@@ -183,30 +179,6 @@ class PatientProfile extends Page implements HasActions, HasForms, HasInfolists
             ->limit(50)
             ->get();
 
-        $this->vitalsHistory = VitalSign::query()
-            ->where('patient_id', $this->currentPatient->id)
-            ->when($this->currentEncounter?->id, fn ($q) => $q->where('encounter_id', $this->currentEncounter->id))
-            ->orderBy('recorded_at', 'desc')
-            ->limit(50)
-            ->get();
-
-        $this->clinicalNotes = ClinicalNote::query()
-            ->where('patient_id', $this->currentPatient->id)
-            ->orderByDesc('created_at')
-            ->limit(50)
-            ->get();
-
-        $this->serviceRequests = ServiceRequest::query()
-            ->where('patient_id', $this->currentPatient->id)
-            ->orderByDesc('created_at')
-            ->limit(50)
-            ->get();
-
-        $this->encounters = Encounter::query()
-            ->where('patient_id', $this->currentPatient->id)
-            ->orderByDesc('created_at')
-            ->limit(50)
-            ->get();
     }
 
     protected function getHeaderActions(): array

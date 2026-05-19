@@ -21,7 +21,7 @@ class RequestItemForm
         return [
             Select::make('service_id')
                 ->label('Service')
-                ->options(fn () => Service::active()->billable()->with('category')->get()->groupBy('category.name')->map(fn ($group) => $group->pluck('name', 'id'))->toArray())
+                ->options(fn() => Service::active()->billable()->with('category')->get()->groupBy('category.name')->map(fn($group) => $group->pluck('name', 'id'))->toArray())
                 ->searchable()
                 ->preload()
                 ->required()
@@ -38,11 +38,11 @@ class RequestItemForm
                 ->label('Variant')
                 ->options(function (Get $get) {
                     $serviceId = $get('service_id');
-                    if (! $serviceId) {
+                    if (!$serviceId) {
                         return [];
                     }
                     $service = Service::find($serviceId);
-                    if (! $service) {
+                    if (!$service) {
                         return [];
                     }
 
@@ -74,60 +74,67 @@ class RequestItemForm
                 ->numeric()
                 ->default(1)
                 ->minValue(1)
-                ->required(),
+                ->required()
+                ->live(),
 
             TextInput::make('unit_price')
                 ->label('Unit Price')
                 ->numeric()
                 ->prefix(config('core.default_currency_symbol'))
-                ->required(),
+                ->required()
+                ->live(),
+        ];
+    }
+
+    public static function getFormSchema(): array
+    {
+        return [
+            Grid::make(4)
+                ->schema(self::getItemFields()),
+
+            Grid::make(3)
+                ->schema([
+                    TextEntry::make('subtotal')
+                        ->label('Subtotal')
+                        ->state(function (Get $get) {
+                            $quantity = $get('quantity') ?? 1;
+                            $unitPrice = $get('unit_price') ?? 0;
+
+                            return config('core.default_currency_symbol') . ' ' . number_format($quantity * $unitPrice, 2);
+                        }),
+
+                    TextInput::make('discount_amount')
+                        ->label('Discount')
+                        ->numeric()
+                        ->prefix(config('core.default_currency_symbol'))
+                        ->default(0)
+                        ->live(),
+
+                    TextEntry::make('total')
+                        ->label('Total')
+                        ->state(function (Get $get) {
+                            $quantity = $get('quantity') ?? 1;
+                            $unitPrice = $get('unit_price') ?? 0;
+                            $discount = $get('discount_amount') ?? 0;
+
+                            return config('core.default_currency_symbol') . ' ' . number_format(($quantity * $unitPrice) - $discount, 2);
+                        }),
+                ]),
+
+            Select::make('status')
+                ->options(RequestItemStatus::class)
+                ->default(RequestItemStatus::PENDING)
+                ->required()
+                ->label('Status'),
+
+            Textarea::make('notes')
+                ->label('Notes/Instructions')
+                ->rows(2),
         ];
     }
 
     public static function configure(Schema $schema): Schema
     {
-        return $schema
-            ->components([
-                Grid::make(4)
-                    ->schema(self::getItemFields()),
-
-                Grid::make(3)
-                    ->schema([
-                        TextEntry::make('subtotal')
-                            ->label('Subtotal')
-                            ->state(function (Get $get) {
-                                $quantity = $get('quantity') ?? 1;
-                                $unitPrice = $get('unit_price') ?? 0;
-
-                                return number_format($quantity * $unitPrice, 2);
-                            })->prefix(config('core.default_currency_symbol')),
-
-                        TextInput::make('discount_amount')
-                            ->label('Discount')
-                            ->numeric()
-                            ->prefix(config('core.default_currency_symbol'))
-                            ->default(0),
-
-                        TextEntry::make('total')
-                            ->label('Total')
-                            ->state(function (Get $get) {
-                                $quantity = $get('quantity') ?? 1;
-                                $unitPrice = $get('unit_price') ?? 0;
-                                $discount = $get('discount_amount') ?? 0;
-
-                                return number_format(($quantity * $unitPrice) - $discount, 2);
-                            })->prefix(config('core.default_currency_symbol')),
-                    ]),
-
-                Select::make('status')
-                    ->options(RequestItemStatus::class)
-                    ->default(RequestItemStatus::PENDING)
-                    ->required()
-                    ->label('Status'),
-
-                Textarea::make('notes')
-                    ->label('Notes/Instructions')
-                    ->rows(2),
-            ]);
+        return $schema->components(self::getFormSchema());
     }
 }

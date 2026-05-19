@@ -15,7 +15,7 @@ use Modules\Core\Classes\Support\PageHeaderActionsRegistry;
 class Timeline extends Page
 {
     use HasPageShield;
-    
+
     use HasPatientContext;
 
     protected static ?string $title = 'Timeline';
@@ -128,6 +128,17 @@ class Timeline extends Page
         $allowed = ['all', 'encounter', 'vitals', 'note', 'order', 'appointment'];
 
         return in_array($filter, $allowed, true) ? $filter : 'all';
+    }
+
+    protected function getFooterWidgets(): array
+    {
+        if (! $this->currentPatient) {
+            return [];
+        }
+
+        return [
+
+        ];
     }
 
     public function getMaxContentWidth(): Width

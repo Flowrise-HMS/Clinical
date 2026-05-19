@@ -2,6 +2,8 @@
 
 namespace Modules\Clinical\Filament\Clusters\Clinical\Resources\ServiceRequests\Schemas;
 
+use Filament\Forms\Components\Hidden;
+use Filament\Forms\Components\Placeholder;
 use Filament\Forms\Components\Repeater;
 use Filament\Forms\Components\RichEditor;
 use Filament\Forms\Components\Select;
@@ -27,7 +29,7 @@ class ServiceRequestForm
                             ->schema([
                                 Select::make('patient_id')
                                     ->relationship('patient', 'mrn')
-                                    ->getOptionLabelFromRecordUsing(fn ($record) => $record ? $record->full_name : 'Select patient')
+                                    ->getOptionLabelFromRecordUsing(fn($record) => $record ? $record->full_name : 'Select patient')
                                     ->searchable()
                                     ->preload()
                                     ->nullable()
@@ -50,11 +52,11 @@ class ServiceRequestForm
                                     ->nullable(),
                             ]),
                     ]),
-
-            ], self::quickElements()));
+                Hidden::make('ordered_by')->default(auth()->id()),
+            ], self::quickElements(useRelationship: true, hidenEncounter: true)));
     }
 
-    public static function quickElements(): array
+    public static function quickElements(bool $useRelationship = false, bool $hidenEncounter = false): array
     {
         return [
             Section::make('Request Details')
@@ -63,10 +65,11 @@ class ServiceRequestForm
                     Grid::make(3)
                         ->schema([
                             Select::make('encounter_id')
-                                ->relationship('encounter', 'encounter_number', fn ($query) => $query?->latest())
-                                ->getOptionLabelFromRecordUsing(fn ($record) => $record ? "{$record->encounter_number} - {$record->display_name}" : 'Select encounter')
+                                ->relationship('encounter', 'encounter_number', fn($query) => $query?->latest())
+                                ->getOptionLabelFromRecordUsing(fn($record) => $record ? "{$record->encounter_number} - {$record->display_name}" : 'Select encounter')
                                 ->searchable()
                                 ->preload()
+                                ->hidden($hidenEncounter)
                                 ->nullable()
                                 ->helperText('Leave empty to continue with the recent active encounter')
                                 ->label('Linked Encounter'),
@@ -88,7 +91,8 @@ class ServiceRequestForm
                         ->schema([
                             TextEntry::make('ordered_by_name')
                                 ->label('Ordered By')
-                                ->state(fn ($record) => $record?->orderedBy?->name ?? 'Not assigned'),
+                                ->state(fn() => auth()->user()?->name)
+                                ->state(fn($record) => $record?->orderedBy?->name ?? 'Not assigned'),
                         ]),
 
                     RichEditor::make('notes')
@@ -111,14 +115,16 @@ class ServiceRequestForm
                 ->collapsible()
                 ->columnSpanFull()
                 ->schema([
-                    Repeater::make('items')
-                        ->relationship('items')
-                        ->columnSpanFull()
-                        ->schema(fn (Schema $schema) => RequestItemForm::configure($schema))
-                        ->addActionLabel('Add Service Item')
-                        ->defaultItems(0)
-                        ->minItems(0)
-                        ->collapsible(),
+                    tap(
+                        Repeater::make('items')
+                            ->columnSpanFull()
+                            ->schema(RequestItemForm::getFormSchema())
+                            ->addActionLabel('Add Service Item')
+                            ->defaultItems(0)
+                            ->minItems(0)
+                            ->collapsible(),
+                        fn (Repeater $repeater) => $useRelationship ? $repeater->relationship('items') : null
+                    ),
                 ]),
         ];
     }

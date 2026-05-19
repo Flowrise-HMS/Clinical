@@ -14,6 +14,7 @@ use Filament\Forms\Components\TimePicker;
 use Filament\Infolists\Components\TextEntry;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\HtmlString;
 use Modules\Clinical\Enums\TaskOutcome;
 use Modules\Clinical\Enums\TaskStatus;
 use Modules\Clinical\Models\RequestItem;
@@ -65,13 +66,14 @@ class FulfillmentService
         $type = $this->getType($item);
         $context = $this->getContextInfo($item);
 
-        $contextHtml = view('clinical::clinical.fulfillment-context', $context)->render();
 
         $schema = [
             TextEntry::make('context')
                 ->hiddenLabel()
                 ->html()
-                ->state($contextHtml),
+                ->state(function () use ($context) {
+                    return (view('clinical::clinical.fulfillment-context',$context)->render());
+                }),
         ];
 
         if ($type === 'medication') {

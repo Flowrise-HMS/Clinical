@@ -15,6 +15,7 @@ use Filament\Tables\Columns\TextColumn;
 use Filament\Widgets\TableWidget as BaseTableWidget;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\HtmlString;
 use Modules\Clinical\Classes\Services\FulfillmentService;
 use Modules\Clinical\Classes\Services\MedicationAdministrationService;
 use Modules\Clinical\Models\RequestItem;
@@ -175,14 +176,14 @@ class PendingFulfillmentsWidget extends BaseTableWidget
             $patientId = $record->serviceRequest?->patient_id;
             $medicationService = app(MedicationAdministrationService::class);
             $items = $medicationService->getPendingItems($patientId);
-
-            $contextHtml = view('clinical::clinical.fulfillmentfulfillment-context', $fulfillmentService->getContextInfo($record))->render();
-
             return [
-                TextEntry::make('context')
-                    ->hiddenLabel()
-                    ->html()
-                    ->state($contextHtml),
+
+
+            TextEntry::make('context')
+                ->hiddenLabel() // This hides the "Context" label you were seeing
+                ->state(function ($record) use ($fulfillmentService) {
+                    return new HtmlString(view('clinical::clinical.fulfillmentfulfillment-context',$fulfillmentService->getContextInfo($record))->render());
+                }),
                 Repeater::make('administrations')
                     ->schema([
                         Hidden::make('request_item_id'),
@@ -223,7 +224,7 @@ class PendingFulfillmentsWidget extends BaseTableWidget
                     ->deletable(false),
                 Textarea::make('notes')
                     ->label('Notes')
-                    ->rows(2),
+                    ->rows(3),
             ];
         }
 
