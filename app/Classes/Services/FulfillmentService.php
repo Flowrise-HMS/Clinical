@@ -92,12 +92,12 @@ class FulfillmentService
         }
 
         if ($type === 'medication') {
-            $schema[] = Textarea::make('notes')->label('Notes')->rows(2);
+            $schema[] = Textarea::make('notes')->label('Notes')->rows(3);
         } else {
             $schema[] = DateTimePicker::make('started_at')->label('Started At')->default(now());
             $schema[] = DateTimePicker::make('ended_at')->label('Ended At')->default(now());
             if ($type !== 'diagnostic') {
-                $schema[] = Textarea::make('notes')->label('Notes')->rows(2);
+                $schema[] = Textarea::make('notes')->label('Notes')->rows(3);
             }
         }
 

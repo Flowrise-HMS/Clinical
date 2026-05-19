@@ -305,10 +305,10 @@ class PatientActions
                                 ->default(true)
                                 ->label(fn ($get) => $get('medication_info'))
                                 ->inline(),
-                            \Filament\Forms\Components\Hidden::make('medication_info'),
-                            \Filament\Forms\Components\TimePicker::make('started_at')->default('08:00'),
-                            \Filament\Forms\Components\TimePicker::make('ended_at')->default('08:00'),
-                            \Filament\Forms\Components\TextInput::make('quantity_given')
+                            Hidden::make('medication_info'),
+                            TimePicker::make('started_at')->default('08:00'),
+                            TimePicker::make('ended_at')->default('08:00'),
+                            TextInput::make('quantity_given')
                                 ->numeric()
                                 ->default(1)
                                 ->minValue(1),
@@ -335,7 +335,7 @@ class PatientActions
                         ->addable(false)
                         ->reorderable(false)
                         ->deletable(false),
-                    Textarea::make('notes')->label('Notes')->rows(2),
+                    Textarea::make('notes')->label('Notes')->rows(3),
                 ];
             })
             ->action(function (array $data): void {

@@ -179,11 +179,6 @@ class PendingFulfillmentsWidget extends BaseTableWidget
             return [
 
 
-            TextEntry::make('context')
-                ->hiddenLabel() // This hides the "Context" label you were seeing
-                ->state(function ($record) use ($fulfillmentService) {
-                    return new HtmlString(view('clinical::clinical.fulfillmentfulfillment-context',$fulfillmentService->getContextInfo($record))->render());
-                }),
                 Repeater::make('administrations')
                     ->schema([
                         Hidden::make('request_item_id'),
