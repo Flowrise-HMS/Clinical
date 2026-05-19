@@ -94,6 +94,16 @@ class RequestItem extends Model
         return $this->hasMany(MedicationAdministration::class);
     }
 
+    public function invoiceLine(): \Illuminate\Database\Eloquent\Relations\MorphOne
+    {
+        return $this->morphOne(\Modules\Billing\Models\InvoiceLine::class, 'billable');
+    }
+
+    public function getPaymentStatusAttribute(): ?\Modules\Billing\Enums\InvoiceLineStatus
+    {
+        return $this->invoiceLine?->line_status;
+    }
+
     public function scopePending(Builder $query): Builder
     {
         return $query->where('status', RequestItemStatus::PENDING);

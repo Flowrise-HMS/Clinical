@@ -58,6 +58,7 @@ class FulfillmentService
             'ordered_at' => $serviceRequest?->created_at?->format('Y-m-d H:i') ?? 'N/A',
             'priority' => $serviceRequest?->priority?->getLabel() ?? '-',
             'status' => $item->status?->getLabel() ?? '-',
+            'payment_status' => $item->payment_status,
         ];
     }
 

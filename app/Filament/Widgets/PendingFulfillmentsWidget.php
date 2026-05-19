@@ -101,6 +101,11 @@ class PendingFulfillmentsWidget extends BaseTableWidget
                     return max(0, $detail->total_administrations - $given).'/'.$detail->total_administrations;
                 })
                 ->visible(fn ($record): bool => $record?->prescriptionDetail !== null),
+            TextColumn::make('payment_status')
+                ->label('Payment')
+                ->badge()
+                ->color(fn (RequestItem $record): string => $record->payment_status?->getColor() ?? 'gray')
+                ->formatStateUsing(fn (RequestItem $record): string => $record->payment_status?->getLabel() ?? '—'),
         ];
     }
 
