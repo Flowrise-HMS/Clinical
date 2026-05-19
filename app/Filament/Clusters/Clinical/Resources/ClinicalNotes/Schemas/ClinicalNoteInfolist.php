@@ -30,7 +30,7 @@ class ClinicalNoteInfolist
                 Section::make('Note Content')
                     ->schema([
                         TextEntry::make('content')
-                            ->label('')
+                            ->hiddenLabel()
                             ->html()
                             ->placeholder('No content recorded'),
                     ]),
