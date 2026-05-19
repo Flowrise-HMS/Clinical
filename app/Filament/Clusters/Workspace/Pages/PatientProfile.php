@@ -2,6 +2,7 @@
 
 namespace Modules\Clinical\Filament\Clusters\Workspace\Pages;
 
+use BezhanSalleh\FilamentShield\Traits\HasPageShield;
 use CodeWithDennis\FilamentLucideIcons\Enums\LucideIcon;
 use Filament\Actions\Concerns\InteractsWithActions;
 use Filament\Actions\Contracts\HasActions;
@@ -32,6 +33,7 @@ use Ysfkaya\FilamentPhoneInput\Infolists\PhoneEntry;
 
 class PatientProfile extends Page implements HasActions, HasForms, HasInfolists
 {
+    use HasPageShield;
     use HasPatientContext, InteractsWithActions, InteractsWithForms, InteractsWithInfolists;
 
     protected static ?string $slug = 'patient/{patient}/profile';

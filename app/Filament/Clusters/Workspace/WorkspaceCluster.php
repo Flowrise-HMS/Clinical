@@ -20,4 +20,9 @@ class WorkspaceCluster extends Cluster
     protected static ?SubNavigationPosition $subNavigationPosition = SubNavigationPosition::Top;
 
     protected static bool $shouldRegisterSubNavigation = false;
+
+    public static function canAccess(): bool
+    {
+        return static::canAccessClusteredComponents();
+    }
 }
