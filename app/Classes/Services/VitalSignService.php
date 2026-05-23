@@ -40,7 +40,7 @@ class VitalSignService
             ];
 
             foreach ($optionalFields as $field) {
-                if (isset($vitalData[$field])) {
+                if (isset($vitalData[$field]) && $vitalData[$field] !== '') {
                     $data[$field] = $vitalData[$field];
                 }
             }

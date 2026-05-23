@@ -39,15 +39,15 @@ class PatientWorkspace extends Page implements HasActions, HasSchemas, HasTable
     use HasPageShield;
     use InteractsWithActions, InteractsWithSchemas, InteractsWithTable;
 
-    protected static ?string $slug = '';
+    protected static ?string $slug = 'legacy-patient-list';
 
-    protected static ?string $navigationLabel = 'Patient Workspace';
+    protected static ?string $navigationLabel = 'Patient Workspace (Legacy)';
 
     protected static ?string $cluster = WorkspaceCluster::class;
 
     protected static string|\BackedEnum|null $navigationIcon = LucideIcon::HeartPulse;
 
-    protected static bool $shouldRegisterNavigation = true;
+    protected static bool $shouldRegisterNavigation = false;
 
     protected string $view = 'clinical::clinical.workspace.patient-list';
 
