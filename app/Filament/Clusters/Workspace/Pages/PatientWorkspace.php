@@ -292,7 +292,7 @@ class PatientWorkspace extends Page implements HasActions, HasSchemas, HasTable
     protected function getFooterWidgets(): array
     {
         return [
-            PendingFulfillmentsWidget::class,
+            // PendingFulfillmentsWidget::class,
         ];
     }
 }
