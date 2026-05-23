@@ -115,32 +115,32 @@ class PatientProfile extends Page implements HasActions, HasForms, HasInfolists
                                     ->boolean()
                                     ->label('Deceased')
                                     ->tooltip('Is Patient Deceased')
-                                    ->state(fn ($record): bool => $record?->isDeceased()),
+                                    ->state(fn($record): bool => $record?->isDeceased()),
                                 TextEntry::make('deceased_at')
-                                    ->visible(fn ($record): bool => $record?->isDeceased()),
+                                    ->visible(fn($record): bool => $record?->isDeceased()),
                                 IconEntry::make('has_allergies')
                                     ->boolean()
-                                    ->state(fn ($record): bool => $this->hasAllergies()),
+                                    ->state(fn($record): bool => $this->hasAllergies()),
                                 TextEntry::make('mrn')->label('MRN'),
                                 TextEntry::make('age')->label('Age'),
                                 TextEntry::make('gender')
                                     ->label('Gender')
                                     ->badge()
-                                    ->formatStateUsing(fn ($state, $record) => $state?->getLabel().($record?->date_of_birth ? '('.$record->date_of_birth?->format('Y-m-d').')' : null) ?? 'N/A'),
+                                    ->formatStateUsing(fn($state, $record) => $state?->getLabel() . ($record?->date_of_birth ? '(' . $record->date_of_birth?->format('Y-m-d') . ')' : null) ?? 'N/A'),
                                 TextEntry::make('blood_type')
                                     ->badge()
-                                    ->formatStateUsing(fn ($state) => $state?->getLabel()),
+                                    ->formatStateUsing(fn($state) => $state?->getLabel()),
                                 TextEntry::make('marital_status')
-                                    ->formatStateUsing(fn ($state) => $state?->getLabel()),
+                                    ->formatStateUsing(fn($state) => $state?->getLabel()),
                             ]),
 
                         Section::make('Location')
                             ->collapsed()
                             ->columns(2)
-                            ->visible(fn () => $this->hasActiveEncounter() && $this->currentEncounter?->isInpatient())
+                            ->visible(fn() => $this->hasActiveEncounter() && $this->currentEncounter?->isInpatient())
                             ->schema([
-                                TextEntry::make('ward')->state(fn () => $this->currentEncounter->location?->name ?? 'N/A'),
-                                TextEntry::make('bed')->state(fn () => $this->currentEncounter->bed?->name ?? 'N/A'),
+                                TextEntry::make('ward')->state(fn() => $this->currentEncounter->location?->name ?? 'N/A'),
+                                TextEntry::make('bed')->state(fn() => $this->currentEncounter->bed?->name ?? 'N/A'),
                             ]),
                         Section::make('Contact Information')
                             ->collapsed()
@@ -149,19 +149,19 @@ class PatientProfile extends Page implements HasActions, HasForms, HasInfolists
                                 PhoneEntry::make('phone'),
                                 TextEntry::make('email'),
                                 TextEntry::make('country')
-                                    ->formatStateUsing(fn ($record) => isset($record->address['country']) ? $record->address['country'] : 'N/A')
+                                    ->formatStateUsing(fn($record) => isset($record->address['country']) ? $record->address['country'] : 'N/A')
                                     ->placeholder('-'),
                                 TextEntry::make('region')
-                                    ->formatStateUsing(fn ($record) => isset($record->address['region']) ? $record->address['region'] : 'N/A')
+                                    ->formatStateUsing(fn($record) => isset($record->address['region']) ? $record->address['region'] : 'N/A')
                                     ->placeholder('-'),
                                 TextEntry::make('district')
-                                    ->formatStateUsing(fn ($record) => isset($record->address['district']) ? $record->address['district'] : 'N/A')
+                                    ->formatStateUsing(fn($record) => isset($record->address['district']) ? $record->address['district'] : 'N/A')
                                     ->placeholder('-'),
                                 TextEntry::make('city')
-                                    ->formatStateUsing(fn ($record) => isset($record->address['city']) ? $record->address['city'] : 'N/A')
+                                    ->formatStateUsing(fn($record) => isset($record->address['city']) ? $record->address['city'] : 'N/A')
                                     ->placeholder('-'),
                                 TextEntry::make('street')
-                                    ->formatStateUsing(fn ($record) => isset($record->address['street']) ? $record->address['street'] : 'N/A')
+                                    ->formatStateUsing(fn($record) => isset($record->address['street']) ? $record->address['street'] : 'N/A')
                                     ->placeholder('-'),
                             ]),
                     ])
@@ -171,7 +171,7 @@ class PatientProfile extends Page implements HasActions, HasForms, HasInfolists
 
     protected function loadPatientData(): void
     {
-        if (! $this->currentPatient) {
+        if (!$this->currentPatient) {
             return;
         }
 
@@ -185,7 +185,7 @@ class PatientProfile extends Page implements HasActions, HasForms, HasInfolists
 
     protected function getHeaderActions(): array
     {
-        if (! $this->currentPatient) {
+        if (!$this->currentPatient) {
             return [];
         }
 

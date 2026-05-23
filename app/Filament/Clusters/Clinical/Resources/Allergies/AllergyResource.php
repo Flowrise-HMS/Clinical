@@ -30,6 +30,11 @@ class AllergyResource extends Resource
 
     protected static ?string $slug = 'clinical/allergies';
 
+    public static function shouldRegisterNavigation(): bool
+    {
+        return false;
+    }
+
     public static function form(Schema $schema): Schema
     {
         return AllergyForm::configure($schema);
