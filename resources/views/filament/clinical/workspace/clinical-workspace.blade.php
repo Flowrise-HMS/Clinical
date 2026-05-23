@@ -126,8 +126,8 @@
                                 <span
                                     class="hidden sm:inline">{{ $currentEncounter->type?->getLabel() ?? 'Encounter' }}</span>
                                 @if ($currentEncounter->coverage_type ?? null)
-                                    <x-filament::badge :color="$currentEncounter->coverage_type === 'nhis' ? 'success' : 'warning'" class="text-xs">
-                                        {{ strtoupper($currentEncounter->coverage_type) }}
+                                    <x-filament::badge :color="$currentEncounter->coverage_type->getColor() ?? 'gray'" class="text-xs">
+                                        {{ $currentEncounter->coverage_type->getLabel() }}
                                     </x-filament::badge>
                                 @endif
                             @endif
@@ -150,7 +150,7 @@
                             {{ $currentEncounter->status?->getLabel() ?? 'N/A' }}
                         </x-filament::badge>
                     @endif
-                    <x-filament::button wire:click="clearPatient" color="gray" size="sm" outlined
+                    <x-filament::button wire:click="clearPatient" color="info" size="sm" outlined
                         icon="heroicon-m-x-mark">
                         <span class="hidden sm:inline">Clear</span>
                     </x-filament::button>
@@ -186,9 +186,9 @@
                 <div
                     class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4 sm:p-6">
                     @if ($activeTab === 'encounter')
-                        <div class="space-y-4">
-                            <h3 class="text-lg font-semibold text-gray-900 dark:text-white">Create OPD Encounter</h3>
-                            @if ($currentEncounter?->isActive())
+                        @if ($currentEncounter?->isActive())
+                            <div class="space-y-4">
+                                <h3 class="text-lg font-semibold text-gray-900 dark:text-white">Active Encounter</h3>
                                 <x-filament::section>
                                     <div class="flex items-center justify-between">
                                         <div>
@@ -197,36 +197,35 @@
                                                 {{ $currentEncounter->type?->getLabel() }} &middot;
                                                 {{ $currentEncounter->status?->getLabel() }}
                                                 @if ($currentEncounter->coverage_type ?? null)
-                                                    &middot; {{ strtoupper($currentEncounter->coverage_type) }}
+                                                    &middot; {{ $currentEncounter->coverage_type->getLabel() }}
                                                 @endif
                                             </p>
                                         </div>
                                         <x-filament::badge color="success">Active</x-filament::badge>
                                     </div>
                                 </x-filament::section>
-                            @endif
-                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                <x-filament::input.wrapper label="Chief Complaint">
-                                    <x-filament::input type="text" wire:model="consultationChiefComplaint"
-                                        placeholder="e.g. Fever, cough" />
-                                </x-filament::input.wrapper>
-                                <div>
-                                    <x-filament::input.wrapper label="Coverage Type">
-                                        <x-filament::input.select wire:model="selectedEncounterCoverage">
-                                            <option value="">Select coverage...</option>
-                                            <option value="cash">Cash</option>
-                                            <option value="nhis">NHIS</option>
-                                        </x-filament::input.select>
-                                    </x-filament::input.wrapper>
+                                <p class="text-sm text-gray-500 dark:text-gray-400">
+                                    This patient already has an active encounter. Record vitals or proceed with assessment.
+                                </p>
+                                <div class="flex justify-end">
+                                    <x-filament::button wire:click="$set('activeTab', 'vitals')" color="primary"
+                                        icon="heroicon-m-heart">
+                                        Go to Vitals
+                                    </x-filament::button>
                                 </div>
                             </div>
-                            <div class="flex justify-end">
-                                <x-filament::button wire:click="createEncounter" color="primary"
-                                    icon="heroicon-m-plus-circle" :disabled="!$selectedEncounterCoverage">
-                                    Create Encounter
-                                </x-filament::button>
+                        @else
+                            <div class="space-y-4">
+                                <h3 class="text-lg font-semibold text-gray-900 dark:text-white">Create OPD Encounter</h3>
+                                {{ $this->encounterForm }}
+                                <div class="flex justify-end pt-4">
+                                    <x-filament::button wire:click="createEncounter" color="primary"
+                                        icon="heroicon-m-plus-circle">
+                                        Create Encounter
+                                    </x-filament::button>
+                                </div>
                             </div>
-                        </div>
+                        @endif
                     @elseif($activeTab === 'vitals')
                         <div class="space-y-4">
                             <h3 class="text-lg font-semibold text-gray-900 dark:text-white">Record Vitals</h3>
@@ -406,17 +405,27 @@
                     class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4 sm:p-6">
                     <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-4">Diagnosis</h3>
                     <div class="space-y-3">
-                        <x-filament::input.wrapper label="Search ICD Codes">
-                            <x-filament::input type="text" wire:model="diagnosisSearch"
-                                placeholder="Search for diagnosis..." />
-                        </x-filament::input.wrapper>
+                        {{ $this->diagnosisForm }}
+
+                        @if ($currentEncounter && count($diagnosisCodes) > 0)
+                            <div class="flex justify-end pt-2">
+                                <x-filament::button wire:click="saveDiagnoses" color="primary"
+                                    icon="heroicon-m-document-check">
+                                    Save Diagnoses
+                                </x-filament::button>
+                            </div>
+                        @endif
+                    </div>
+                </div>
+                        </div>
 
                         @if (count($diagnosisCodes) > 0)
                             <div class="flex flex-wrap gap-2">
                                 @foreach ($diagnosisCodes as $idx => $code)
                                     <div
                                         class="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-primary-50 dark:bg-primary-900/20 text-primary-700 dark:text-primary-300 text-sm border border-primary-200 dark:border-primary-700">
-                                        <span>{{ $code['code'] ?? $code }} - {{ $code['label'] ?? $code }}</span>
+                                        <span class="font-mono">{{ $code['code'] ?? $code }}</span>
+                                        <span>{{ $code['label'] ?? $code }}</span>
                                         <button wire:click="removeDiagnosis({{ $idx }})"
                                             class="hover:text-danger-500 ml-1">
                                             <x-filament::icon name="heroicon-m-x-mark" class="w-3.5 h-3.5" />
@@ -426,6 +435,15 @@
                             </div>
                         @else
                             <p class="text-sm text-gray-400 dark:text-gray-500 italic">No diagnoses added yet.</p>
+                        @endif
+
+                        @if ($currentEncounter && count($diagnosisCodes) > 0)
+                            <div class="flex justify-end pt-2">
+                                <x-filament::button wire:click="saveDiagnoses" color="primary"
+                                    icon="heroicon-m-document-check">
+                                    Save Diagnoses
+                                </x-filament::button>
+                            </div>
                         @endif
                     </div>
                 </div>
@@ -557,7 +575,7 @@
             <x-filament::icon name="heroicon-o-user" class="w-16 h-16 text-gray-300 dark:text-gray-600 mb-4" />
             <h3 class="text-lg font-medium text-gray-500 dark:text-gray-400">Patient not found</h3>
             <p class="text-sm text-gray-400 dark:text-gray-500 mt-1">The selected patient could not be loaded.</p>
-            <x-filament::button wire:click="clearPatient" color="primary" class="mt-4">
+            <x-filament::button wire:click="clearPatient" color="info" class="mt-4">
                 Back to Workspace
             </x-filament::button>
         </div>

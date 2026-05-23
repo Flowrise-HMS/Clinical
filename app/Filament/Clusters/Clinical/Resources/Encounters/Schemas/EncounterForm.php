@@ -14,6 +14,7 @@ use Modules\Clinical\Enums\EncounterPriority;
 use Modules\Clinical\Enums\EncounterStatus;
 use Modules\Clinical\Enums\EncounterType;
 use Modules\Core\Classes\Services\BranchService;
+use Modules\Core\Enums\CoverageType;
 
 class EncounterForm
 {
@@ -61,7 +62,7 @@ class EncounterForm
             Section::make('Encounter Details')
                 ->description('Basic encounter information')
                 ->schema([
-                    Grid::make(3)
+                    Grid::make(4)
                         ->schema([
                             Select::make('type')
                                 ->options(EncounterType::class)
@@ -81,15 +82,25 @@ class EncounterForm
                                 ->default('planned')
                                 ->required()
                                 ->label('Status'),
+
+                            Select::make('coverage_type')
+                                ->options([
+                                    'nhis' => 'NHIS',
+                                    'private' => 'Private Insurance',
+                                    'none' => 'Cash',
+                                ])
+                                ->native(false)
+                                ->nullable()
+                                ->label('Coverage Type'),
                         ]),
 
                     Fieldset::make('Clinical Information')
                         ->schema([
-                            Textarea::make('chief_complaint')
-                                ->label('Chief Complaint')
-                                ->helperText('Primary reason for visit')
-                                ->rows(2)
-                                ->columnSpanFull(),
+                            // Textarea::make('chief_complaint')
+                            //     ->label('Chief Complaint')
+                            //     ->helperText('Primary reason for visit')
+                            //     ->rows(2)
+                            //     ->columnSpanFull(),
 
                             RichEditor::make('notes')
                                 ->label('Clinical Notes')

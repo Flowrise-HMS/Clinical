@@ -2,20 +2,18 @@
 
 namespace Modules\Clinical\Filament\Clusters\Workspace\Pages;
 
-use Filament\Actions\Concerns\HasSchema;
 use Filament\Forms\Components\Checkbox;
 use Filament\Forms\Components\Repeater;
 use Filament\Forms\Components\RichEditor;
 use Filament\Forms\Components\Select;
+use Filament\Forms\Components\TagsInput;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
-use Filament\Forms\Concerns\InteractsWithForms;
-use Filament\Forms\Contracts\HasForms;
 use Filament\Notifications\Notification;
 use Filament\Pages\Page;
+use Filament\Schemas\Components\Grid;
 use Filament\Schemas\Concerns\InteractsWithSchemas;
 use Filament\Schemas\Contracts\HasSchemas;
-use Filament\Schemas\Schema;
 use Illuminate\Support\Facades\Auth;
 use Livewire\Attributes\Computed;
 use Livewire\Attributes\On;
@@ -24,6 +22,7 @@ use Modules\Clinical\Classes\Actions\PatientActions;
 use Modules\Clinical\Classes\Services\AllergyService;
 use Modules\Clinical\Classes\Services\ClinicalNoteService;
 use Modules\Clinical\Classes\Services\ClinicalWorkspaceService;
+use Modules\Clinical\Classes\Services\DiagnosisService;
 use Modules\Clinical\Classes\Services\EncounterService;
 use Modules\Clinical\Classes\Services\FulfillmentService;
 use Modules\Clinical\Classes\Services\ServiceRequestService;
@@ -41,11 +40,16 @@ use Modules\Clinical\Filament\Widgets\CriticalPatientsWidget;
 use Modules\Clinical\Filament\Widgets\MyTasksWidget;
 use Modules\Clinical\Filament\Widgets\PendingFulfillmentsWidget;
 use Modules\Clinical\Filament\Widgets\WorkspaceTodayAppointmentsWidget;
+use Modules\Clinical\Models\DiagnosisCode;
 use Modules\Clinical\Models\Encounter;
 use Modules\Clinical\Models\RequestItem;
 use Modules\Core\Classes\Support\PageHeaderActionsRegistry;
+use Modules\Core\Models\Service;
 use Modules\Patient\Classes\Services\PatientSearchService;
 use Modules\Patient\Models\Patient;
+use Modules\Pharmacy\Classes\Services\MedicationOrderService;
+use Modules\Pharmacy\Enums\MedicationFrequency;
+use Modules\Pharmacy\Enums\MedicationRoute;
 
 class ClinicalWorkspace extends Page implements HasSchemas
 {
@@ -84,7 +88,7 @@ class ClinicalWorkspace extends Page implements HasSchemas
 
     public array $diagnosisCodes = [];
 
-    public string $diagnosisSearch = '';
+    public string $diagnosisNotes = '';
 
     public array $vitalsData = [];
 
@@ -92,11 +96,11 @@ class ClinicalWorkspace extends Page implements HasSchemas
 
     public array $allergyData = [];
 
-    public ?string $selectedEncounterCoverage = null;
-
     public array $consultationData = [];
 
     public array $medicationData = [];
+
+    public array $encounterFormData = [];
 
     public array $dischargeData = [];
 
@@ -116,6 +120,8 @@ class ClinicalWorkspace extends Page implements HasSchemas
 
     protected ?AllergyService $allergyService = null;
 
+    protected ?DiagnosisService $diagnosisService = null;
+
     public function boot(): void
     {
         $this->workspaceService ??= app(ClinicalWorkspaceService::class);
@@ -125,6 +131,7 @@ class ClinicalWorkspace extends Page implements HasSchemas
         $this->serviceRequestService ??= app(ServiceRequestService::class);
         $this->encounterService ??= app(EncounterService::class);
         $this->allergyService ??= app(AllergyService::class);
+        $this->diagnosisService ??= app(DiagnosisService::class);
 
         foreach ($this->registerForms() as $name => $schema) {
             $this->cacheSchema($name, $schema);
@@ -166,23 +173,23 @@ class ClinicalWorkspace extends Page implements HasSchemas
 
     protected function resetFormStates(): void
     {
+        $this->encounterFormData = [];
         $this->consultationChiefComplaint = '';
         $this->consultationNotes = '';
         $this->consultationData = [];
         $this->diagnosisCodes = [];
-        $this->diagnosisSearch = '';
+        $this->diagnosisNotes = '';
         $this->vitalsData = [];
         $this->serviceRequestData = [];
         $this->allergyData = [];
         $this->medicationData = [];
         $this->dischargeData = [];
         $this->referralData = [];
-        $this->selectedEncounterCoverage = null;
     }
 
     protected function loadPatientContext(): void
     {
-        if (!$this->patientId) {
+        if (! $this->patientId) {
             return;
         }
 
@@ -196,6 +203,14 @@ class ClinicalWorkspace extends Page implements HasSchemas
         if ($this->currentPatient) {
             $this->workspaceService->setPatient($this->currentPatient);
             $this->currentEncounter = $this->currentPatient->activeEncounter ?? $this->currentPatient->latestEncounter;
+
+            if ($this->currentEncounter) {
+                $existing = $this->diagnosisService->getForEncounter($this->currentEncounter->id);
+                $this->diagnosisCodes = array_map(fn ($dx) => $dx['code']
+                    ? $dx['code'].' - '.$dx['label']
+                    : $dx['label'], $existing['diagnoses']);
+                $this->diagnosisNotes = $existing['notes'];
+            }
         }
     }
 
@@ -215,6 +230,7 @@ class ClinicalWorkspace extends Page implements HasSchemas
     {
         if (strlen($this->searchTerm) < 2) {
             $this->searchResults = [];
+
             return;
         }
         $this->searchResults = $this->patientSearchService
@@ -231,7 +247,7 @@ class ClinicalWorkspace extends Page implements HasSchemas
     protected function getUserRoleKey(): string
     {
         $user = Auth::user();
-        if (!$user) {
+        if (! $user) {
             return 'clinician';
         }
 
@@ -267,7 +283,7 @@ class ClinicalWorkspace extends Page implements HasSchemas
 
     protected function getHeaderActions(): array
     {
-        if (!$this->currentPatient) {
+        if (! $this->currentPatient) {
             return [];
         }
 
@@ -285,10 +301,11 @@ class ClinicalWorkspace extends Page implements HasSchemas
 
     protected function getFooterWidgets(): array
     {
-        $widgets= [];
-        if(!empty($this->currentPatient?->id)){
+        $widgets = [];
+        if (! empty($this->currentPatient?->id)) {
             $widgets[] = PendingFulfillmentsWidget::make(['patientId' => $this->currentPatient?->id]);
         }
+
         return $widgets;
 
     }
@@ -300,8 +317,9 @@ class ClinicalWorkspace extends Page implements HasSchemas
 
     public function saveConsultation(): void
     {
-        if (!$this->currentPatient || !$this->currentEncounter) {
+        if (! $this->currentPatient || ! $this->currentEncounter) {
             Notification::make()->title('No active encounter')->danger()->send();
+
             return;
         }
 
@@ -310,13 +328,13 @@ class ClinicalWorkspace extends Page implements HasSchemas
             [
                 'note_type' => NoteType::CONSULTATION,
                 'status' => NoteStatus::DRAFT,
-                'subject' => 'Consultation - ' . ($this->consultationChiefComplaint ?: 'General'),
+                'subject' => 'Consultation - '.($this->consultationChiefComplaint ?: 'General'),
                 'content' => $this->consultationData['notes'] ?? '',
             ],
             $this->currentEncounter->id,
         );
 
-        if ($this->consultationChiefComplaint && !$this->currentEncounter->chief_complaint) {
+        if ($this->consultationChiefComplaint && ! $this->currentEncounter->chief_complaint) {
             $this->currentEncounter->update(['chief_complaint' => $this->consultationChiefComplaint]);
         }
 
@@ -325,7 +343,7 @@ class ClinicalWorkspace extends Page implements HasSchemas
 
     public function saveVitals(): void
     {
-        if (!$this->currentPatient) {
+        if (! $this->currentPatient) {
             return;
         }
 
@@ -342,7 +360,7 @@ class ClinicalWorkspace extends Page implements HasSchemas
 
     public function saveServiceRequest(): void
     {
-        if (!$this->currentPatient) {
+        if (! $this->currentPatient) {
             return;
         }
 
@@ -358,7 +376,7 @@ class ClinicalWorkspace extends Page implements HasSchemas
 
     public function saveAllergy(): void
     {
-        if (!$this->currentPatient) {
+        if (! $this->currentPatient) {
             return;
         }
 
@@ -371,37 +389,74 @@ class ClinicalWorkspace extends Page implements HasSchemas
 
     public function createEncounter(): void
     {
-        if (!$this->currentPatient) {
+        if (! $this->currentPatient) {
+            return;
+        }
+
+        if ($this->currentEncounter?->isActive()) {
+            Notification::make()
+                ->title('Active encounter exists')
+                ->body('This patient already has an active encounter. Switch to the Vitals tab to continue.')
+                ->warning()
+                ->send();
+
             return;
         }
 
         $encounter = $this->encounterService->createForPatient(
             patient: $this->currentPatient,
             type: EncounterType::OUTPATIENT,
-            chiefComplaint: $this->consultationChiefComplaint ?: null,
+            chiefComplaint: $this->encounterFormData['chief_complaint'] ?? null,
             priority: EncounterPriority::ROUTINE,
         );
 
-        if ($this->selectedEncounterCoverage && $encounter->getConnection()->getSchemaBuilder()->hasColumn('encounters', 'coverage_type')) {
-            $encounter->update(['coverage_type' => $this->selectedEncounterCoverage]);
+        if ($coverage = $this->encounterFormData['coverage_type'] ?? null) {
+            $encounter->update(['coverage_type' => $coverage]);
         }
 
         $this->currentEncounter = $encounter->fresh();
+        $this->encounterFormData = [];
+        $this->activeTab = 'vitals';
         Notification::make()->title('OPD encounter created')->success()->send();
     }
 
-    public function removeDiagnosis(int $index): void
+    public function saveDiagnoses(): void
     {
-        if (isset($this->diagnosisCodes[$index])) {
-            unset($this->diagnosisCodes[$index]);
-            $this->diagnosisCodes = array_values($this->diagnosisCodes);
+        if (! $this->currentEncounter || empty($this->diagnosisCodes)) {
+            Notification::make()->title('No diagnoses to save')->warning()->send();
+
+            return;
         }
+
+        $items = [];
+        foreach ($this->diagnosisCodes as $tag) {
+            $parts = explode(' - ', $tag, 2);
+            $code = DiagnosisCode::where('code', $parts[0])->first();
+
+            if ($code && $code->code.' - '.$code->description === $tag) {
+                $items[] = ['id' => $code->id, 'label' => $code->description];
+            } else {
+                $items[] = ['id' => null, 'label' => $tag];
+            }
+        }
+
+        $this->diagnosisService->record(
+            $this->currentPatient,
+            $items,
+            $this->currentEncounter->id,
+            Auth::id(),
+            $this->diagnosisNotes ?: null,
+        );
+
+        $this->loadPatientContext();
+        Notification::make()->title('Diagnoses saved')->success()->send();
     }
 
     public function saveLabResult(): void
     {
-        if (!$this->currentPatient || !$this->serviceRequestData['request_item_id'] ?? null) {
+        if (! $this->currentPatient || ! $this->serviceRequestData['request_item_id'] ?? null) {
             Notification::make()->title('Select a pending lab item')->warning()->send();
+
             return;
         }
 
@@ -420,18 +475,20 @@ class ClinicalWorkspace extends Page implements HasSchemas
 
     public function saveMedicationOrder(): void
     {
-        if (!$this->currentPatient || !$this->currentEncounter) {
+        if (! $this->currentPatient || ! $this->currentEncounter) {
             Notification::make()->title('No active encounter')->danger()->send();
+
             return;
         }
 
         if (empty($this->medicationData['items'])) {
             Notification::make()->title('Add at least one medication')->warning()->send();
+
             return;
         }
 
         try {
-            $service = app(\Modules\Pharmacy\Classes\Services\MedicationOrderService::class);
+            $service = app(MedicationOrderService::class);
             $request = $service->order(
                 $this->currentPatient,
                 $this->medicationData['items'],
@@ -454,8 +511,9 @@ class ClinicalWorkspace extends Page implements HasSchemas
 
     public function saveDischarge(): void
     {
-        if (!$this->currentEncounter) {
+        if (! $this->currentEncounter) {
             Notification::make()->title('No active encounter')->danger()->send();
+
             return;
         }
 
@@ -480,8 +538,9 @@ class ClinicalWorkspace extends Page implements HasSchemas
 
     public function saveReferral(): void
     {
-        if (!$this->currentPatient || !$this->currentEncounter) {
+        if (! $this->currentPatient || ! $this->currentEncounter) {
             Notification::make()->title('No active encounter')->danger()->send();
+
             return;
         }
 
@@ -491,9 +550,9 @@ class ClinicalWorkspace extends Page implements HasSchemas
                 [
                     'note_type' => NoteType::CONSULTATION,
                     'status' => NoteStatus::DRAFT,
-                    'subject' => 'Referral - ' . ($this->referralData['destination'] ?? 'Unspecified'),
+                    'subject' => 'Referral - '.($this->referralData['destination'] ?? 'Unspecified'),
                     'content' => ($this->referralData['notes'] ?? '')
-                        . "\n\nDestination: " . ($this->referralData['destination'] ?? ''),
+                        ."\n\nDestination: ".($this->referralData['destination'] ?? ''),
                 ],
                 $this->currentEncounter->id,
             );
@@ -512,6 +571,23 @@ class ClinicalWorkspace extends Page implements HasSchemas
     protected function registerForms(): array
     {
         return [
+            'encounterForm' => $this->makeSchema()
+                ->schema([
+                    Grid::make(2)
+                        ->schema([
+                            Select::make('coverage_type')
+                                ->label('Coverage Type')
+                                ->default('none')
+                                ->options([
+                                    'nhis' => 'NHIS',
+                                    'private' => 'Private Insurance',
+                                    'none' => 'Cash',
+                                ])
+                                ->required()
+                                ->native(false),
+                        ]),
+                ])
+                ->statePath('encounterFormData'),
             'vitalsForm' => $this->makeSchema()
                 ->schema(VitalSignForm::quickElements())
                 ->statePath('vitalsData'),
@@ -551,17 +627,17 @@ class ClinicalWorkspace extends Page implements HasSchemas
                                 ->label('Medication')
                                 ->required()
                                 ->searchable()
-                                ->options(fn () => \Modules\Core\Models\Service::where('requires_prescription', true)->pluck('name', 'id')),
+                                ->options(fn () => Service::where('requires_prescription', true)->pluck('name', 'id')),
                             TextInput::make('dosage')
                                 ->label('Dosage')
                                 ->placeholder('e.g. 500mg'),
                             Select::make('frequency')
                                 ->label('Frequency')
-                                ->options(\Modules\Pharmacy\Enums\MedicationFrequency::class)
+                                ->options(MedicationFrequency::class)
                                 ->searchable(),
                             Select::make('route')
                                 ->label('Route')
-                                ->options(\Modules\Pharmacy\Enums\MedicationRoute::class)
+                                ->options(MedicationRoute::class)
                                 ->searchable(),
                             TextInput::make('duration_days')
                                 ->label('Duration (days)')
@@ -582,6 +658,27 @@ class ClinicalWorkspace extends Page implements HasSchemas
                         ]),
                 ])
                 ->statePath('medicationData'),
+            'diagnosisForm' => $this->makeSchema()
+                ->schema([
+                    TagsInput::make('diagnosisCodes')
+                        ->label('Add Diagnoses')
+                        ->placeholder('Type or select ICD codes...')
+                        ->trim()
+                        ->suggestions(fn () => DiagnosisCode::where('is_active', true)
+                            ->orderBy('code')
+                            ->get()
+                            ->map(fn ($code) => $code->code.' - '.$code->description)
+                            ?->toArray()),
+                    RichEditor::make('diagnosisNotes')
+                        ->label('Assessment / Notes')
+                        ->placeholder('Add notes, assessment, or plan for these diagnoses...')
+                        ->toolbarButtons([
+                            'bold',
+                            'bulletList',
+                            'italic',
+                            'orderedList',
+                        ]),
+                ]),
             'dischargeForm' => $this->makeSchema()
                 ->schema([
                     Select::make('discharge_disposition')
@@ -688,13 +785,13 @@ class ClinicalWorkspace extends Page implements HasSchemas
     #[Computed]
     public function pendingLabItems(): array
     {
-        if (!$this->currentPatient) {
+        if (! $this->currentPatient) {
             return [];
         }
 
         return RequestItem::query()
             ->whereIn('status', ['pending', 'in_progress'])
-            ->whereHas('serviceRequest', fn($q) => $q->where('patient_id', $this->currentPatient->id))
+            ->whereHas('serviceRequest', fn ($q) => $q->where('patient_id', $this->currentPatient->id))
             ->whereDoesntHave('prescriptionDetail')
             ->with(['service', 'serviceRequest.orderedBy', 'service.category'])
             ->get()
@@ -704,13 +801,13 @@ class ClinicalWorkspace extends Page implements HasSchemas
     #[Computed]
     public function completedLabItems(): array
     {
-        if (!$this->currentPatient) {
+        if (! $this->currentPatient) {
             return [];
         }
 
         return RequestItem::query()
             ->where('status', 'completed')
-            ->whereHas('serviceRequest', fn($q) => $q->where('patient_id', $this->currentPatient->id))
+            ->whereHas('serviceRequest', fn ($q) => $q->where('patient_id', $this->currentPatient->id))
             ->whereDoesntHave('prescriptionDetail')
             ->with(['service', 'serviceRequest.orderedBy', 'service.category'])
             ->latest()

@@ -16,6 +16,7 @@ use Modules\Clinical\Enums\EncounterPriority;
 use Modules\Clinical\Enums\EncounterStatus;
 use Modules\Clinical\Enums\EncounterType;
 use Modules\Clinical\Enums\ParticipantStatus;
+use Modules\Core\Enums\CoverageType;
 use Modules\Core\Models\BaseModel;
 use Modules\Core\Models\Branch;
 use Modules\Core\Models\Department;
@@ -39,6 +40,7 @@ class Encounter extends BaseModel
         'status',
         'priority',
         'chief_complaint',
+        'coverage_type',
         'admitted_by',
         'discharged_by',
         'discharge_disposition',
@@ -58,6 +60,7 @@ class Encounter extends BaseModel
         'status' => EncounterStatus::class,
         'priority' => EncounterPriority::class,
         'discharge_disposition' => DischargeDisposition::class,
+        'coverage_type' => CoverageType::class,
         'admitted_at' => 'datetime',
         'discharged_at' => 'datetime',
         'metadata' => 'array',

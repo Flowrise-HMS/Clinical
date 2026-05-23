@@ -15,10 +15,13 @@ use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\TimePicker;
 use Filament\Infolists\Components\TextEntry;
 use Filament\Notifications\Notification;
+use Filament\Schemas\Components\Utilities\Set;
 use Illuminate\Support\Facades\Auth;
 use Modules\Clinical\Classes\Services\AllergyService;
 use Modules\Clinical\Classes\Services\BedAssignmentService;
 use Modules\Clinical\Classes\Services\ClinicalNoteService;
+use Modules\Clinical\Classes\Services\DiagnosisCodeService;
+use Modules\Clinical\Classes\Services\DiagnosisService;
 use Modules\Clinical\Classes\Services\EncounterService;
 use Modules\Clinical\Classes\Services\FulfillmentService;
 use Modules\Clinical\Classes\Services\MedicationAdministrationService;
@@ -35,7 +38,9 @@ use Modules\Clinical\Filament\Clusters\Workspace\Pages\PatientProfile;
 use Modules\Clinical\Filament\Clusters\Workspace\Pages\Timeline;
 use Modules\Clinical\Models\Allergy;
 use Modules\Clinical\Models\ClinicalNote;
+use Modules\Clinical\Models\DiagnosisCode;
 use Modules\Clinical\Models\Encounter;
+use Modules\Clinical\Models\EncounterDiagnosis;
 use Modules\Clinical\Models\RequestItem;
 use Modules\Clinical\Models\ServiceRequest;
 use Modules\Clinical\Models\VitalSign;
@@ -57,7 +62,8 @@ class PatientActions
         protected EncounterService $encounterService,
         protected FulfillmentService $fulfillmentService,
         protected MedicationAdministrationService $medicationAdminService,
-        protected BedAssignmentService $bedAssignmentService
+        protected BedAssignmentService $bedAssignmentService,
+        protected DiagnosisService $diagnosisService,
     ) {}
 
     protected ?Patient $patient = null;
@@ -74,7 +80,8 @@ class PatientActions
             app(EncounterService::class),
             app(FulfillmentService::class),
             app(MedicationAdministrationService::class),
-            app(BedAssignmentService::class)
+            app(BedAssignmentService::class),
+            app(DiagnosisService::class),
         );
     }
 
@@ -113,6 +120,7 @@ class PatientActions
             $this->note(),
             $this->order(),
             $this->medicationOrder(),
+            $this->diagnosis(),
             $this->vitals(),
             $this->allergy(),
         ])
@@ -156,6 +164,97 @@ class PatientActions
                 $data
             ))
             ->successNotificationTitle('Allergy recorded');
+    }
+
+    public function diagnosis(): Action
+    {
+        return Action::make('diagnosis')
+            ->label('Add Diagnosis')
+            ->icon('heroicon-m-document-text')
+            ->model(EncounterDiagnosis::class)
+            ->slideOver()
+            ->closeModalByClickingAway(false)
+            ->schema([
+                Select::make('diagnosis_code_id')
+                    ->label('ICD Code')
+                    ->searchable()
+                    ->getSearchResultsUsing(function (string $search) {
+                        return app(DiagnosisCodeService::class)->search($search, limit: 10)
+                            ->mapWithKeys(fn ($code) => [
+                                $code->id => $code->code . ' - ' . $code->description,
+                            ]);
+                    })
+                    ->getOptionLabelUsing(function ($value): ?string {
+                        $code = DiagnosisCode::find($value);
+                        return $code ? $code->code . ' - ' . $code->description : null;
+                    })
+                    ->nullable()
+                    ->live()
+                    ->afterStateUpdated(function ($state, Set $set) {
+                        if (! $state) {
+                            return;
+                        }
+                        $code = DiagnosisCode::find($state);
+                        if ($code) {
+                            $set('description', $code->description);
+                        }
+                    }),
+                TextInput::make('description')
+                    ->label('Diagnosis Name')
+                    ->placeholder('Or type a custom diagnosis name...')
+                    ->requiredWithout('diagnosis_code_id'),
+                Select::make('type')
+                    ->options([
+                        'primary' => 'Primary',
+                        'secondary' => 'Secondary',
+                        'complication' => 'Complication',
+                    ])
+                    ->default('primary')
+                    ->required(),
+            ])
+            ->visible(fn () => $this->patient !== null && $this->encounterId !== null)
+            ->action(function (array $data) {
+                if (! $this->patient) {
+                    return;
+                }
+
+                if (! $this->encounterId) {
+                    Notification::make()
+                        ->title('No active encounter')
+                        ->body('A diagnosis requires an active encounter.')
+                        ->warning()
+                        ->send();
+                    return;
+                }
+
+                $description = $data['description'];
+                $diagnosisCodeId = null;
+
+                if ($data['diagnosis_code_id']) {
+                    $code = DiagnosisCode::find($data['diagnosis_code_id']);
+                    if ($code) {
+                        $diagnosisCodeId = $code->id;
+                        $description = $description ?: $code->description;
+                    }
+                }
+
+                if (! $description) {
+                    return;
+                }
+
+                $this->diagnosisService->record(
+                    $this->patient,
+                    [
+                        [
+                            'id' => $diagnosisCodeId,
+                            'label' => $description,
+                        ],
+                    ],
+                    $this->encounterId,
+                    Auth::id(),
+                );
+            })
+            ->successNotificationTitle('Diagnosis added');
     }
 
     public function vitals(): Action
