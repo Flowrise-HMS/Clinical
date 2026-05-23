@@ -285,9 +285,12 @@ class ClinicalWorkspace extends Page implements HasSchemas
 
     protected function getFooterWidgets(): array
     {
-        return [
-            PendingFulfillmentsWidget::make(['patientId' => $this->currentPatient?->id]),
-        ];
+        $widgets= [];
+        if(!empty($this->currentPatient?->id)){
+            $widgets[] = PendingFulfillmentsWidget::make(['patientId' => $this->currentPatient?->id]);
+        }
+        return $widgets;
+
     }
 
     protected function hasAppointmentModule(): bool
