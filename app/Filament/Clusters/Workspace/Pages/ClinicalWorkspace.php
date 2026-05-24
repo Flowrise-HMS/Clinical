@@ -40,8 +40,10 @@ use Modules\Clinical\Filament\Widgets\CriticalPatientsWidget;
 use Modules\Clinical\Filament\Widgets\MyTasksWidget;
 use Modules\Clinical\Filament\Widgets\PendingFulfillmentsWidget;
 use Modules\Clinical\Filament\Widgets\WorkspaceTodayAppointmentsWidget;
+use Modules\Clinical\Models\ClinicalNote;
 use Modules\Clinical\Models\DiagnosisCode;
 use Modules\Clinical\Models\Encounter;
+use Modules\Clinical\Models\EncounterDiagnosis;
 use Modules\Clinical\Models\RequestItem;
 use Modules\Core\Classes\Support\PageHeaderActionsRegistry;
 use Modules\Core\Models\Service;
@@ -293,6 +295,7 @@ class ClinicalWorkspace extends Page implements HasSchemas
 
         return [
             $actions->timelineAction(),
+            $actions->profileAction(),
             $actions->patientActionGroups(),
             ...app(PageHeaderActionsRegistry::class)->for(static::class, $this),
         ];
@@ -733,6 +736,10 @@ class ClinicalWorkspace extends Page implements HasSchemas
                 'label' => 'Referral',
                 'icon' => 'heroicon-m-arrow-path',
             ],
+            'history' => [
+                'label' => 'History',
+                'icon' => 'heroicon-m-clock',
+            ],
         ];
     }
 
@@ -754,6 +761,10 @@ class ClinicalWorkspace extends Page implements HasSchemas
             'triage' => [
                 'label' => 'Triage',
                 'icon' => 'heroicon-m-clipboard-document',
+            ],
+            'history' => [
+                'label' => 'History',
+                'icon' => 'heroicon-m-clock',
             ],
         ];
     }
@@ -814,5 +825,78 @@ class ClinicalWorkspace extends Page implements HasSchemas
             ->limit(20)
             ->get()
             ->toArray();
+    }
+
+    #[Computed]
+    public function pastEncounters(): array
+    {
+        if (!$this->currentPatient) {
+            return [];
+        }
+
+        $encounters = Encounter::where('patient_id', $this->currentPatient->id)
+            ->when($this->currentEncounter, fn ($q) => $q->where('id', '!=', $this->currentEncounter->id))
+            ->with([
+                'vitalSigns' => fn ($q) => $q->latest('recorded_at')->take(1),
+                'clinicalNotes' => fn ($q) => $q->latest()->take(1),
+            ])
+            ->latest()
+            ->limit(20)
+            ->get();
+
+        if ($encounters->isEmpty()) {
+            return [];
+        }
+
+        $encounterIds = $encounters->pluck('id');
+
+        $diagnoses = EncounterDiagnosis::whereIn('encounter_id', $encounterIds)
+            ->where('is_active', true)
+            ->get()
+            ->groupBy('encounter_id');
+
+        $medications = RequestItem::whereHas('serviceRequest', fn ($q) => $q->whereIn('encounter_id', $encounterIds))
+            ->whereHas('prescriptionDetail')
+            ->with(['service', 'serviceRequest', 'prescriptionDetail'])
+            ->get()
+            ->groupBy(fn ($item) => $item->serviceRequest->encounter_id);
+
+        return $encounters->map(function ($encounter) use ($diagnoses, $medications) {
+            $latestVitals = $encounter->vitalSigns->first();
+            $latestNote = $encounter->clinicalNotes->first();
+            $encounterDiagnoses = $diagnoses->get($encounter->id, collect());
+            $encounterMeds = $medications->get($encounter->id, collect());
+
+            return [
+                'id' => $encounter->id,
+                'encounter_number' => $encounter->encounter_number,
+                'type' => $encounter->type?->getLabel(),
+                'status' => $encounter->status?->getLabel(),
+                'status_color' => $encounter->status?->getColor(),
+                'coverage' => $encounter->coverage_type?->getLabel(),
+                'coverage_color' => $encounter->coverage_type?->getColor(),
+                'date' => $encounter->created_at?->diffForHumans(),
+                'created_at' => $encounter->created_at?->toDateTimeString(),
+                'vitals' => $latestVitals ? [
+                    'bp' => $latestVitals->systolic_bp && $latestVitals->diastolic_bp
+                        ? $latestVitals->systolic_bp . '/' . $latestVitals->diastolic_bp : null,
+                    'hr' => $latestVitals->heart_rate,
+                    'temp' => $latestVitals->temperature,
+                    'spo2' => $latestVitals->spo2,
+                    'rr' => $latestVitals->respiratory_rate,
+                ] : null,
+                'diagnoses' => $encounterDiagnoses->map(fn ($dx) => [
+                    'code' => $dx->icd_code,
+                    'label' => $dx->description,
+                ])->toArray(),
+                'medications' => $encounterMeds->map(fn ($item) => [
+                    'name' => $item->service?->name ?? 'Unknown',
+                    'dosage' => $item->prescriptionDetail?->dosage,
+                    'frequency' => $item->prescriptionDetail?->frequency,
+                    'route' => $item->prescriptionDetail?->route,
+                ])->toArray(),
+                'note_preview' => $latestNote ? strip_tags($latestNote->content) : null,
+            ];
+        })->toArray();
     }
 }
