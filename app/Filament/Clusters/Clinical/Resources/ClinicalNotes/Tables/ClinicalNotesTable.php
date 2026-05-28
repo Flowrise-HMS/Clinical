@@ -71,6 +71,7 @@ class ClinicalNotesTable
 
                 SelectFilter::make('author')
                     ->relationship('author', 'name')
+                    ->getOptionLabelFromRecordUsing(fn ($record) => $record?->name ?? $record?->email ?? 'Unknown')
                     ->label('Author')
                     ->preload(),
             ])

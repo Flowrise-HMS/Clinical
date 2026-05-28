@@ -29,6 +29,7 @@ class EncounterParticipantsRelationManager extends RelationManager
                 Select::make('user_id')
                     ->label('Staff Member')
                     ->relationship('user', 'name', fn ($query) => $query->where('is_active', true))
+                    ->getOptionLabelFromRecordUsing(fn ($record) => $record?->name ?? $record?->email ?? 'Unknown')
                     ->searchable()
                     ->preload()
                     ->required(),
