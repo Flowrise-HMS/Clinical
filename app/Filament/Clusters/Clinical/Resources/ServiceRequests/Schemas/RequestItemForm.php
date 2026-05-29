@@ -21,7 +21,7 @@ class RequestItemForm
         return [
             Select::make('service_id')
                 ->label('Service')
-                ->options(fn() => Service::active()->billable()->with('category')->get()->groupBy('category.name')->map(fn($group) => $group->pluck('name', 'id'))->toArray())
+                ->options(fn() => Service::active()->billable()->nonMedication()->with('category')->get()->groupBy('category.name')->map(fn($group) => $group->pluck('name', 'id'))->toArray())
                 ->searchable()
                 ->preload()
                 ->required()
