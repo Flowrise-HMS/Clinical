@@ -76,13 +76,13 @@ class ServiceRequestForm
 
                             Select::make('priority')
                                 ->options(RequestPriority::class)
-                                ->default('routine')
+                                ->default(RequestPriority::ROUTINE)
                                 ->required()
                                 ->label('Priority'),
 
                             Select::make('status')
                                 ->options(RequestStatus::class)
-                                ->default('draft')
+                                ->default(RequestStatus::ACTIVE)
                                 ->required()
                                 ->label('Status'),
                         ]),
