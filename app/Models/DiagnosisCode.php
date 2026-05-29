@@ -23,4 +23,10 @@ class DiagnosisCode extends BaseModel
         'nhis_covered' => 'boolean',
         'is_active' => 'boolean',
     ];
+
+    protected static function bootBelongsToBranch(): void
+    {
+        // Diagnosis codes are system-wide reference data, not branch-specific.
+        // Intentionally empty to override the BelongsToBranch trait.
+    }
 }
