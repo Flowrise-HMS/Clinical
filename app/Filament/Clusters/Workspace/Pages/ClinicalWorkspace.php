@@ -12,6 +12,7 @@ use Filament\Forms\Components\TextInput;
 use Filament\Notifications\Notification;
 use Filament\Pages\Page;
 use Filament\Schemas\Components\Grid;
+use Filament\Schemas\Components\Utilities\Set;
 use Filament\Schemas\Concerns\InteractsWithSchemas;
 use Filament\Schemas\Contracts\HasSchemas;
 use Illuminate\Support\Facades\Auth;
@@ -49,9 +50,14 @@ use Modules\Core\Classes\Support\PageHeaderActionsRegistry;
 use Modules\Core\Models\Service;
 use Modules\Patient\Classes\Services\PatientSearchService;
 use Modules\Patient\Models\Patient;
+use Modules\Pharmacy\Classes\Services\DrugSearchService;
 use Modules\Pharmacy\Classes\Services\MedicationOrderService;
+use Modules\Pharmacy\Classes\Services\MedicationService;
+use Modules\Pharmacy\Enums\DosageForm;
 use Modules\Pharmacy\Enums\MedicationFrequency;
 use Modules\Pharmacy\Enums\MedicationRoute;
+use Modules\Pharmacy\Models\Drug;
+use Modules\Pharmacy\Models\Medication;
 
 class ClinicalWorkspace extends Page implements HasSchemas
 {
@@ -630,7 +636,87 @@ class ClinicalWorkspace extends Page implements HasSchemas
                                 ->label('Medication')
                                 ->required()
                                 ->searchable()
-                                ->options(fn () => Service::where('requires_prescription', true)->pluck('name', 'id')),
+                                ->getSearchResultsUsing(function (string $search) {
+                                    return collect(app(DrugSearchService::class)->search($search, 10))
+                                        ->mapWithKeys(function (array $result): array {
+                                            if (filled($result['service_id'])) {
+                                                return [
+                                                    (string) $result['service_id'] => '[Catalog] '.$result['display_name'],
+                                                ];
+                                            }
+
+                                            if (filled($result['drug_id'])) {
+                                                $prefix = $result['source_provider'] === 'local' ? '[Reference] ' : '[External] ';
+
+                                                return [
+                                                    'drug:'.$result['drug_id'] => $prefix.$result['display_name'],
+                                                ];
+                                            }
+
+                                            if (filled($result['medication_id'])) {
+                                                return [
+                                                    'medication:'.$result['medication_id'] => $result['display_name'],
+                                                ];
+                                            }
+
+                                            return [];
+                                        })
+                                        ->all();
+                                })
+                                ->getOptionLabelUsing(function ($value): ?string {
+                                    if (str_starts_with($value, 'drug:')) {
+                                        $drugId = str($value)->after('drug:')->toString();
+                                        $drug = Drug::query()->find($drugId);
+
+                                        if (! $drug) {
+                                            return $value;
+                                        }
+
+                                        $prefix = $drug->source_provider === 'local' ? '[Reference] ' : '[External] ';
+
+                                        return $prefix.$drug->display_name;
+                                    }
+
+                                    if (str_starts_with($value, 'medication:')) {
+                                        $medicationId = str($value)->after('medication:')->toString();
+                                        $medication = Medication::find($medicationId);
+
+                                        return $medication?->service?->name ?? $medication?->generic_name ?? $value;
+                                    }
+
+                                    return Service::find($value)?->name;
+                                })
+                                ->createOptionForm([
+                                    TextInput::make('generic_name')
+                                        ->required()
+                                        ->maxLength(255),
+                                    TextInput::make('brand_name')
+                                        ->maxLength(255),
+                                    TextInput::make('strength')
+                                        ->maxLength(255),
+                                    Select::make('dosage_form')
+                                        ->options(DosageForm::class)
+                                        ->default(DosageForm::TABLET),
+                                    TextInput::make('price')
+                                        ->label('Price (Cash)')
+                                        ->numeric()
+                                        ->minValue(0)
+                                        ->prefix(config('core.default_currency_symbol', 'GHS'))
+                                        ->placeholder('0.00')
+                                        ->default(0),
+                                ])
+                                ->createOptionUsing(function (array $data): string {
+                                    return app(MedicationService::class)->createWithService($data)->service_id;
+                                })
+                                ->afterStateUpdated(function ($state, Set $set) {
+                                    if (str_starts_with($state, 'drug:')) {
+                                        Notification::make()
+                                            ->title('Drug reference selected')
+                                            ->body('Create a medication from the Pharmacy module to use this drug.')
+                                            ->info()
+                                            ->send();
+                                    }
+                                }),
                             TextInput::make('dosage')
                                 ->label('Dosage')
                                 ->placeholder('e.g. 500mg'),
