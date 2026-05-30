@@ -411,8 +411,13 @@ class PatientActions
                                 ->numeric()
                                 ->default(1)
                                 ->minValue(1),
+                            Select::make('dose_unit_id')
+                                ->label('Dose Unit')
+                                ->options(fn () => \Modules\Core\Models\Unit::pluck('label', 'id'))
+                                ->searchable()
+                                ->placeholder('Select unit'),
                         ])
-                        ->columns(5)
+                        ->columns(6)
                         ->defaultItems(function () use ($items) {
                             return $items->map(function ($item) {
                                 $detail = $item->prescriptionDetail;
@@ -428,6 +433,7 @@ class PatientActions
                                     'started_at' => '08:00',
                                     'ended_at' => '08:00',
                                     'quantity_given' => 1,
+                                    'dose_unit_id' => $detail?->dose_unit_id,
                                 ];
                             })->toArray();
                         })

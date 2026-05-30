@@ -70,6 +70,7 @@ class MedicationAdministrationService
                 'started_at' => $startedAt,
                 'ended_at' => $endedAt,
                 'quantity_given' => $data['quantity_given'] ?? 1,
+                'dose_unit_id' => $data['dose_unit_id'] ?? $item->prescriptionDetail?->dose_unit_id,
                 'status' => MedicationAdministrationStatus::GIVEN,
                 'notes' => $notes,
             ]);

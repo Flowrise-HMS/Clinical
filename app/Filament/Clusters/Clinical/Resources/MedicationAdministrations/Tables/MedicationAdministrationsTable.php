@@ -27,6 +27,11 @@ class MedicationAdministrationsTable
                     ->label('Qty Given')
                     ->sortable(),
 
+                TextColumn::make('doseUnit.label')
+                    ->label('Dose Unit')
+                    ->placeholder('-')
+                    ->sortable(),
+
                 TextColumn::make('administeredBy.name')
                     ->label('Administered By')
                     ->searchable()

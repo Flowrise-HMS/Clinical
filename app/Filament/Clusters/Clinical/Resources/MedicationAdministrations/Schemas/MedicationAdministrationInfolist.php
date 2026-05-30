@@ -19,6 +19,9 @@ class MedicationAdministrationInfolist
                             ->label('Status'),
                         TextEntry::make('quantity_given')
                             ->label('Quantity Given'),
+                        TextEntry::make('doseUnit.label')
+                            ->label('Dose Unit')
+                            ->placeholder('-'),
                     ]),
 
                 Section::make('Medication Details')

@@ -8,6 +8,7 @@ use Filament\Forms\Components\Checkbox;
 use Filament\Forms\Components\DateTimePicker;
 use Filament\Forms\Components\Hidden;
 use Filament\Forms\Components\Repeater;
+use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\TimePicker;
@@ -132,8 +133,13 @@ class FulfillmentService
                     TimePicker::make('started_at')->default('08:00'),
                     TimePicker::make('ended_at')->default('08:00'),
                     TextInput::make('quantity_given')->numeric()->default(1)->minValue(1),
+                    Select::make('dose_unit_id')
+                        ->label('Dose Unit')
+                        ->options(fn () => \Modules\Core\Models\Unit::pluck('label', 'id'))
+                        ->searchable()
+                        ->placeholder('Select unit'),
                 ])
-                ->columns(5)
+                ->columns(6)
                 ->defaultItems(function () use ($items) {
                     return $items->map(function ($item) {
                         $detail = $item->prescriptionDetail;
@@ -149,6 +155,7 @@ class FulfillmentService
                             'started_at' => '08:00',
                             'ended_at' => '08:00',
                             'quantity_given' => 1,
+                            'dose_unit_id' => $detail?->dose_unit_id,
                         ];
                     })->toArray();
                 })
