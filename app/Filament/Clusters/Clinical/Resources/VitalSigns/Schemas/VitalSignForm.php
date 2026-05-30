@@ -93,7 +93,7 @@ class VitalSignForm
 
                             TextInput::make('respiratory_rate')
                                 ->label('Respiratory Rate')
-                                ->suffix('/min')
+                                ->suffix('bpm')
                                 ->numeric(),
                         ]),
 
@@ -109,7 +109,7 @@ class VitalSignForm
                                 ->label('Height')
                                 ->suffix('cm')
                                 ->numeric()
-                                ->live()
+                                ->live(debounce: 200)
                                 ->afterStateUpdated(function (Set $set, ?string $state, Get $get) {
                                     $weight = $get('weight');
                                     if ($state && $weight) {

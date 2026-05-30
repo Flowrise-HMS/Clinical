@@ -46,7 +46,7 @@ class PendingFulfillmentsWidget extends BaseTableWidget
                 'serviceRequest.patient',
                 'serviceRequest.orderedBy',
                 'service.category',
-                'prescriptionDetail',
+                'prescriptionDetail.doseUnit',
                 'medicationAdministrations' => fn ($q) => $q->latest(),
             ])
             ->latest();
@@ -97,8 +97,9 @@ class PendingFulfillmentsWidget extends BaseTableWidget
                         return null;
                     }
                     $given = $record->medicationAdministrations()->sum('quantity_given');
+                    $unit = $detail->doseUnit?->label ?? '';
 
-                    return max(0, $detail->total_administrations - $given).'/'.$detail->total_administrations;
+                    return max(0, $detail->total_administrations - $given).'/'.$detail->total_administrations.' '.$unit;
                 })
                 ->visible(fn ($record): bool => $record?->prescriptionDetail !== null),
             TextColumn::make('payment_status')

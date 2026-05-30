@@ -39,6 +39,7 @@ use Modules\Clinical\Filament\Clusters\Clinical\Resources\VitalSigns\Schemas\Vit
 use Modules\Clinical\Filament\Clusters\Workspace\WorkspaceCluster;
 use Modules\Clinical\Filament\Widgets\CriticalPatientsWidget;
 use Modules\Clinical\Filament\Widgets\MyTasksWidget;
+use Modules\Clinical\Filament\Widgets\PatientVitalsHistoryWidget;
 use Modules\Clinical\Filament\Widgets\PendingFulfillmentsWidget;
 use Modules\Clinical\Filament\Widgets\WorkspaceTodayAppointmentsWidget;
 use Modules\Clinical\Models\ClinicalNote;
@@ -312,7 +313,8 @@ class ClinicalWorkspace extends Page implements HasSchemas
     {
         $widgets = [];
         if (! empty($this->currentPatient?->id)) {
-            $widgets[] = PendingFulfillmentsWidget::make(['patientId' => $this->currentPatient?->id]);
+            $widgets[] = PendingFulfillmentsWidget::make(['patientId' => $this->currentPatient?->id,'encounterId' => $this->currentEncounter?->id]);
+            $widgets[] = PatientVitalsHistoryWidget::make(['patientId' => $this->currentPatient?->id]);
         }
 
         return $widgets;

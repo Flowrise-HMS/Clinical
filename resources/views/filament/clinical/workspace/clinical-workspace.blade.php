@@ -216,7 +216,7 @@
                                     </div>
                                 </div>
                             @else
-                                <div class="space-y-4">
+                                <div class="space-y-4 mt-4">
                                     <h3 class="text-lg font-semibold text-gray-900 dark:text-white">Create OPD Encounter</h3>
                                     {{ $this->encounterForm }}
                                     <div class="flex justify-end pt-4">
