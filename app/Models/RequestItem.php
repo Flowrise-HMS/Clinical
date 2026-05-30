@@ -34,6 +34,7 @@ class RequestItem extends Model
         'fulfilled_by',
         'fulfilled_at',
         'notes',
+        'billing_unit_id',
     ];
 
     protected $casts = [
@@ -92,6 +93,11 @@ class RequestItem extends Model
     public function medicationAdministrations(): HasMany
     {
         return $this->hasMany(MedicationAdministration::class);
+    }
+
+    public function billingUnit(): BelongsTo
+    {
+        return $this->belongsTo(\Modules\Core\Models\Unit::class, 'billing_unit_id');
     }
 
     public function invoiceLine(): \Illuminate\Database\Eloquent\Relations\MorphOne
