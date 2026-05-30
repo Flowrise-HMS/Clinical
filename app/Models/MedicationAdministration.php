@@ -21,6 +21,7 @@ class MedicationAdministration extends Model
         'started_at',
         'ended_at',
         'quantity_given',
+        'dose_unit_id',
         'status',
         'notes',
     ];
@@ -40,5 +41,10 @@ class MedicationAdministration extends Model
     public function administeredBy(): BelongsTo
     {
         return $this->belongsTo(User::class, 'administered_by');
+    }
+
+    public function doseUnit(): BelongsTo
+    {
+        return $this->belongsTo(\Modules\Core\Models\Unit::class, 'dose_unit_id');
     }
 }
