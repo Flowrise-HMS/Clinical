@@ -633,6 +633,7 @@ class ClinicalWorkspace extends Page implements HasSchemas
                 ->schema([
                     Repeater::make('items')
                         ->minItems(1)
+                        ->columns(2)
                         ->schema([
                             Select::make('service_id')
                                 ->label('Medication')
