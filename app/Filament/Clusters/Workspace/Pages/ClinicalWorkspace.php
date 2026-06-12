@@ -12,7 +12,6 @@ use Filament\Forms\Components\TextInput;
 use Filament\Notifications\Notification;
 use Filament\Pages\Page;
 use Filament\Schemas\Components\Grid;
-use Filament\Schemas\Components\Utilities\Set;
 use Filament\Schemas\Concerns\InteractsWithSchemas;
 use Filament\Schemas\Contracts\HasSchemas;
 use Illuminate\Support\Facades\Auth;
@@ -710,15 +709,6 @@ class ClinicalWorkspace extends Page implements HasSchemas
                                 ])
                                 ->createOptionUsing(function (array $data): string {
                                     return app(MedicationService::class)->createWithService($data)->service_id;
-                                })
-                                ->afterStateUpdated(function ($state, Set $set) {
-                                    if (str_starts_with($state, 'drug:')) {
-                                        Notification::make()
-                                            ->title('Drug reference selected')
-                                            ->body('Create a medication from the Pharmacy module to use this drug.')
-                                            ->info()
-                                            ->send();
-                                    }
                                 }),
                             TextInput::make('dosage')
                                 ->label('Dosage')
@@ -924,7 +914,7 @@ class ClinicalWorkspace extends Page implements HasSchemas
         }
 
         $encounters = Encounter::where('patient_id', $this->currentPatient->id)
-            ->when($this->currentEncounter, fn ($q) => $q->where('id', '!=', $this->currentEncounter->id))
+            // ->when($this->currentEncounter, fn ($q) => $q->where('id', '!=', $this->currentEncounter->id))
             ->with([
                 'vitalSigns' => fn ($q) => $q->latest('recorded_at')->take(1),
                 'clinicalNotes' => fn ($q) => $q->latest()->take(1),
