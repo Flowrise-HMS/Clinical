@@ -2,6 +2,7 @@
 
 namespace Modules\Clinical\Filament\Clusters\Workspace\Pages;
 
+use BezhanSalleh\FilamentShield\Traits\HasPageShield;
 use Filament\Forms\Components\Checkbox;
 use Filament\Forms\Components\Repeater;
 use Filament\Forms\Components\RichEditor;
@@ -38,6 +39,8 @@ use Modules\Clinical\Filament\Clusters\Clinical\Resources\VitalSigns\Schemas\Vit
 use Modules\Clinical\Filament\Clusters\Workspace\WorkspaceCluster;
 use Modules\Clinical\Filament\Widgets\CriticalPatientsWidget;
 use Modules\Clinical\Filament\Widgets\MyTasksWidget;
+use Modules\Clinical\Filament\Widgets\PatientNotesWidget;
+use Modules\Clinical\Filament\Widgets\PatientOrdersWidget;
 use Modules\Clinical\Filament\Widgets\PatientVitalsHistoryWidget;
 use Modules\Clinical\Filament\Widgets\PendingFulfillmentsWidget;
 use Modules\Clinical\Filament\Widgets\WorkspaceTodayAppointmentsWidget;
@@ -61,7 +64,7 @@ use Modules\Pharmacy\Models\Medication;
 
 class ClinicalWorkspace extends Page implements HasSchemas
 {
-    use InteractsWithSchemas;
+    use InteractsWithSchemas, HasPageShield;
 
     protected static ?string $slug = '';
 
@@ -314,6 +317,14 @@ class ClinicalWorkspace extends Page implements HasSchemas
         if (! empty($this->currentPatient?->id)) {
             $widgets[] = PendingFulfillmentsWidget::make(['patientId' => $this->currentPatient?->id,'encounterId' => $this->currentEncounter?->id]);
             $widgets[] = PatientVitalsHistoryWidget::make(['patientId' => $this->currentPatient?->id]);
+            $widgets[] = PatientNotesWidget::make([
+                'patientId' => $this->currentPatient?->id,
+                'encounterId' => $this->currentEncounter?->id,
+            ]);
+            $widgets[] = PatientOrdersWidget::make([
+                'patientId' => $this->currentPatient->id,
+                'encounterId' => $this->currentEncounter?->id,
+            ]);
         }
 
         return $widgets;
