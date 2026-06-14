@@ -35,4 +35,12 @@ class AllergyService
             ]);
         });
     }
+
+    public function getActiveForPatient(string $patientId): \Illuminate\Support\Collection
+    {
+        return Allergy::query()
+            ->active()
+            ->forPatient($patientId)
+            ->get();
+    }
 }

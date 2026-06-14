@@ -25,6 +25,7 @@ use Modules\Clinical\Classes\Services\DiagnosisService;
 use Modules\Clinical\Classes\Services\EncounterService;
 use Modules\Clinical\Classes\Services\FulfillmentService;
 use Modules\Clinical\Classes\Services\MedicationAdministrationService;
+use Modules\Clinical\Classes\Services\MedicationFulfillmentPolicy;
 use Modules\Clinical\Classes\Services\ServiceRequestService;
 use Modules\Clinical\Classes\Services\VitalSignService;
 use Modules\Clinical\Enums\EncounterStatus;
@@ -34,6 +35,7 @@ use Modules\Clinical\Filament\Clusters\Clinical\Resources\ClinicalNotes\Schemas\
 use Modules\Clinical\Filament\Clusters\Clinical\Resources\Encounters\Schemas\EncounterForm;
 use Modules\Clinical\Filament\Clusters\Clinical\Resources\ServiceRequests\Schemas\ServiceRequestForm;
 use Modules\Clinical\Filament\Clusters\Clinical\Resources\VitalSigns\Schemas\VitalSignForm;
+use Modules\Clinical\Filament\Support\MarRecordDoseFormSchema;
 use Modules\Clinical\Filament\Clusters\Workspace\Pages\PatientProfile;
 use Modules\Clinical\Filament\Clusters\Workspace\Pages\Timeline;
 use Modules\Clinical\Models\Allergy;
@@ -364,12 +366,14 @@ class PatientActions
 
     public function medicationAdminAction(): Action
     {
+        $policy = app(MedicationFulfillmentPolicy::class);
+
         return Action::make('medication_admin')
             ->label('Administer Medications')
             ->icon('heroicon-m-beaker')
             ->color('success')
             ->slideOver()
-            ->visible(function (): bool {
+            ->visible(function () use ($policy): bool {
                 if (! $this->patient) {
                     return false;
                 }
@@ -377,75 +381,42 @@ class PatientActions
                 return RequestItem::query()
                     ->whereIn('status', ['pending', 'in_progress'])
                     ->whereHas('serviceRequest', fn ($q) => $q->where('patient_id', $this->patient->id))
-                    ->whereHas('prescriptionDetail')
-                    ->exists();
+                    ->whereHas('prescriptionDetail', fn ($q) => $q->where('administration_context', 'in_facility'))
+                    ->get()
+                    ->contains(fn (RequestItem $item) => $policy->canRecordMar($item));
             })
-            ->modalHeading(fn (): string => 'Administer Medications — ' . ($this->patient?->full_name ?? 'Unknown'))
+            ->modalHeading(fn (): string => 'Administer Medications — '.($this->patient?->full_name ?? 'Unknown'))
             ->modalSubmitActionLabel('Administer Selected')
             ->schema(function (): array {
-                $items = $this->medicationAdminService->getPendingItems($this->patient?->id);
-                $context = $this->fulfillmentService->getContextInfo($items->first());
+                $items = $this->medicationAdminService->getPendingItems($this->patient?->id, true);
 
                 if ($items->isEmpty()) {
                     return [];
                 }
 
-                $contextHtml = view('clinical::clinical.fulfillment-context', $context)->render();
-
-                return [
-                    TextEntry::make('context')
-                        ->hiddenLabel()
-                        ->html()
-                        ->content($contextHtml),
-                    Repeater::make('administrations')
+                $schemas = [];
+                foreach ($items as $item) {
+                    $schemas[] = \Filament\Schemas\Components\Fieldset::make($item->service?->name ?? 'Medication')
                         ->schema([
-                            Hidden::make('request_item_id'),
-                            Checkbox::make('selected')
-                                ->default(true)
-                                ->label(fn ($get) => $get('medication_info'))
-                                ->inline(),
-                            Hidden::make('medication_info'),
-                            TimePicker::make('started_at')->default('08:00'),
-                            TimePicker::make('ended_at')->default('08:00'),
-                            TextInput::make('quantity_given')
-                                ->numeric()
-                                ->default(1)
-                                ->minValue(1),
-                            Select::make('dose_unit_id')
-                                ->label('Dose Unit')
-                                ->options(fn () => \Modules\Core\Models\Unit::pluck('label', 'id'))
-                                ->searchable()
-                                ->placeholder('Select unit'),
+                            ...MarRecordDoseFormSchema::forSingleItem($item, true),
                         ])
-                        ->columns(6)
-                        ->defaultItems(function () use ($items) {
-                            return $items->map(function ($item) {
-                                $detail = $item->prescriptionDetail;
-                                $remaining = $this->medicationAdminService->getRemainingDoses($item);
+                        ->statePath('administrations.'.$item->id);
+                }
 
-                                return [
-                                    'request_item_id' => $item->id,
-                                    'selected' => true,
-                                    'medication_info' => $item->service?->name
-                                        . ' (' . ($detail?->dosage ?? '') . ' ' . ($detail?->route ?? '') . ')'
-                                        . ' — ' . ($detail?->frequency ?? '')
-                                        . ' [' . $remaining . ' remaining]',
-                                    'started_at' => '08:00',
-                                    'ended_at' => '08:00',
-                                    'quantity_given' => 1,
-                                    'dose_unit_id' => $detail?->dose_unit_id,
-                                ];
-                            })->toArray();
-                        })
-                        ->addable(false)
-                        ->reorderable(false)
-                        ->deletable(false),
-                    Textarea::make('notes')->label('Notes')->rows(3),
-                ];
+                $schemas[] = Textarea::make('notes')->label('Notes')->rows(3);
+
+                return $schemas;
             })
             ->action(function (array $data): void {
+                $administrations = [];
+                foreach ($data['administrations'] ?? [] as $itemId => $admin) {
+                    $admin['request_item_id'] = $itemId;
+                    $admin['selected'] = true;
+                    $administrations[] = $admin;
+                }
+
                 $result = $this->medicationAdminService->administerBatch(
-                    $data['administrations'] ?? [],
+                    $administrations,
                     $data['notes'] ?? null
                 );
 

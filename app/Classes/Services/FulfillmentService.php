@@ -19,11 +19,14 @@ use Illuminate\Support\HtmlString;
 use Modules\Clinical\Enums\TaskOutcome;
 use Modules\Clinical\Enums\TaskStatus;
 use Modules\Clinical\Models\RequestItem;
+use Modules\Clinical\Filament\Support\MarRecordDoseFormSchema;
+use Modules\Core\Enums\ServiceCategoryCode;
 
 class FulfillmentService
 {
     public function __construct(
         protected MedicationAdministrationService $medicationService,
+        protected MedicationFulfillmentPolicy $policy,
         protected TaskService $taskService,
         protected ?object $diagnosticService = null
     ) {
@@ -36,6 +39,10 @@ class FulfillmentService
     public function getType(RequestItem $item): string
     {
         if ($item->prescriptionDetail !== null) {
+            return 'medication';
+        }
+
+        if ($item->service?->category?->code === ServiceCategoryCode::MED) {
             return 'medication';
         }
 
@@ -120,49 +127,11 @@ class FulfillmentService
 
     protected function getMedicationFormFields(RequestItem $item): array
     {
-        $items = $this->medicationService->getPendingItems(
-            $item->serviceRequest?->patient_id
-        );
+        if ($item->prescriptionDetail?->isInFacility()) {
+            return MarRecordDoseFormSchema::forSingleItem($item);
+        }
 
-        return [
-            Repeater::make('administrations')
-                ->schema([
-                    Hidden::make('request_item_id'),
-                    Checkbox::make('selected')->default(true)->label(fn ($get) => $get('medication_info'))->inline(),
-                    Hidden::make('medication_info'),
-                    TimePicker::make('started_at')->default('08:00'),
-                    TimePicker::make('ended_at')->default('08:00'),
-                    TextInput::make('quantity_given')->numeric()->default(1)->minValue(1),
-                    Select::make('dose_unit_id')
-                        ->label('Dose Unit')
-                        ->options(fn () => \Modules\Core\Models\Unit::pluck('label', 'id'))
-                        ->searchable()
-                        ->placeholder('Select unit'),
-                ])
-                ->columns(6)
-                ->defaultItems(function () use ($items) {
-                    return $items->map(function ($item) {
-                        $detail = $item->prescriptionDetail;
-                        $remaining = $this->medicationService->getRemainingDoses($item);
-
-                        return [
-                            'request_item_id' => $item->id,
-                            'selected' => true,
-                            'medication_info' => $item->service?->name
-                                .' ('.($detail?->dosage ?? '').' '.($detail?->route ?? '').')'
-                                .' — '.($detail?->frequency ?? '')
-                                .' ['.$remaining.' remaining]',
-                            'started_at' => '08:00',
-                            'ended_at' => '08:00',
-                            'quantity_given' => 1,
-                            'dose_unit_id' => $detail?->dose_unit_id,
-                        ];
-                    })->toArray();
-                })
-                ->addable(false)
-                ->reorderable(false)
-                ->deletable(false),
-        ];
+        return MarRecordDoseFormSchema::dispenseFields($item);
     }
 
     protected function getGenericFormFields(): array
@@ -181,6 +150,19 @@ class FulfillmentService
 
     protected function fulfillMedication(RequestItem $item, array $data, ?User $user): void
     {
+        if ($item->prescriptionDetail?->isInFacility()) {
+            $this->medicationService->administer($item, $data, $data['notes'] ?? null, $user);
+
+            return;
+        }
+
+        if (isset($data['medication_id'])) {
+            app(\Modules\Pharmacy\Classes\Services\DispenseService::class)
+                ->dispense($item, $data, $user);
+
+            return;
+        }
+
         $result = $this->medicationService->administerBatch(
             $data['administrations'] ?? [],
             $data['notes'] ?? null,
@@ -201,6 +183,10 @@ class FulfillmentService
 
     protected function fulfillGeneric(RequestItem $item, array $data, ?User $user): void
     {
+        if ($item->service?->category?->code === ServiceCategoryCode::MED || $item->prescriptionDetail) {
+            throw new \InvalidArgumentException('Medication orders must be fulfilled via MAR or pharmacy dispense.');
+        }
+
         DB::transaction(function () use ($item, $data, $user) {
             $task = $item->tasks()->create([
                 'status' => TaskStatus::COMPLETED,

@@ -138,7 +138,10 @@ class Task extends Model
             'notes' => $notes ?? $this->notes,
         ]);
 
-        $this->requestItem?->markAsFulfilled($this->performed_by);
+        if ($this->requestItem && app(\Modules\Clinical\Classes\Services\MedicationFulfillmentPolicy::class)
+            ->shouldCompleteOnDispense($this->requestItem)) {
+            $this->requestItem->markAsFulfilled($this->performed_by);
+        }
     }
 
     public function cancel(?string $reason = null): void

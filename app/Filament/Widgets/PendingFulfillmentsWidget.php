@@ -3,23 +3,21 @@
 namespace Modules\Clinical\Filament\Widgets;
 
 use Filament\Actions\Action;
-use Filament\Forms\Components\Checkbox;
-use Filament\Forms\Components\Hidden;
-use Filament\Forms\Components\Repeater;
 use Filament\Forms\Components\Textarea;
-use Filament\Forms\Components\TextInput;
-use Filament\Forms\Components\TimePicker;
 use Filament\Infolists\Components\TextEntry;
 use Filament\Notifications\Notification;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Widgets\TableWidget as BaseTableWidget;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\HtmlString;
 use Modules\Clinical\Classes\Services\FulfillmentService;
 use Modules\Clinical\Classes\Services\MedicationAdministrationService;
+use Modules\Clinical\Classes\Services\MedicationFulfillmentPolicy;
+use Modules\Clinical\Filament\Support\MarRecordDoseFormSchema;
 use Modules\Clinical\Models\RequestItem;
 use Modules\Core\Classes\Services\BranchService;
+use Modules\Pharmacy\Classes\Services\DispenseService;
+use Modules\Pharmacy\Enums\AdministrationContext;
 
 class PendingFulfillmentsWidget extends BaseTableWidget
 {
@@ -45,6 +43,7 @@ class PendingFulfillmentsWidget extends BaseTableWidget
             ->with([
                 'serviceRequest.patient',
                 'serviceRequest.orderedBy',
+                'serviceRequest.encounter',
                 'service.category',
                 'prescriptionDetail.doseUnit',
                 'medicationAdministrations' => fn ($q) => $q->latest(),
@@ -54,6 +53,8 @@ class PendingFulfillmentsWidget extends BaseTableWidget
 
     protected function getTableColumns(): array
     {
+        $policy = app(MedicationFulfillmentPolicy::class);
+
         return [
             TextColumn::make('#')->rowIndex(),
             TextColumn::make('serviceRequest.patient.display_name')
@@ -63,9 +64,14 @@ class PendingFulfillmentsWidget extends BaseTableWidget
                 ->label('Service')
                 ->searchable()
                 ->sortable(),
-            TextColumn::make('service.category.name')
-                ->label('Category')
-                ->badge(),
+            TextColumn::make('prescriptionDetail.administration_context')
+                ->label('Context')
+                ->badge()
+                ->formatStateUsing(fn ($state) => $state?->getLabel() ?? '—'),
+            TextColumn::make('prescriptionDetail.next_dose_at')
+                ->label('Next due')
+                ->dateTime('M j H:i')
+                ->placeholder('—'),
             TextColumn::make('serviceRequest.orderedBy.name')
                 ->label('Ordered By')
                 ->sortable(),
@@ -73,15 +79,6 @@ class PendingFulfillmentsWidget extends BaseTableWidget
                 ->label('Ordered At')
                 ->since()
                 ->sortable(),
-            TextColumn::make('serviceRequest.priority')
-                ->label('Priority')
-                ->colors([
-                    'danger' => 'emergency',
-                    'warning' => 'urgent',
-                    'primary' => 'routine',
-                    'gray' => 'low',
-                ])
-                ->badge(),
             TextColumn::make('status')
                 ->colors([
                     'warning' => 'pending',
@@ -90,13 +87,13 @@ class PendingFulfillmentsWidget extends BaseTableWidget
                     'gray' => 'cancelled',
                 ])->badge(),
             TextColumn::make('remaining')
-                ->label('Remaining')
-                ->getStateUsing(function (RequestItem $record) {
+                ->label('Doses left')
+                ->getStateUsing(function (RequestItem $record) use ($policy) {
                     $detail = $record->prescriptionDetail;
                     if (! $detail || ! $detail->total_administrations) {
                         return null;
                     }
-                    $given = $record->medicationAdministrations()->sum('quantity_given');
+                    $given = $policy->countGivenDoses($record);
                     $unit = $detail->doseUnit?->label ?? '';
 
                     return max(0, $detail->total_administrations - $given).'/'.$detail->total_administrations.' '.$unit;
@@ -113,178 +110,102 @@ class PendingFulfillmentsWidget extends BaseTableWidget
     protected function getTableActions(): array
     {
         return [
-            Action::make('fulfill')
-                ->label(fn (RequestItem $record): string => $this->getActionLabel($record))
-                ->icon(fn (RequestItem $record): string => $this->getActionIcon($record))
-                ->color(fn (RequestItem $record): string => $this->getActionColor($record))
-                ->button()
-                ->visible(fn (RequestItem $record): bool => ! $record->isTerminal())
-                ->modalHeading(fn (RequestItem $record): string => $this->getModalHeading($record))
-                ->modalSubmitActionLabel(fn (RequestItem $record): string => $this->getSubmitLabel($record))
-                ->schema(fn (RequestItem $record): array => $this->getFormSchema($record))
-                ->action(fn (array $data, RequestItem $record) => $this->handleFulfillment($data, $record)),
+            $this->recordDoseAction(),
+            $this->dispenseAction(),
+            $this->genericFulfillAction(),
         ];
     }
 
-    protected function getActionLabel(RequestItem $record): string
+    protected function recordDoseAction(): Action
     {
-        return match (app(FulfillmentService::class)->getType($record)) {
-            'medication' => 'Administer',
-            'diagnostic' => 'Record Results',
-            default => 'Fulfill',
-        };
+        $policy = app(MedicationFulfillmentPolicy::class);
+
+        return Action::make('record_dose')
+            ->label('Record dose')
+            ->icon('heroicon-m-beaker')
+            ->color('success')
+            ->button()
+            ->visible(fn (RequestItem $record): bool => $record->prescriptionDetail?->isInFacility()
+                && $policy->canRecordMar($record))
+            ->modalHeading(fn (RequestItem $record): string => 'Record dose — '.($record->service?->name ?? 'Medication'))
+            ->modalSubmitActionLabel('Save administration')
+            ->schema(fn (RequestItem $record): array => [
+                ...MarRecordDoseFormSchema::forSingleItem($record),
+                Textarea::make('notes')->label('Notes')->rows(2),
+            ])
+            ->action(function (array $data, RequestItem $record): void {
+                try {
+                    app(MedicationAdministrationService::class)->administer($record, $data, $data['notes'] ?? null);
+                    Notification::make()->title('Dose recorded')->success()->send();
+                } catch (\Throwable $e) {
+                    Notification::make()->title('Could not record dose')->body($e->getMessage())->danger()->persistent()->send();
+                }
+            });
     }
 
-    protected function getActionIcon(RequestItem $record): string
+    protected function dispenseAction(): Action
     {
-        return match (app(FulfillmentService::class)->getType($record)) {
-            'medication' => 'heroicon-m-beaker',
-            'diagnostic' => 'heroicon-m-clipboard-document-check',
-            default => 'heroicon-m-check-circle',
-        };
-    }
+        $policy = app(MedicationFulfillmentPolicy::class);
 
-    protected function getActionColor(RequestItem $record): string
-    {
-        return match (app(FulfillmentService::class)->getType($record)) {
-            'medication' => 'success',
-            'diagnostic' => 'primary',
-            default => 'success',
-        };
-    }
-
-    protected function getModalHeading(RequestItem $record): string
-    {
-        $type = app(FulfillmentService::class)->getType($record);
-        $patientName = $record->serviceRequest?->patient?->full_name ?? 'Unknown';
-
-        return match ($type) {
-            'medication' => "Administer Medications — {$patientName}",
-            'diagnostic' => "Record Results — {$record->service?->name}",
-            default => "Fulfill — {$record->service?->name}",
-        };
-    }
-
-    protected function getSubmitLabel(RequestItem $record): string
-    {
-        return match (app(FulfillmentService::class)->getType($record)) {
-            'medication' => 'Administer Selected',
-            'diagnostic' => 'Submit Results',
-            default => 'Mark Fulfilled',
-        };
-    }
-
-    protected function getFormSchema(RequestItem $record): array
-    {
-        $fulfillmentService = app(FulfillmentService::class);
-
-        if ($fulfillmentService->getType($record) === 'medication') {
-            $patientId = $record->serviceRequest?->patient_id;
-            $medicationService = app(MedicationAdministrationService::class);
-            $items = $medicationService->getPendingItems($patientId);
-            return [
-
-
-                Repeater::make('administrations')
-                    ->schema([
-                        Hidden::make('request_item_id'),
-                        Checkbox::make('selected')
-                            ->default(true)
-                            ->label(fn ($get) => $get('medication_info'))
-                            ->inline(),
-                        Hidden::make('medication_info'),
-                        TimePicker::make('started_at')->default('08:00'),
-                        TimePicker::make('ended_at')->default('08:00'),
-                        TextInput::make('quantity_given')
-                            ->numeric()
-                            ->default(1)
-                            ->minValue(1),
-                        Select::make('dose_unit_id')
-                            ->label('Dose Unit')
-                            ->options(fn () => \Modules\Core\Models\Unit::pluck('label', 'id'))
-                            ->searchable()
-                            ->placeholder('Select unit'),
-                    ])
-                    ->columns(6)
-                    ->defaultItems(function () use ($items) {
-                        return $items->map(function ($item) {
-                            $detail = $item->prescriptionDetail;
-                            $remaining = app(MedicationAdministrationService::class)
-                                ->getRemainingDoses($item);
-
-                            return [
-                                'request_item_id' => $item->id,
-                                'selected' => true,
-                                'medication_info' => $item->service?->name
-                                    .' ('.($detail?->dosage ?? '').' '.($detail?->route ?? '').')'
-                                    .' — '.($detail?->frequency ?? '')
-                                    .' ['.$remaining.' remaining]',
-                                'started_at' => '08:00',
-                                'ended_at' => '08:00',
-                                'quantity_given' => 1,
-                                'dose_unit_id' => $detail?->dose_unit_id,
-                            ];
-                        })->toArray();
-                    })
-                    ->addable(false)
-                    ->reorderable(false)
-                    ->deletable(false),
-                Textarea::make('notes')
-                    ->label('Notes')
-                    ->rows(3),
-            ];
-        }
-
-        return $fulfillmentService->getFormSchema($record);
-    }
-
-    protected function handleFulfillment(array $data, RequestItem $record): void
-    {
-        $fulfillmentService = app(FulfillmentService::class);
-        $type = $fulfillmentService->getType($record);
-
-        try {
-            if ($type === 'medication') {
-                $result = app(MedicationAdministrationService::class)
-                    ->administerBatch($data['administrations'] ?? [], $data['notes'] ?? null);
-
-                if (! empty($result['created'])) {
-                    Notification::make()
-                        ->title('Medications administered')
-                        ->body(implode(', ', $result['created']))
-                        ->success()
-                        ->send();
+        return Action::make('dispense')
+            ->label('Dispense')
+            ->icon('heroicon-m-shopping-bag')
+            ->color('info')
+            ->button()
+            ->visible(function (RequestItem $record) use ($policy): bool {
+                if (! $record->prescriptionDetail) {
+                    return false;
                 }
 
-                if (! empty($result['errors'])) {
-                    Notification::make()
-                        ->title('Some items could not be administered')
-                        ->body(implode("\n", $result['errors']))
-                        ->danger()
-                        ->persistent()
-                        ->send();
+                if ($record->prescriptionDetail->isTakeHome()) {
+                    return $policy->canDispense($record);
                 }
-            } else {
-                $fulfillmentService->fulfill($record, $data);
 
-                Notification::make()
-                    ->title($record->service?->name.' fulfilled successfully')
-                    ->success()
-                    ->send();
-            }
-        } catch (\Exception $e) {
-            Notification::make()
-                ->title('Fulfillment failed')
-                ->body($e->getMessage())
-                ->danger()
-                ->persistent()
-                ->send();
-        }
+                return $policy->requiresMar($record->prescriptionDetail)
+                    && Auth::user()?->hasAnyRole(['pharmacist', 'pharmacy_technician']);
+            })
+            ->modalHeading(fn (RequestItem $record): string => 'Dispense — '.($record->service?->name ?? 'Medication'))
+            ->modalSubmitActionLabel('Dispense')
+            ->schema(fn (RequestItem $record): array => MarRecordDoseFormSchema::dispenseFields($record))
+            ->action(function (array $data, RequestItem $record): void {
+                try {
+                    app(DispenseService::class)->dispense($record, $data, Auth::user());
+                    Notification::make()->title('Dispensed successfully')->success()->send();
+                } catch (\Throwable $e) {
+                    Notification::make()->title('Dispense failed')->body($e->getMessage())->danger()->persistent()->send();
+                }
+            });
     }
 
-    protected function getTableHeaderActions(): array
+    protected function genericFulfillAction(): Action
     {
-        return [];
+        return Action::make('fulfill')
+            ->label(fn (RequestItem $record): string => match (app(FulfillmentService::class)->getType($record)) {
+                'diagnostic' => 'Record Results',
+                default => 'Fulfill',
+            })
+            ->icon('heroicon-m-check-circle')
+            ->color('primary')
+            ->button()
+            ->visible(function (RequestItem $record): bool {
+                if ($record->isTerminal()) {
+                    return false;
+                }
+
+                $type = app(FulfillmentService::class)->getType($record);
+
+                return $type !== 'medication';
+            })
+            ->modalHeading(fn (RequestItem $record): string => 'Fulfill — '.($record->service?->name ?? 'Service'))
+            ->schema(fn (RequestItem $record): array => app(FulfillmentService::class)->getFormSchema($record))
+            ->action(function (array $data, RequestItem $record): void {
+                try {
+                    app(FulfillmentService::class)->fulfill($record, $data);
+                    Notification::make()->title('Fulfilled successfully')->success()->send();
+                } catch (\Throwable $e) {
+                    Notification::make()->title('Fulfillment failed')->body($e->getMessage())->danger()->persistent()->send();
+                }
+            });
     }
 
     protected function getTablePollingInterval(): ?string

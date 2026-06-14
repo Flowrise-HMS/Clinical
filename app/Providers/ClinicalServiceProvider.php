@@ -4,6 +4,7 @@ namespace Modules\Clinical\Providers;
 
 use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Modules\Clinical\Console\SendMarDoseRemindersCommand;
 use Modules\Clinical\Models\ClinicalNote;
 use Modules\Clinical\Models\Encounter;
 use Modules\Clinical\Models\MedicationAdministration;
@@ -33,7 +34,9 @@ class ClinicalServiceProvider extends ModuleServiceProvider
      *
      * @var string[]
      */
-    // protected array $commands = [];
+    protected array $commands = [
+        SendMarDoseRemindersCommand::class,
+    ];
 
     /**
      * Provider classes to register.
@@ -113,13 +116,8 @@ class ClinicalServiceProvider extends ModuleServiceProvider
         }
     }
 
-    /**
-     * Define module schedules.
-     *
-     * @param  $schedule
-     */
-    // protected function configureSchedules(Schedule $schedule): void
-    // {
-    //     $schedule->command('inspire')->hourly();
-    // }
+    protected function configureSchedules(Schedule $schedule): void
+    {
+        $schedule->command('clinical:mar-dose-reminders')->everyFiveMinutes();
+    }
 }
