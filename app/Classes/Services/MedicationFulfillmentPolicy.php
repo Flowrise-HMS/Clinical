@@ -123,14 +123,15 @@ class MedicationFulfillmentPolicy
             return true;
         }
 
-        if (! class_exists(InvoiceLine::class) || ! Schema::hasTable('invoice_lines')) {
-            return false;
-        }
+        // if (! class_exists(InvoiceLine::class) || ! Schema::hasTable('invoice_lines')) {
+        //     return false;
+        // }
 
-        return InvoiceLine::query()
-            ->where('billable_type', $item::class)
-            ->where('billable_id', $item->id)
-            ->exists();
+        // return InvoiceLine::query()
+        //     ->where('billable_type', $item::class)
+        //     ->where('billable_id', $item->id)
+        //     ->exists();
+        return false;
     }
 
     public function isPaidFor(RequestItem $item): bool

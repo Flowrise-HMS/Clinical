@@ -35,7 +35,7 @@ class EncounterService
         return DB::transaction(function () use ($patient, $type, $chiefComplaint, $priority, $locationId, $departmentId, $createdBy) {
             return Encounter::create([
                 'patient_id' => $patient->id,
-                'branch_id' => $patient->branch_id,
+                'branch_id' => $patient?->branch_id ?? $this->branchService->getDefaultBranchId(),
                 'type' => $type,
                 'status' => EncounterStatus::PLANNED,
                 'priority' => $priority ?? EncounterPriority::default(),
