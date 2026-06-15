@@ -131,6 +131,7 @@ class MedicationFulfillmentPolicy
         //     ->where('billable_type', $item::class)
         //     ->where('billable_id', $item->id)
         //     ->exists();
+        //todo: Makae this configurable via settings later on
         return false;
     }
 
