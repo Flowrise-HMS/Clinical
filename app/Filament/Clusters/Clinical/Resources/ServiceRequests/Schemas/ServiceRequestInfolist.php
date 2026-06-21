@@ -6,6 +6,7 @@ use Filament\Infolists\Components\RepeatableEntry;
 use Filament\Infolists\Components\TextEntry;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
+use Modules\Core\Filament\Infolists\Components\CurrencyEntry;
 
 class ServiceRequestInfolist
 {
@@ -49,9 +50,8 @@ class ServiceRequestInfolist
                                     ->label('Code'),
                                 TextEntry::make('quantity')
                                     ->label('Qty'),
-                                TextEntry::make('unit_price')
-                                    ->label('Unit Price')
-                                    ->money('GHS'),
+                                CurrencyEntry::make('unit_price')
+                                    ->label('Unit Price'),
                                 TextEntry::make('status')
                                     ->label('Status'),
                             ])
@@ -61,9 +61,8 @@ class ServiceRequestInfolist
                 Section::make('Summary')
                     ->columns(2)
                     ->schema([
-                        TextEntry::make('total_amount')
-                            ->label('Total Amount')
-                            ->money('GHS'),
+                        CurrencyEntry::make('total_amount')
+                            ->label('Total Amount'),
                         TextEntry::make('progress_percentage')
                             ->label('Progress')
                             ->suffix('%'),

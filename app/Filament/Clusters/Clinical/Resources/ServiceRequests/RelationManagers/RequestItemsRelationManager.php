@@ -13,6 +13,7 @@ use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
 use Modules\Clinical\Enums\RequestItemStatus;
 use Modules\Clinical\Filament\Clusters\Clinical\Resources\ServiceRequests\Schemas\RequestItemForm;
+use Modules\Core\Filament\Tables\Columns\CurrencyColumn;
 
 class RequestItemsRelationManager extends RelationManager
 {
@@ -48,20 +49,17 @@ class RequestItemsRelationManager extends RelationManager
                     ->label('Qty')
                     ->sortable(),
 
-                TextColumn::make('unit_price')
+                CurrencyColumn::make('unit_price')
                     ->label('Unit Price')
-                    ->money()
                     ->sortable(),
 
-                TextColumn::make('discount_amount')
+                CurrencyColumn::make('discount_amount')
                     ->label('Discount')
-                    ->money()
                     ->sortable()
                     ->toggleable(isToggledHiddenByDefault: true),
 
-                TextColumn::make('total_price')
+                CurrencyColumn::make('total_price')
                     ->label('Total')
-                    ->money()
                     ->sortable(),
 
                 TextColumn::make('status')

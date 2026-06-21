@@ -15,6 +15,7 @@ use Filament\Tables\Table;
 use Modules\Clinical\Filament\Clusters\Clinical\Resources\ServiceRequests\ServiceRequestResource;
 use Modules\Clinical\Enums\RequestPriority;
 use Modules\Clinical\Enums\RequestStatus;
+use Modules\Core\Filament\Tables\Columns\CurrencyColumn;
 
 class ServiceRequestsTable
 {
@@ -56,9 +57,8 @@ class ServiceRequestsTable
                     ->label('Items')
                     ->counts('items'),
 
-                TextColumn::make('total_amount')
+                CurrencyColumn::make('total_amount')
                     ->label('Total')
-                    ->money('GHS')
                     ->sortable(),
 
                 TextColumn::make('progress_percentage')
