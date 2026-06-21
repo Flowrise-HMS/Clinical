@@ -2,7 +2,7 @@
 
 namespace Modules\Clinical\Tests\Feature;
 
-use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Modules\Clinical\Models\Encounter;
 use Modules\Core\Models\Branch;
 use Modules\Patient\Models\Patient;
@@ -10,14 +10,12 @@ use Tests\TestCase;
 
 class ClinicalEncounterModelTest extends TestCase
 {
-    use RefreshDatabase;
+    use DatabaseTransactions;
 
     protected function setUp(): void
     {
         parent::setUp();
-        $this->artisan('module:migrate', ['module' => 'Core', '--force' => true]);
-        $this->artisan('module:migrate', ['module' => 'Patient', '--force' => true]);
-        $this->artisan('module:migrate', ['module' => 'Clinical', '--force' => true]);
+        $this->migrateModules(['Core', 'Patient', 'Clinical']);
     }
 
     public function test_encounter_factory_creates_encounter(): void

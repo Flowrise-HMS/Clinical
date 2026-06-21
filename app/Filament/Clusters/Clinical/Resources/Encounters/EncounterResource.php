@@ -9,6 +9,7 @@ use Modules\Billing\Filament\RelationManagers\EncounterInvoicesRelationManager;
 use Modules\Clinical\Filament\Clusters\Clinical\ClinicalCluster;
 use Modules\Clinical\Filament\Clusters\Clinical\Resources\Encounters\Pages\CreateEncounter;
 use Modules\Clinical\Filament\Clusters\Clinical\Resources\Encounters\Pages\EditEncounter;
+use Modules\Clinical\Filament\Clusters\Clinical\Resources\Encounters\Pages\ListEncounterActivities;
 use Modules\Clinical\Filament\Clusters\Clinical\Resources\Encounters\Pages\ListEncounters;
 use Modules\Clinical\Filament\Clusters\Clinical\Resources\Encounters\Pages\ViewEncounter;
 use Modules\Clinical\Filament\Clusters\Clinical\Resources\Encounters\RelationManagers\ClinicalNotesRelationManager;
@@ -71,6 +72,7 @@ class EncounterResource extends Resource
             'create' => CreateEncounter::route('/create'),
             'view' => ViewEncounter::route('/{record}'),
             'edit' => EditEncounter::route('/{record}/edit'),
+            'activities' => ListEncounterActivities::route('/{record}/activities'),
         ];
     }
 }

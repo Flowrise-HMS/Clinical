@@ -5,6 +5,7 @@ namespace Modules\Clinical\Database\Factories;
 use Illuminate\Database\Eloquent\Factories\Factory;
 use Modules\Clinical\Enums\AllergenType;
 use Modules\Clinical\Enums\AllergySeverity;
+use Modules\Clinical\Enums\OnsetType;
 use Modules\Clinical\Models\Allergy;
 use Modules\Patient\Models\Patient;
 
@@ -51,11 +52,7 @@ class AllergyFactory extends Factory
                 'Stomach pain',
             ]),
             'severity' => fake()->randomElement(AllergySeverity::cases()),
-            'onset_type' => fake()->randomElement([
-                'acute' => 'Acute',
-                'chronic' => 'Chronic',
-                'unknown' => 'Unknown',
-            ]),
+            'onset_type' => fake()->randomElement(OnsetType::cases()),
             'is_active' => true,
             'onset_date' => fake()->dateTimeBetween('-5 years', 'now'),
             'verification_status' => 'verified',

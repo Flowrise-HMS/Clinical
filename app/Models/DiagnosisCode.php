@@ -3,12 +3,13 @@
 namespace Modules\Clinical\Models;
 
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Modules\Core\Models\BaseModel;
 
 class DiagnosisCode extends BaseModel
 {
-    use HasUuids;
+    use HasFactory, HasUuids;
 
     protected $fillable = [
         'code',

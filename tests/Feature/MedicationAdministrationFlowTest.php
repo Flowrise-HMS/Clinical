@@ -3,7 +3,7 @@
 namespace Modules\Clinical\Tests\Feature;
 
 use App\Models\User;
-use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Modules\Billing\Enums\InvoiceLineStatus;
 use Modules\Billing\Enums\InvoiceStatus;
 use Modules\Billing\Enums\InvoiceType;
@@ -35,17 +35,12 @@ use Tests\TestCase;
 
 class MedicationAdministrationFlowTest extends TestCase
 {
-    use RefreshDatabase;
+    use DatabaseTransactions;
 
     protected function setUp(): void
     {
         parent::setUp();
-
-        $this->artisan('module:migrate', ['module' => 'Core', '--force' => true]);
-        $this->artisan('module:migrate', ['module' => 'Patient', '--force' => true]);
-        $this->artisan('module:migrate', ['module' => 'Billing', '--force' => true]);
-        $this->artisan('module:migrate', ['module' => 'Clinical', '--force' => true]);
-        $this->artisan('module:migrate', ['module' => 'Pharmacy', '--force' => true]);
+        $this->migrateModules(['Core', 'Patient', 'Billing', 'Clinical', 'Pharmacy']);
 
         config(['clinical.mar_payment.require_before_mar' => false]);
     }
@@ -235,7 +230,7 @@ class MedicationAdministrationFlowTest extends TestCase
             'status' => EncounterStatus::IN_PROGRESS,
         ]);
 
-        $category = ServiceCategory::factory()->create(['code' => 'MED']);
+        $category = $this->medicationServiceCategory();
         $service = Service::factory()->create([
             'category_id' => $category->id,
             'requires_payment_before' => $requiresPayment,
@@ -313,7 +308,7 @@ class MedicationAdministrationFlowTest extends TestCase
         Role::findOrCreate('pharmacist', 'web');
         $pharmacist->assignRole('pharmacist');
 
-        $category = ServiceCategory::factory()->create(['code' => 'MED']);
+        $category = $this->medicationServiceCategory();
         $service = Service::factory()->create(['category_id' => $category->id]);
         $medication = Medication::factory()->create(['service_id' => $service->id]);
 

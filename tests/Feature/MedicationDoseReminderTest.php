@@ -3,7 +3,7 @@
 namespace Modules\Clinical\Tests\Feature;
 
 use App\Models\User;
-use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Illuminate\Support\Facades\Notification;
 use Modules\Clinical\Classes\Services\MedicationDoseScheduleService;
 use Modules\Pharmacy\Classes\Services\PrescriptionScheduleCalculator;
@@ -26,16 +26,13 @@ use Tests\TestCase;
 
 class MedicationDoseReminderTest extends TestCase
 {
-    use RefreshDatabase;
+    use DatabaseTransactions;
 
     protected function setUp(): void
     {
         parent::setUp();
 
-        $this->artisan('module:migrate', ['module' => 'Core', '--force' => true]);
-        $this->artisan('module:migrate', ['module' => 'Patient', '--force' => true]);
-        $this->artisan('module:migrate', ['module' => 'Clinical', '--force' => true]);
-        $this->artisan('module:migrate', ['module' => 'Pharmacy', '--force' => true]);
+        $this->migrateModules(['Core', 'Patient', 'Clinical', 'Pharmacy']);
 
         config(['clinical.mar_reminders.enabled' => true]);
         config(['clinical.mar_payment.require_before_mar' => false]);
@@ -74,12 +71,12 @@ class MedicationDoseReminderTest extends TestCase
     {
         Notification::fake();
 
-        [$item, , $detail] = $this->seedInFacilityOrder(MedicationFrequency::STAT, 1);
-        $detail->update(['next_dose_at' => now()->subMinute()]);
-
-        $nurse = User::factory()->create(['branch_id' => $item->serviceRequest->branch_id]);
-        Permission::findOrCreate('administer_medication', 'web');
-        $nurse->givePermissionTo('administer_medication');
+        [$item, $nurse, $detail] = $this->seedInFacilityOrder(MedicationFrequency::STAT, 1);
+        $pastDue = now()->subHour();
+        $detail->update([
+            'course_started_at' => $pastDue,
+            'next_dose_at' => $pastDue,
+        ]);
 
         $this->artisan('clinical:mar-dose-reminders')->assertSuccessful();
         Notification::assertSentTo($nurse, MedicationDueDoseNotification::class);
@@ -128,7 +125,7 @@ class MedicationDoseReminderTest extends TestCase
             'status' => EncounterStatus::IN_PROGRESS,
         ]);
 
-        $category = ServiceCategory::factory()->create(['code' => 'MED']);
+        $category = $this->medicationServiceCategory();
         $service = Service::factory()->create([
             'category_id' => $category->id,
             'requires_payment_before' => false,

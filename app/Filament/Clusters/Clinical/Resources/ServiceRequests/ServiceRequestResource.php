@@ -8,6 +8,7 @@ use Filament\Tables\Table;
 use Modules\Clinical\Filament\Clusters\Clinical\ClinicalCluster;
 use Modules\Clinical\Filament\Clusters\Clinical\Resources\ServiceRequests\Pages\CreateServiceRequest;
 use Modules\Clinical\Filament\Clusters\Clinical\Resources\ServiceRequests\Pages\EditServiceRequest;
+use Modules\Clinical\Filament\Clusters\Clinical\Resources\ServiceRequests\Pages\ListServiceRequestActivities;
 use Modules\Clinical\Filament\Clusters\Clinical\Resources\ServiceRequests\Pages\ListServiceRequests;
 use Modules\Clinical\Filament\Clusters\Clinical\Resources\ServiceRequests\Pages\ViewServiceRequest;
 use Modules\Clinical\Filament\Clusters\Clinical\Resources\ServiceRequests\RelationManagers\RequestItemsRelationManager;
@@ -58,6 +59,7 @@ class ServiceRequestResource extends Resource
             'create' => CreateServiceRequest::route('/create'),
             'view' => ViewServiceRequest::route('/{record}'),
             'edit' => EditServiceRequest::route('/{record}/edit'),
+            'activities' => ListServiceRequestActivities::route('/{record}/activities'),
         ];
     }
 }

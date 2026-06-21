@@ -4,13 +4,14 @@ namespace Modules\Clinical\Models;
 
 use App\Models\User;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Modules\Core\Models\BaseModel;
 use Modules\Patient\Models\Patient;
 
 class EncounterDiagnosis extends BaseModel
 {
-    use HasUuids;
+    use HasFactory, HasUuids;
 
     protected $fillable = [
         'encounter_id',

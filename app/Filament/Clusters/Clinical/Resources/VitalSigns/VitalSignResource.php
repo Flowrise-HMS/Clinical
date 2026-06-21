@@ -9,6 +9,7 @@ use Filament\Tables\Table;
 use Modules\Clinical\Filament\Clusters\Clinical\ClinicalCluster;
 use Modules\Clinical\Filament\Clusters\Clinical\Resources\VitalSigns\Pages\CreateVitalSign;
 use Modules\Clinical\Filament\Clusters\Clinical\Resources\VitalSigns\Pages\EditVitalSign;
+use Modules\Clinical\Filament\Clusters\Clinical\Resources\VitalSigns\Pages\ListVitalSignActivities;
 use Modules\Clinical\Filament\Clusters\Clinical\Resources\VitalSigns\Pages\ListVitalSigns;
 use Modules\Clinical\Filament\Clusters\Clinical\Resources\VitalSigns\Pages\ViewVitalSign;
 use Modules\Clinical\Filament\Clusters\Clinical\Resources\VitalSigns\Schemas\VitalSignForm;
@@ -56,6 +57,7 @@ class VitalSignResource extends Resource
             'create' => CreateVitalSign::route('/create'),
             'view' => ViewVitalSign::route('/{record}'),
             'edit' => EditVitalSign::route('/{record}/edit'),
+            'activities' => ListVitalSignActivities::route('/{record}/activities'),
         ];
     }
 }

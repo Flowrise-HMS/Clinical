@@ -2,6 +2,7 @@
 
 namespace Modules\Clinical\Filament\Clusters\Clinical\Resources\VitalSigns\Tables;
 
+use Filament\Actions\Action;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteAction;
 use Filament\Actions\DeleteBulkAction;
@@ -9,6 +10,7 @@ use Filament\Actions\EditAction;
 use Filament\Actions\ViewAction;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
+use Modules\Clinical\Filament\Clusters\Clinical\Resources\VitalSigns\VitalSignResource;
 
 class VitalSignsTable
 {
@@ -35,6 +37,10 @@ class VitalSignsTable
                 ViewAction::make(),
                 EditAction::make(),
                 DeleteAction::make(),
+                Action::make('activities')
+                    ->label('Activities')
+                    ->icon('heroicon-o-bell-alert')
+                    ->url(fn ($record) => VitalSignResource::getUrl('activities', ['record' => $record])),
             ])
             ->toolbarActions([
                 BulkActionGroup::make([

@@ -2,6 +2,7 @@
 
 namespace Modules\Clinical\Filament\Clusters\Clinical\Resources\ServiceRequests\Tables;
 
+use Filament\Actions\Action;
 use Filament\Actions\ActionGroup;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteAction;
@@ -11,6 +12,7 @@ use Filament\Actions\ViewAction;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
+use Modules\Clinical\Filament\Clusters\Clinical\Resources\ServiceRequests\ServiceRequestResource;
 use Modules\Clinical\Enums\RequestPriority;
 use Modules\Clinical\Enums\RequestStatus;
 
@@ -81,11 +83,15 @@ class ServiceRequestsTable
 
             ])
             ->recordActions([
-                ActionGroup::make([
-                    ViewAction::make(),
-                    EditAction::make(),
-                    DeleteAction::make(),
-                ]),
+            ActionGroup::make([
+                ViewAction::make(),
+                EditAction::make(),
+                DeleteAction::make(),
+                Action::make('activities')
+                    ->label('Activities')
+                    ->icon('heroicon-o-bell-alert')
+                    ->url(fn ($record) => ServiceRequestResource::getUrl('activities', ['record' => $record])),
+            ]),
             ])
             ->toolbarActions([
                 BulkActionGroup::make([
