@@ -13,6 +13,7 @@ use Modules\Clinical\Classes\Services\MedicationFulfillmentPolicy;
 use Modules\Clinical\Filament\Clusters\Clinical\ClinicalCluster;
 use Modules\Clinical\Models\RequestItem;
 use Modules\Core\Classes\Services\BranchService;
+use Modules\Core\Settings\FeatureSettings;
 
 class MedicationAdministrationBoard extends Page implements HasTable
 {
@@ -32,7 +33,7 @@ class MedicationAdministrationBoard extends Page implements HasTable
     public static function shouldRegisterNavigation(): bool
     {
         try {
-            return app(\Modules\Core\Settings\FeatureSettings::class)->mar_board_enabled;
+            return app(FeatureSettings::class)->mar_board_enabled;
         } catch (\Throwable) {
             return true;
         }

@@ -23,7 +23,6 @@ use Modules\Clinical\Models\Allergy;
 use Modules\Clinical\Models\ClinicalNote;
 use Modules\Clinical\Models\Encounter;
 use Modules\Clinical\Models\EncounterParticipant;
-use Modules\Clinical\Models\RequestItem;
 use Modules\Clinical\Models\Task;
 use Tests\TestCase;
 

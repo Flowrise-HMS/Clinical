@@ -4,10 +4,10 @@ namespace Modules\Clinical\Tests\Unit\Classes\Services;
 
 use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Modules\Clinical\Classes\Services\AllergyService;
-use Modules\Clinical\Enums\AllergySeverity;
-use Modules\Clinical\Enums\OnsetType;
-use Modules\Clinical\Enums\AllergyVerificationStatus;
 use Modules\Clinical\Enums\AllergenType;
+use Modules\Clinical\Enums\AllergySeverity;
+use Modules\Clinical\Enums\AllergyVerificationStatus;
+use Modules\Clinical\Enums\OnsetType;
 use Modules\Clinical\Models\Allergy;
 use Modules\Patient\Models\Patient;
 use Tests\TestCase;

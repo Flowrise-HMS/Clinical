@@ -19,6 +19,7 @@ class PatientVitalsChartWidget extends ChartWidget
     public ?string $encounterId = null;
 
     protected int|string|array $columnSpan = 'full';
+
     protected bool $isCollapsible = true;
 
     protected int $limit = 30;

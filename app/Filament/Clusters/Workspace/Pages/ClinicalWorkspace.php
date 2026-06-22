@@ -44,13 +44,13 @@ use Modules\Clinical\Filament\Widgets\PatientOrdersWidget;
 use Modules\Clinical\Filament\Widgets\PatientVitalsHistoryWidget;
 use Modules\Clinical\Filament\Widgets\PendingFulfillmentsWidget;
 use Modules\Clinical\Filament\Widgets\WorkspaceTodayAppointmentsWidget;
-use Modules\Clinical\Models\ClinicalNote;
 use Modules\Clinical\Models\DiagnosisCode;
 use Modules\Clinical\Models\Encounter;
 use Modules\Clinical\Models\EncounterDiagnosis;
 use Modules\Clinical\Models\RequestItem;
 use Modules\Core\Classes\Support\PageHeaderActionsRegistry;
 use Modules\Core\Models\Service;
+use Modules\Core\Settings\FeatureSettings;
 use Modules\Patient\Classes\Services\PatientSearchService;
 use Modules\Patient\Models\Patient;
 use Modules\Pharmacy\Classes\Services\DrugSearchService;
@@ -64,7 +64,7 @@ use Modules\Pharmacy\Models\Medication;
 
 class ClinicalWorkspace extends Page implements HasSchemas
 {
-    use InteractsWithSchemas, HasPageShield;
+    use HasPageShield, InteractsWithSchemas;
 
     protected static ?string $slug = '';
 
@@ -77,7 +77,7 @@ class ClinicalWorkspace extends Page implements HasSchemas
     public static function shouldRegisterNavigation(): bool
     {
         try {
-            return app(\Modules\Core\Settings\FeatureSettings::class)->clinical_workspace_enabled;
+            return app(FeatureSettings::class)->clinical_workspace_enabled;
         } catch (\Throwable) {
             return true;
         }
@@ -322,7 +322,7 @@ class ClinicalWorkspace extends Page implements HasSchemas
     {
         $widgets = [];
         if (! empty($this->currentPatient?->id)) {
-            $widgets[] = PendingFulfillmentsWidget::make(['patientId' => $this->currentPatient?->id,'encounterId' => $this->currentEncounter?->id]);
+            $widgets[] = PendingFulfillmentsWidget::make(['patientId' => $this->currentPatient?->id, 'encounterId' => $this->currentEncounter?->id]);
             $widgets[] = PatientVitalsHistoryWidget::make(['patientId' => $this->currentPatient?->id]);
             $widgets[] = PatientNotesWidget::make([
                 'patientId' => $this->currentPatient?->id,
@@ -927,7 +927,7 @@ class ClinicalWorkspace extends Page implements HasSchemas
     #[Computed]
     public function pastEncounters(): array
     {
-        if (!$this->currentPatient) {
+        if (! $this->currentPatient) {
             return [];
         }
 
@@ -976,7 +976,7 @@ class ClinicalWorkspace extends Page implements HasSchemas
                 'created_at' => $encounter->created_at?->toDateTimeString(),
                 'vitals' => $latestVitals ? [
                     'bp' => $latestVitals->systolic_bp && $latestVitals->diastolic_bp
-                        ? $latestVitals->systolic_bp . '/' . $latestVitals->diastolic_bp : null,
+                        ? $latestVitals->systolic_bp.'/'.$latestVitals->diastolic_bp : null,
                     'hr' => $latestVitals->heart_rate,
                     'temp' => $latestVitals->temperature,
                     'spo2' => $latestVitals->spo2,

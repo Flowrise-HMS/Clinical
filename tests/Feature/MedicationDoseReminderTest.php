@@ -5,8 +5,8 @@ namespace Modules\Clinical\Tests\Feature;
 use App\Models\User;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Illuminate\Support\Facades\Notification;
+use Modules\Clinical\Classes\Services\MedicationAdministrationService;
 use Modules\Clinical\Classes\Services\MedicationDoseScheduleService;
-use Modules\Pharmacy\Classes\Services\PrescriptionScheduleCalculator;
 use Modules\Clinical\Enums\EncounterStatus;
 use Modules\Clinical\Enums\EncounterType;
 use Modules\Clinical\Models\Encounter;
@@ -16,8 +16,8 @@ use Modules\Clinical\Models\ServiceRequest;
 use Modules\Clinical\Notifications\MedicationDueDoseNotification;
 use Modules\Core\Models\Branch;
 use Modules\Core\Models\Service;
-use Modules\Core\Models\ServiceCategory;
 use Modules\Patient\Models\Patient;
+use Modules\Pharmacy\Classes\Services\PrescriptionScheduleCalculator;
 use Modules\Pharmacy\Enums\AdministrationContext;
 use Modules\Pharmacy\Enums\MedicationFrequency;
 use Modules\Pharmacy\Models\PrescriptionDetail;
@@ -56,7 +56,7 @@ class MedicationDoseReminderTest extends TestCase
         $first = $scheduleService->getNextDueSlot($item);
         $this->assertNotNull($first);
 
-        app(\Modules\Clinical\Classes\Services\MedicationAdministrationService::class)->administer($item, [
+        app(MedicationAdministrationService::class)->administer($item, [
             'status' => 'given',
             'started_at' => $first->dueAt,
         ], null, $nurse);

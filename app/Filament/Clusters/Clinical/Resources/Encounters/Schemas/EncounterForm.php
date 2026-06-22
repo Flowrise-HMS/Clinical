@@ -14,7 +14,6 @@ use Modules\Clinical\Enums\EncounterPriority;
 use Modules\Clinical\Enums\EncounterStatus;
 use Modules\Clinical\Enums\EncounterType;
 use Modules\Core\Classes\Services\BranchService;
-use Modules\Core\Enums\CoverageType;
 
 class EncounterForm
 {

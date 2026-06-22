@@ -4,6 +4,9 @@ namespace Modules\Clinical\Filament\Clusters\Clinical\Resources\Encounters\Pages
 
 use Filament\Resources\Pages\EditRecord;
 use Modules\Clinical\Classes\Actions\EncounterActions;
+use Modules\Clinical\Classes\Services\EncounterService;
+use Modules\Clinical\Enums\DischargeDisposition;
+use Modules\Clinical\Enums\EncounterPriority;
 use Modules\Clinical\Filament\Clusters\Clinical\Resources\Encounters\EncounterResource;
 
 class EditEncounter extends EditRecord
@@ -17,7 +20,7 @@ class EditEncounter extends EditRecord
         return [
             EncounterActions::admit($record)
                 ->action(function (array $data) use ($record) {
-                    app(\Modules\Clinical\Classes\Services\EncounterService::class)->admitPatient(
+                    app(EncounterService::class)->admitPatient(
                         $record,
                         bedId: $data['bed_id'] ?? null
                     );
@@ -27,9 +30,9 @@ class EditEncounter extends EditRecord
 
             EncounterActions::triage($record)
                 ->action(function (array $data) use ($record) {
-                    app(\Modules\Clinical\Classes\Services\EncounterService::class)->triage(
+                    app(EncounterService::class)->triage(
                         $record,
-                        \Modules\Clinical\Enums\EncounterPriority::from($data['priority'])
+                        EncounterPriority::from($data['priority'])
                     );
                     $this->refreshFormData(['status', 'priority']);
                     $this->notify('success', 'Patient triaged successfully');
@@ -37,9 +40,9 @@ class EditEncounter extends EditRecord
 
             EncounterActions::discharge($record)
                 ->action(function (array $data) use ($record) {
-                    app(\Modules\Clinical\Classes\Services\EncounterService::class)->discharge(
+                    app(EncounterService::class)->discharge(
                         $record,
-                        \Modules\Clinical\Enums\DischargeDisposition::from($data['discharge_disposition']),
+                        DischargeDisposition::from($data['discharge_disposition']),
                         $data['transfer_destination'] ?? null
                     );
                     $this->refreshFormData(['status', 'discharge_disposition', 'discharged_at']);
@@ -48,7 +51,7 @@ class EditEncounter extends EditRecord
 
             EncounterActions::cancel($record)
                 ->action(function (array $data) use ($record) {
-                    app(\Modules\Clinical\Classes\Services\EncounterService::class)->cancelEncounter($record, $data['reason']);
+                    app(EncounterService::class)->cancelEncounter($record, $data['reason']);
                     $this->refreshFormData(['status']);
                     $this->notify('warning', 'Encounter cancelled');
                 }),

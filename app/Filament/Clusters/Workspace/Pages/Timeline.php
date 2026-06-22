@@ -15,7 +15,6 @@ use Modules\Core\Classes\Support\PageHeaderActionsRegistry;
 class Timeline extends Page
 {
     use HasPageShield;
-
     use HasPatientContext;
 
     protected static ?string $title = 'Timeline';

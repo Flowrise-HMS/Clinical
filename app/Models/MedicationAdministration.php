@@ -8,6 +8,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Modules\Clinical\Enums\MedicationAdministrationStatus;
+use Modules\Core\Models\Unit;
 
 class MedicationAdministration extends Model
 {
@@ -51,7 +52,7 @@ class MedicationAdministration extends Model
 
     public function doseUnit(): BelongsTo
     {
-        return $this->belongsTo(\Modules\Core\Models\Unit::class, 'dose_unit_id');
+        return $this->belongsTo(Unit::class, 'dose_unit_id');
     }
 
     public function countsAsGiven(): bool

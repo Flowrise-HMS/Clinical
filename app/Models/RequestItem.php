@@ -10,10 +10,16 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
+use Illuminate\Database\Eloquent\Relations\MorphOne;
+use Modules\Billing\Enums\InvoiceLineStatus;
+use Modules\Billing\Models\InvoiceLine;
 use Modules\Clinical\Database\Factories\RequestItemFactory;
 use Modules\Clinical\Enums\RequestItemStatus;
 use Modules\Core\Models\Service;
 use Modules\Core\Models\ServiceVariant;
+use Modules\Core\Models\Unit;
+use Modules\Pharmacy\Models\PrescriptionDetail;
 
 class RequestItem extends Model
 {
@@ -85,9 +91,9 @@ class RequestItem extends Model
         return $this->hasMany(Task::class);
     }
 
-    public function prescriptionDetail(): \Illuminate\Database\Eloquent\Relations\HasOne
+    public function prescriptionDetail(): HasOne
     {
-        return $this->hasOne(\Modules\Pharmacy\Models\PrescriptionDetail::class, 'request_item_id');
+        return $this->hasOne(PrescriptionDetail::class, 'request_item_id');
     }
 
     public function medicationAdministrations(): HasMany
@@ -97,15 +103,15 @@ class RequestItem extends Model
 
     public function billingUnit(): BelongsTo
     {
-        return $this->belongsTo(\Modules\Core\Models\Unit::class, 'billing_unit_id');
+        return $this->belongsTo(Unit::class, 'billing_unit_id');
     }
 
-    public function invoiceLine(): \Illuminate\Database\Eloquent\Relations\MorphOne
+    public function invoiceLine(): MorphOne
     {
-        return $this->morphOne(\Modules\Billing\Models\InvoiceLine::class, 'billable');
+        return $this->morphOne(InvoiceLine::class, 'billable');
     }
 
-    public function getPaymentStatusAttribute(): ?\Modules\Billing\Enums\InvoiceLineStatus
+    public function getPaymentStatusAttribute(): ?InvoiceLineStatus
     {
         return $this->invoiceLine?->line_status;
     }

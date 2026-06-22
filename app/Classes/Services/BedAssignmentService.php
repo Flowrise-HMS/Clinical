@@ -54,6 +54,7 @@ class BedAssignmentService
         }
 
         $encounter->update(['bed_id' => $bedId]);
+
         return $encounter->fresh();
     }
 }

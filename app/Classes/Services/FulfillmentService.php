@@ -4,23 +4,19 @@ namespace Modules\Clinical\Classes\Services;
 
 use App\Models\User;
 use Carbon\Carbon;
-use Filament\Forms\Components\Checkbox;
 use Filament\Forms\Components\DateTimePicker;
-use Filament\Forms\Components\Hidden;
 use Filament\Forms\Components\Repeater;
-use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
-use Filament\Forms\Components\TimePicker;
 use Filament\Infolists\Components\TextEntry;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\HtmlString;
 use Modules\Clinical\Enums\TaskOutcome;
 use Modules\Clinical\Enums\TaskStatus;
-use Modules\Clinical\Models\RequestItem;
 use Modules\Clinical\Filament\Support\MarRecordDoseFormSchema;
+use Modules\Clinical\Models\RequestItem;
 use Modules\Core\Enums\ServiceCategoryCode;
+use Modules\Pharmacy\Classes\Services\DispenseService;
 
 class FulfillmentService
 {
@@ -75,13 +71,12 @@ class FulfillmentService
         $type = $this->getType($item);
         $context = $this->getContextInfo($item);
 
-
         $schema = [
             TextEntry::make('context')
                 ->hiddenLabel()
                 ->html()
                 ->state(function () use ($context) {
-                    return (view('clinical::clinical.fulfillment-context',$context)->render());
+                    return view('clinical::clinical.fulfillment-context', $context)->render();
                 }),
         ];
 
@@ -157,7 +152,7 @@ class FulfillmentService
         }
 
         if (isset($data['medication_id'])) {
-            app(\Modules\Pharmacy\Classes\Services\DispenseService::class)
+            app(DispenseService::class)
                 ->dispense($item, $data, $user);
 
             return;

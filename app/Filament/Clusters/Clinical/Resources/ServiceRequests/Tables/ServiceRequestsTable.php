@@ -12,9 +12,9 @@ use Filament\Actions\ViewAction;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
-use Modules\Clinical\Filament\Clusters\Clinical\Resources\ServiceRequests\ServiceRequestResource;
 use Modules\Clinical\Enums\RequestPriority;
 use Modules\Clinical\Enums\RequestStatus;
+use Modules\Clinical\Filament\Clusters\Clinical\Resources\ServiceRequests\ServiceRequestResource;
 use Modules\Core\Filament\Tables\Columns\CurrencyColumn;
 
 class ServiceRequestsTable
@@ -83,15 +83,15 @@ class ServiceRequestsTable
 
             ])
             ->recordActions([
-            ActionGroup::make([
-                ViewAction::make(),
-                EditAction::make(),
-                DeleteAction::make(),
-                Action::make('activities')
-                    ->label('Activities')
-                    ->icon('heroicon-o-bell-alert')
-                    ->url(fn ($record) => ServiceRequestResource::getUrl('activities', ['record' => $record])),
-            ]),
+                ActionGroup::make([
+                    ViewAction::make(),
+                    EditAction::make(),
+                    DeleteAction::make(),
+                    Action::make('activities')
+                        ->label('Activities')
+                        ->icon('heroicon-o-bell-alert')
+                        ->url(fn ($record) => ServiceRequestResource::getUrl('activities', ['record' => $record])),
+                ]),
             ])
             ->toolbarActions([
                 BulkActionGroup::make([

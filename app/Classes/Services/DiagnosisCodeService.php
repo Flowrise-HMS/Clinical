@@ -18,7 +18,7 @@ class DiagnosisCodeService
         if (strlen($term) >= 2) {
             $query->where(function ($q) use ($term) {
                 $q->where('code', 'like', "%{$term}%")
-                  ->orWhere('description', 'like', "%{$term}%");
+                    ->orWhere('description', 'like', "%{$term}%");
             });
         }
 

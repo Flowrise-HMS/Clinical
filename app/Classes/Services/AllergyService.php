@@ -2,6 +2,7 @@
 
 namespace Modules\Clinical\Classes\Services;
 
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Modules\Clinical\Enums\AllergyVerificationStatus;
 use Modules\Clinical\Models\Allergy;
@@ -36,7 +37,7 @@ class AllergyService
         });
     }
 
-    public function getActiveForPatient(string $patientId): \Illuminate\Support\Collection
+    public function getActiveForPatient(string $patientId): Collection
     {
         return Allergy::query()
             ->active()

@@ -4,11 +4,13 @@ namespace Modules\Clinical\Console;
 
 use App\Models\User;
 use Illuminate\Console\Command;
+use Illuminate\Support\Collection;
 use Modules\Clinical\Classes\Services\MedicationDoseScheduleService;
 use Modules\Clinical\Models\MedicationDoseReminderLog;
 use Modules\Clinical\Notifications\MedicationDueDoseNotification;
 use Modules\Core\Classes\Services\BranchService;
 use Modules\Core\Models\Branch;
+use Modules\Core\Support\AppSettings;
 
 class SendMarDoseRemindersCommand extends Command
 {
@@ -25,7 +27,7 @@ class SendMarDoseRemindersCommand extends Command
         }
 
         try {
-            if (! app(\Modules\Core\Support\AppSettings::class)->clinical()->mar_reminders_enabled) {
+            if (! app(AppSettings::class)->clinical()->mar_reminders_enabled) {
                 $this->info('MAR reminders are disabled via settings.');
 
                 return self::SUCCESS;
@@ -75,7 +77,7 @@ class SendMarDoseRemindersCommand extends Command
     }
 
     /**
-     * @return \Illuminate\Support\Collection<int, User>
+     * @return Collection<int, User>
      */
     protected function resolveRecipients($item, ?Branch $branch)
     {

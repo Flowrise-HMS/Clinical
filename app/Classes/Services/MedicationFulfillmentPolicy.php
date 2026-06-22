@@ -10,6 +10,7 @@ use Modules\Clinical\Enums\EncounterType;
 use Modules\Clinical\Enums\MedicationAdministrationStatus;
 use Modules\Clinical\Models\Encounter;
 use Modules\Clinical\Models\RequestItem;
+use Modules\Core\Support\AppSettings;
 use Modules\Pharmacy\Enums\AdministrationContext;
 use Modules\Pharmacy\Enums\MedicationRoute;
 use Modules\Pharmacy\Models\Medication;
@@ -110,7 +111,7 @@ class MedicationFulfillmentPolicy
     public function requiresPaymentBeforeMarOrDispense(RequestItem $item): bool
     {
         try {
-            $clinical = app(\Modules\Core\Support\AppSettings::class)->clinical();
+            $clinical = app(AppSettings::class)->clinical();
             if (! $clinical->mar_require_payment_before) {
                 return false;
             }
@@ -139,7 +140,7 @@ class MedicationFulfillmentPolicy
         //     ->where('billable_type', $item::class)
         //     ->where('billable_id', $item->id)
         //     ->exists();
-        //todo: Makae this configurable via settings later on
+        // todo: Makae this configurable via settings later on
         return false;
     }
 

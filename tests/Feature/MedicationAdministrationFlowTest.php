@@ -10,7 +10,6 @@ use Modules\Billing\Enums\InvoiceType;
 use Modules\Billing\Models\Invoice;
 use Modules\Billing\Models\InvoiceLine;
 use Modules\Clinical\Classes\Services\MedicationAdministrationService;
-use Modules\Clinical\Classes\Services\MedicationFulfillmentPolicy;
 use Modules\Clinical\Enums\EncounterStatus;
 use Modules\Clinical\Enums\EncounterType;
 use Modules\Clinical\Enums\MedicationAdministrationStatus;
@@ -19,10 +18,9 @@ use Modules\Clinical\Models\RequestItem;
 use Modules\Clinical\Models\ServiceRequest;
 use Modules\Core\Models\Branch;
 use Modules\Core\Models\Service;
-use Modules\Core\Models\ServiceCategory;
 use Modules\Patient\Models\Patient;
 use Modules\Pharmacy\Classes\Services\DispenseService;
-use Modules\Pharmacy\Classes\Services\MedicationOrderService;
+use Modules\Pharmacy\Classes\Services\PrescriptionScheduleCalculator;
 use Modules\Pharmacy\Enums\AdministrationContext;
 use Modules\Pharmacy\Enums\ControlledSchedule;
 use Modules\Pharmacy\Enums\MedicationFrequency;
@@ -258,7 +256,7 @@ class MedicationAdministrationFlowTest extends TestCase
             'administration_context' => AdministrationContext::IN_FACILITY,
             'course_started_at' => now(),
             'course_end_at' => now()->addDays($durationDays),
-            'total_administrations' => app(\Modules\Pharmacy\Classes\Services\PrescriptionScheduleCalculator::class)
+            'total_administrations' => app(PrescriptionScheduleCalculator::class)
                 ->compute([
                     'frequency' => $frequency->value,
                     'duration_days' => $durationDays,

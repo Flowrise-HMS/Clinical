@@ -7,6 +7,7 @@ use Illuminate\Notifications\Notification;
 use Modules\Clinical\Models\Encounter;
 use Modules\Clinical\Notifications\Concerns\BuildsPatientFacingChannels;
 use Modules\Core\Notifications\Concerns\RespectsNotificationSettings;
+use Modules\Core\Support\AppSettings;
 
 class PatientDischargedNotification extends Notification
 {
@@ -19,8 +20,8 @@ class PatientDischargedNotification extends Notification
         $channels = $this->channelsFor($notifiable);
 
         try {
-            $settings = app(\Modules\Core\Support\AppSettings::class)->notifications();
-            $billing = app(\Modules\Core\Support\AppSettings::class)->billing();
+            $settings = app(AppSettings::class)->notifications();
+            $billing = app(AppSettings::class)->billing();
 
             return $this->applyNotificationSettings(
                 $channels,

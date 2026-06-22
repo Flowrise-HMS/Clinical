@@ -21,7 +21,7 @@ class RequestItemForm
         return [
             Select::make('service_id')
                 ->label('Service')
-                ->options(fn() => Service::active()->billable()->nonMedication()->with('category')->get()->groupBy('category.name')->map(fn($group) => $group->pluck('name', 'id'))->toArray())
+                ->options(fn () => Service::active()->billable()->nonMedication()->with('category')->get()->groupBy('category.name')->map(fn ($group) => $group->pluck('name', 'id'))->toArray())
                 ->searchable()
                 ->preload()
                 ->required()
@@ -38,11 +38,11 @@ class RequestItemForm
                 ->label('Variant')
                 ->options(function (Get $get) {
                     $serviceId = $get('service_id');
-                    if (!$serviceId) {
+                    if (! $serviceId) {
                         return [];
                     }
                     $service = Service::find($serviceId);
-                    if (!$service) {
+                    if (! $service) {
                         return [];
                     }
 
@@ -100,7 +100,7 @@ class RequestItemForm
                             $quantity = $get('quantity') ?? 1;
                             $unitPrice = $get('unit_price') ?? 0;
 
-                            return config('core.default_currency_symbol') . ' ' . number_format($quantity * $unitPrice, 2);
+                            return config('core.default_currency_symbol').' '.number_format($quantity * $unitPrice, 2);
                         }),
 
                     TextInput::make('discount_amount')
@@ -117,7 +117,7 @@ class RequestItemForm
                             $unitPrice = $get('unit_price') ?? 0;
                             $discount = $get('discount_amount') ?? 0;
 
-                            return config('core.default_currency_symbol') . ' ' . number_format(($quantity * $unitPrice) - $discount, 2);
+                            return config('core.default_currency_symbol').' '.number_format(($quantity * $unitPrice) - $discount, 2);
                         }),
                 ]),
 

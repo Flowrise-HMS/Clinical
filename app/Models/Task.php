@@ -10,6 +10,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Support\Facades\Auth;
+use Modules\Clinical\Classes\Services\MedicationFulfillmentPolicy;
 use Modules\Clinical\Database\Factories\TaskFactory;
 use Modules\Clinical\Enums\TaskOutcome;
 use Modules\Clinical\Enums\TaskStatus;
@@ -138,7 +139,7 @@ class Task extends Model
             'notes' => $notes ?? $this->notes,
         ]);
 
-        if ($this->requestItem && app(\Modules\Clinical\Classes\Services\MedicationFulfillmentPolicy::class)
+        if ($this->requestItem && app(MedicationFulfillmentPolicy::class)
             ->shouldCompleteOnDispense($this->requestItem)) {
             $this->requestItem->markAsFulfilled($this->performed_by);
         }

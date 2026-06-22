@@ -2,6 +2,7 @@
 
 namespace Modules\Clinical\Tests\Feature;
 
+use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Illuminate\Support\Facades\Notification;
 use Modules\Clinical\Classes\Services\EncounterService;
 use Modules\Clinical\Database\Factories\EncounterFactory;
@@ -9,7 +10,6 @@ use Modules\Clinical\Notifications\PatientDischargedNotification;
 use Modules\Core\Database\Factories\BranchFactory;
 use Modules\Patient\Database\Factories\PatientFactory;
 use Modules\Patient\Models\Patient;
-use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Tests\TestCase;
 
 class PatientDischargeNotificationTest extends TestCase

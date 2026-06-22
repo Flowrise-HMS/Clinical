@@ -4,17 +4,13 @@ namespace Modules\Clinical\Classes\Actions;
 
 use Filament\Actions\Action;
 use Filament\Actions\ActionGroup;
-use Filament\Forms\Components\Checkbox;
 use Filament\Forms\Components\DateTimePicker;
 use Filament\Forms\Components\FileUpload;
-use Filament\Forms\Components\Hidden;
-use Filament\Forms\Components\Repeater;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
-use Filament\Forms\Components\TimePicker;
-use Filament\Infolists\Components\TextEntry;
 use Filament\Notifications\Notification;
+use Filament\Schemas\Components\Fieldset;
 use Filament\Schemas\Components\Utilities\Set;
 use Illuminate\Support\Facades\Auth;
 use Modules\Clinical\Classes\Services\AllergyService;
@@ -35,9 +31,9 @@ use Modules\Clinical\Filament\Clusters\Clinical\Resources\ClinicalNotes\Schemas\
 use Modules\Clinical\Filament\Clusters\Clinical\Resources\Encounters\Schemas\EncounterForm;
 use Modules\Clinical\Filament\Clusters\Clinical\Resources\ServiceRequests\Schemas\ServiceRequestForm;
 use Modules\Clinical\Filament\Clusters\Clinical\Resources\VitalSigns\Schemas\VitalSignForm;
-use Modules\Clinical\Filament\Support\MarRecordDoseFormSchema;
 use Modules\Clinical\Filament\Clusters\Workspace\Pages\PatientProfile;
 use Modules\Clinical\Filament\Clusters\Workspace\Pages\Timeline;
+use Modules\Clinical\Filament\Support\MarRecordDoseFormSchema;
 use Modules\Clinical\Models\Allergy;
 use Modules\Clinical\Models\ClinicalNote;
 use Modules\Clinical\Models\DiagnosisCode;
@@ -142,8 +138,9 @@ class PatientActions
 
     public function withEncounter(object|string|null $encounterId): static
     {
-        if(is_object($encounterId) &&  $encounterId instanceof Encounter){
+        if (is_object($encounterId) && $encounterId instanceof Encounter) {
             $this->encounterId = $encounterId?->id;
+
             return $this;
         }
         $this->encounterId = $encounterId;
@@ -160,7 +157,7 @@ class PatientActions
             ->slideOver()
             ->schema(fn ($schema) => AllergyForm::quickElements())
             ->mutateDataUsing(fn (array $data): array => $this->injectAllergyData($data))
-            ->visible(fn() => app(AllergyPolicy::class)->create(Auth::user()))
+            ->visible(fn () => app(AllergyPolicy::class)->create(Auth::user()))
             ->action(fn (array $data) => $this->allergyService->record(
                 $this->patient,
                 $data
@@ -183,12 +180,13 @@ class PatientActions
                     ->getSearchResultsUsing(function (string $search) {
                         return app(DiagnosisCodeService::class)->search($search, limit: 10)
                             ->mapWithKeys(fn ($code) => [
-                                $code->id => $code->code . ' - ' . $code->description,
+                                $code->id => $code->code.' - '.$code->description,
                             ]);
                     })
                     ->getOptionLabelUsing(function ($value): ?string {
                         $code = DiagnosisCode::find($value);
-                        return $code ? $code->code . ' - ' . $code->description : null;
+
+                        return $code ? $code->code.' - '.$code->description : null;
                     })
                     ->nullable()
                     ->live()
@@ -226,6 +224,7 @@ class PatientActions
                         ->body('A diagnosis requires an active encounter.')
                         ->warning()
                         ->send();
+
                     return;
                 }
 
@@ -267,7 +266,7 @@ class PatientActions
             ->model(VitalSign::class)
             ->slideOver()
             ->schema(fn () => VitalSignForm::quickElements())
-            ->visible(fn() => app(VitalSignPolicy::class)->create(Auth::user()))
+            ->visible(fn () => app(VitalSignPolicy::class)->create(Auth::user()))
             ->mutateDataUsing(fn (array $data): array => $this->injectVitalSignData($data))
             ->action(fn (array $data) => $this->vitalSignService->record(
                 $this->patient,
@@ -283,7 +282,7 @@ class PatientActions
             ->label('View Full Profile')
             ->icon('heroicon-m-user-circle')
             ->record($this->patient)
-            ->visible(fn($record) => app(PatientPolicy::class)->view(Auth::user(), $record))
+            ->visible(fn ($record) => app(PatientPolicy::class)->view(Auth::user(), $record))
             ->url(fn ($record) => PatientProfile::getUrl(['patient' => $record?->id]), shouldOpenInNewTab: true)
             ->color('gray');
     }
@@ -295,7 +294,7 @@ class PatientActions
             ->icon('heroicon-m-clock')
             ->color('gray')
             ->record($this->patient)
-            ->visible(fn($record) => app(PatientPolicy::class)->view(Auth::user(), $record))
+            ->visible(fn ($record) => app(PatientPolicy::class)->view(Auth::user(), $record))
             ->url(fn ($record) => Timeline::getUrl(['patient' => $record?->id]), shouldOpenInNewTab: true);
     }
 
@@ -321,7 +320,7 @@ class PatientActions
             ->model(ClinicalNote::class)
             ->slideOver()
             ->schema(fn ($schema) => ClinicalNoteForm::quickElements())
-            ->visible(fn($record) => app(ClinicalNotePolicy::class)->create(Auth::user()))
+            ->visible(fn ($record) => app(ClinicalNotePolicy::class)->create(Auth::user()))
             ->mutateDataUsing(fn (array $data): array => $this->injectClinicalNoteData($data))
             ->action(fn (array $data) => $this->clinicalNoteService->record(
                 $this->patient,
@@ -340,7 +339,7 @@ class PatientActions
             ->model(ServiceRequest::class)
             ->schema(fn ($schema) => ServiceRequestForm::quickElements(hidenEncounter: true))
             ->mutateDataUsing(fn (array $data): array => $this->injectServiceRequestData($data))
-            ->visible(fn($record) => app(ServiceRequestPolicy::class)->create(Auth::user()))
+            ->visible(fn ($record) => app(ServiceRequestPolicy::class)->create(Auth::user()))
             ->action(fn (array $data) => $this->serviceRequestService->record(
                 $this->patient,
                 $data,
@@ -396,7 +395,7 @@ class PatientActions
 
                 $schemas = [];
                 foreach ($items as $item) {
-                    $schemas[] = \Filament\Schemas\Components\Fieldset::make($item->service?->name ?? 'Medication')
+                    $schemas[] = Fieldset::make($item->service?->name ?? 'Medication')
                         ->schema([
                             ...MarRecordDoseFormSchema::forSingleItem($item, true),
                         ])
@@ -457,7 +456,7 @@ class PatientActions
                     ->whereDoesntHave('prescriptionDetail')
                     ->exists();
             })
-            ->modalHeading(fn (): string => 'Fulfill Service — ' . ($this->patient?->full_name ?? 'Unknown'))
+            ->modalHeading(fn (): string => 'Fulfill Service — '.($this->patient?->full_name ?? 'Unknown'))
             ->modalSubmitActionLabel('Submit')
             ->schema(function (): array {
                 $items = RequestItem::query()
@@ -507,7 +506,7 @@ class PatientActions
                     $this->fulfillmentService->fulfill($item, $data);
 
                     Notification::make()
-                        ->title(($item->service?->name ?? 'Service') . ' fulfilled')
+                        ->title(($item->service?->name ?? 'Service').' fulfilled')
                         ->success()
                         ->send();
                 } catch (\Exception $e) {

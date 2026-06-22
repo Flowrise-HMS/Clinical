@@ -14,6 +14,7 @@ use Modules\Clinical\Classes\Services\MedicationAdministrationService;
 use Modules\Clinical\Classes\Services\MedicationFulfillmentPolicy;
 use Modules\Clinical\Enums\MedicationAdministrationStatus;
 use Modules\Clinical\Models\RequestItem;
+use Modules\Core\Models\Unit;
 use Modules\Pharmacy\Models\Medication;
 
 class MarRecordDoseFormSchema
@@ -77,7 +78,7 @@ class MarRecordDoseFormSchema
 
         $fields[] = Select::make('dose_unit_id')
             ->label('Dose unit')
-            ->options(fn () => \Modules\Core\Models\Unit::pluck('label', 'id'))
+            ->options(fn () => Unit::pluck('label', 'id'))
             ->default($detail?->dose_unit_id)
             ->searchable();
 
