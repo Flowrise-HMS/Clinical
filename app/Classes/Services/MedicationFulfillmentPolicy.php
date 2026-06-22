@@ -109,13 +109,21 @@ class MedicationFulfillmentPolicy
 
     public function requiresPaymentBeforeMarOrDispense(RequestItem $item): bool
     {
-        if (! config('clinical.mar_payment.require_before_mar', true)) {
-            return false;
+        try {
+            $clinical = app(\Modules\Core\Support\AppSettings::class)->clinical();
+            if (! $clinical->mar_require_payment_before) {
+                return false;
+            }
+            $emergencyExempt = $clinical->mar_emergency_exempt;
+        } catch (\Throwable) {
+            if (! config('clinical.mar_payment.require_before_mar', true)) {
+                return false;
+            }
+            $emergencyExempt = config('clinical.mar_payment.emergency_exempt', true);
         }
 
         $encounter = $item->serviceRequest?->encounter;
-        if ($encounter?->type === EncounterType::EMERGENCY
-            && config('clinical.mar_payment.emergency_exempt', true)) {
+        if ($encounter?->type === EncounterType::EMERGENCY && $emergencyExempt) {
             return false;
         }
 

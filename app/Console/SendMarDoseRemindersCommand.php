@@ -24,6 +24,15 @@ class SendMarDoseRemindersCommand extends Command
             return self::SUCCESS;
         }
 
+        try {
+            if (! app(\Modules\Core\Support\AppSettings::class)->clinical()->mar_reminders_enabled) {
+                $this->info('MAR reminders are disabled via settings.');
+
+                return self::SUCCESS;
+            }
+        } catch (\Throwable) {
+        }
+
         $branchId = $branchService->getDefaultBranchId();
         $branch = $branchId ? Branch::find($branchId) : null;
         $dueSlots = $scheduleService->getDueSoonSlots($branch);

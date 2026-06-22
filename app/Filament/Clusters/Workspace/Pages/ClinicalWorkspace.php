@@ -74,7 +74,14 @@ class ClinicalWorkspace extends Page implements HasSchemas
 
     protected static string|\BackedEnum|null $navigationIcon = 'heroicon-m-heart';
 
-    protected static bool $shouldRegisterNavigation = true;
+    public static function shouldRegisterNavigation(): bool
+    {
+        try {
+            return app(\Modules\Core\Settings\FeatureSettings::class)->clinical_workspace_enabled;
+        } catch (\Throwable) {
+            return true;
+        }
+    }
 
     protected string $view = 'clinical::clinical.workspace.clinical-workspace';
 

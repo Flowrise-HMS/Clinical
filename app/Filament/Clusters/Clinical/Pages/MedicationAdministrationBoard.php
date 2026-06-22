@@ -29,6 +29,15 @@ class MedicationAdministrationBoard extends Page implements HasTable
 
     protected static ?int $navigationSort = 5;
 
+    public static function shouldRegisterNavigation(): bool
+    {
+        try {
+            return app(\Modules\Core\Settings\FeatureSettings::class)->mar_board_enabled;
+        } catch (\Throwable) {
+            return true;
+        }
+    }
+
     protected string $view = 'clinical::clinical.pages.medication-administration-board';
 
     public function table(Table $table): Table

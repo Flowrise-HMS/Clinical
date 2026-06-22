@@ -6,16 +6,31 @@ use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Notifications\Notification;
 use Modules\Clinical\Models\Encounter;
 use Modules\Clinical\Notifications\Concerns\BuildsPatientFacingChannels;
+use Modules\Core\Notifications\Concerns\RespectsNotificationSettings;
 
 class PatientAdmittedNotification extends Notification
 {
-    use BuildsPatientFacingChannels;
+    use BuildsPatientFacingChannels, RespectsNotificationSettings;
 
     public function __construct(protected Encounter $encounter) {}
 
     public function via(object $notifiable): array
     {
-        return $this->channelsFor($notifiable);
+        $channels = $this->channelsFor($notifiable);
+
+        try {
+            $settings = app(\Modules\Core\Support\AppSettings::class)->notifications();
+            $billing = app(\Modules\Core\Support\AppSettings::class)->billing();
+
+            return $this->applyNotificationSettings(
+                $channels,
+                $settings->patient_admitted_mail,
+                $settings->patient_admitted_sms,
+                $billing->sms_enabled,
+            );
+        } catch (\Throwable) {
+            return $channels;
+        }
     }
 
     public function toMail(object $notifiable): MailMessage
