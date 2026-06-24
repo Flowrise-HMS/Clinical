@@ -335,7 +335,7 @@
                             <div class="space-y-4">
                                 <h3 class="text-lg font-semibold text-gray-900 dark:text-white">Submit Lab Results</h3>
                                 <x-filament::input.wrapper label="Service">
-                                    <x-filament::input.select wire:model="serviceRequestData.request_item_id">
+                                    <x-filament::input.select wire:model.live="serviceRequestData.request_item_id">
                                         <option value="">Select pending lab...</option>
                                         @foreach ($this->pendingLabItems as $item)
                                             <option value="{{ $item['id'] }}">

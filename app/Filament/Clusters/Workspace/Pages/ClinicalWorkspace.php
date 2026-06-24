@@ -4,6 +4,7 @@ namespace Modules\Clinical\Filament\Clusters\Workspace\Pages;
 
 use BezhanSalleh\FilamentShield\Traits\HasPageShield;
 use Filament\Forms\Components\Checkbox;
+use Filament\Forms\Components\Placeholder;
 use Filament\Forms\Components\Repeater;
 use Filament\Forms\Components\RichEditor;
 use Filament\Forms\Components\Select;
@@ -112,6 +113,8 @@ class ClinicalWorkspace extends Page implements HasSchemas
 
     public array $serviceRequestData = [];
 
+    public array $labResultData = [];
+
     public array $allergyData = [];
 
     public array $consultationData = [];
@@ -154,6 +157,8 @@ class ClinicalWorkspace extends Page implements HasSchemas
         foreach ($this->registerForms() as $name => $schema) {
             $this->cacheSchema($name, $schema);
         }
+
+        $this->buildLabResultFormSchema();
     }
 
     public function mount(): void
@@ -199,6 +204,7 @@ class ClinicalWorkspace extends Page implements HasSchemas
         $this->diagnosisNotes = '';
         $this->vitalsData = [];
         $this->serviceRequestData = [];
+        $this->labResultData = [];
         $this->allergyData = [];
         $this->medicationData = [];
         $this->dischargeData = [];
@@ -480,25 +486,71 @@ class ClinicalWorkspace extends Page implements HasSchemas
         Notification::make()->title('Diagnoses saved')->success()->send();
     }
 
+    public function updatedServiceRequestDataRequestItemId(?string $requestItemId): void
+    {
+        $this->labResultData = [];
+        $this->buildLabResultFormSchema();
+    }
+
+    protected function buildLabResultFormSchema(): void
+    {
+        $requestItemId = $this->serviceRequestData['request_item_id'] ?? null;
+        $schema = [];
+
+        if (filled($requestItemId)) {
+            $item = RequestItem::query()
+                ->with(['service.category', 'serviceRequest.orderedBy', 'prescriptionDetail'])
+                ->find($requestItemId);
+
+            if ($item !== null) {
+                $schema = app(FulfillmentService::class)->getFormSchema($item);
+            }
+        }
+
+        if ($schema === []) {
+            $schema = [
+                Placeholder::make('select_pending_lab')
+                    ->hiddenLabel()
+                    ->content('Select a pending lab item to load the result form.'),
+            ];
+        }
+
+        $this->cacheSchema('labResultForm', $this->makeSchema()
+            ->schema($schema)
+            ->statePath('labResultData'));
+    }
+
     public function saveLabResult(): void
     {
-        if (! $this->currentPatient || ! $this->serviceRequestData['request_item_id'] ?? null) {
+        if (! $this->currentPatient || empty($this->serviceRequestData['request_item_id'])) {
             Notification::make()->title('Select a pending lab item')->warning()->send();
 
             return;
         }
 
-        $item = RequestItem::find($this->serviceRequestData['request_item_id']);
-        if ($item) {
-            app(FulfillmentService::class)->fulfill($item, [
-                'notes' => $this->serviceRequestData['notes'] ?? '',
-                'started_at' => now(),
-                'ended_at' => now(),
-            ]);
+        $item = RequestItem::query()
+            ->with(['service.category', 'serviceRequest.orderedBy', 'prescriptionDetail'])
+            ->find($this->serviceRequestData['request_item_id']);
+
+        if ($item === null) {
+            Notification::make()->title('Lab item not found')->danger()->send();
+
+            return;
         }
 
-        $this->serviceRequestData = [];
-        Notification::make()->title('Lab result submitted')->success()->send();
+        try {
+            app(FulfillmentService::class)->fulfill($item, $this->labResultData);
+            $this->serviceRequestData = [];
+            $this->labResultData = [];
+            $this->buildLabResultFormSchema();
+            Notification::make()->title('Lab result submitted')->success()->send();
+        } catch (\Throwable $e) {
+            Notification::make()
+                ->title('Lab result submission failed')
+                ->body($e->getMessage())
+                ->danger()
+                ->send();
+        }
     }
 
     public function saveMedicationOrder(): void
@@ -639,13 +691,6 @@ class ClinicalWorkspace extends Page implements HasSchemas
                         ->placeholder('Subjective, Objective, Assessment, Plan...'),
                 ])
                 ->statePath('consultationData'),
-            'labResultForm' => $this->makeSchema()
-                ->schema([
-                    RichEditor::make('notes')
-                        ->label('Result Notes')
-                        ->placeholder('Enter lab result details...'),
-                ])
-                ->statePath('serviceRequestData'),
             'medicationForm' => $this->makeSchema()
                 ->schema([
                     Repeater::make('items')
