@@ -63,6 +63,7 @@ class FulfillmentService
             'priority' => $serviceRequest?->priority?->getLabel() ?? '-',
             'status' => $item->status?->getLabel() ?? '-',
             'payment_status' => $item->payment_status,
+            'financial_hold' => $item->hasActiveFinancialHold(),
         ];
     }
 

@@ -34,4 +34,9 @@
             This service has not been paid yet. Please confirm payment before proceeding.
         </div>
     @endif
+    @if($financial_hold ?? false)
+        <div class="mt-2 p-2 rounded bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-700 text-red-700 dark:text-red-300 text-xs">
+            Patient has an active financial hold. Fulfillment is blocked until outstanding prepayment-required items are resolved.
+        </div>
+    @endif
 </div>

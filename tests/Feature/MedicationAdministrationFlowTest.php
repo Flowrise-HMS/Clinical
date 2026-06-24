@@ -307,7 +307,10 @@ class MedicationAdministrationFlowTest extends TestCase
         $pharmacist->assignRole('pharmacist');
 
         $category = $this->medicationServiceCategory();
-        $service = Service::factory()->create(['category_id' => $category->id]);
+        $service = Service::factory()->create([
+            'category_id' => $category->id,
+            'requires_payment_before' => false,
+        ]);
         $medication = Medication::factory()->create(['service_id' => $service->id]);
 
         $request = ServiceRequest::factory()->create([

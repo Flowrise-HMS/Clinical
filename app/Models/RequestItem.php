@@ -16,9 +16,11 @@ use Modules\Billing\Enums\InvoiceLineStatus;
 use Modules\Billing\Models\InvoiceLine;
 use Modules\Clinical\Database\Factories\RequestItemFactory;
 use Modules\Clinical\Enums\RequestItemStatus;
+use Modules\Core\Contracts\PatientFinancialHoldChecker;
 use Modules\Core\Models\Service;
 use Modules\Core\Models\ServiceVariant;
 use Modules\Core\Models\Unit;
+use Modules\Core\Support\AppSettings;
 use Modules\Pharmacy\Models\PrescriptionDetail;
 
 class RequestItem extends Model
@@ -204,8 +206,29 @@ class RequestItem extends Model
         return $user->hasAnyRole($allowedRoles->pluck('name')->toArray());
     }
 
+    public function hasActiveFinancialHold(): bool
+    {
+        $settings = app(AppSettings::class);
+
+        if (! $settings->billing()->financial_hold_enabled) {
+            return false;
+        }
+
+        $encounter = $this->serviceRequest?->encounter;
+
+        return app(PatientFinancialHoldChecker::class)
+            ->requiresFinancialHold(
+                patientId: $encounter?->patient_id,
+                encounterId: $encounter?->id,
+            );
+    }
+
     public function markAsFulfilled(int $fulfilledBy): void
     {
+        if ($this->hasActiveFinancialHold()) {
+            throw new \RuntimeException(__('Cannot fulfill: patient has an active financial hold.'));
+        }
+
         $this->update([
             'status' => RequestItemStatus::COMPLETED,
             'fulfilled_by' => $fulfilledBy,
@@ -217,6 +240,10 @@ class RequestItem extends Model
 
     public function markAsInProgress(): void
     {
+        if ($this->hasActiveFinancialHold()) {
+            throw new \RuntimeException(__('Cannot start: patient has an active financial hold.'));
+        }
+
         $this->update(['status' => RequestItemStatus::IN_PROGRESS]);
     }
 

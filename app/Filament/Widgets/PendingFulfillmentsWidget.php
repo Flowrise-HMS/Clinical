@@ -102,6 +102,11 @@ class PendingFulfillmentsWidget extends BaseTableWidget
                 ->badge()
                 ->color(fn (RequestItem $record): string => $record->payment_status?->getColor() ?? 'gray')
                 ->formatStateUsing(fn (RequestItem $record): string => $record->payment_status?->getLabel() ?? '—'),
+            TextColumn::make('financial_hold')
+                ->label('Hold')
+                ->badge()
+                ->color(fn (RequestItem $record): string => $record->hasActiveFinancialHold() ? 'danger' : 'success')
+                ->formatStateUsing(fn (RequestItem $record): string => $record->hasActiveFinancialHold() ? 'On hold' : 'Clear'),
         ];
     }
 
@@ -124,6 +129,7 @@ class PendingFulfillmentsWidget extends BaseTableWidget
             ->color('success')
             ->button()
             ->visible(fn (RequestItem $record): bool => $record->prescriptionDetail?->isInFacility()
+                && ! $record->hasActiveFinancialHold()
                 && $policy->canRecordMar($record))
             ->modalHeading(fn (RequestItem $record): string => 'Record dose — '.($record->service?->name ?? 'Medication'))
             ->modalSubmitActionLabel('Save administration')
@@ -151,6 +157,10 @@ class PendingFulfillmentsWidget extends BaseTableWidget
             ->color('info')
             ->button()
             ->visible(function (RequestItem $record) use ($policy): bool {
+                if ($record->hasActiveFinancialHold()) {
+                    return false;
+                }
+
                 if (! $record->prescriptionDetail) {
                     return false;
                 }
@@ -186,7 +196,7 @@ class PendingFulfillmentsWidget extends BaseTableWidget
             ->color('primary')
             ->button()
             ->visible(function (RequestItem $record): bool {
-                if ($record->isTerminal()) {
+                if ($record->isTerminal() || $record->hasActiveFinancialHold()) {
                     return false;
                 }
 
