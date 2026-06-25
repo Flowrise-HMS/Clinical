@@ -143,12 +143,12 @@ class Encounter extends BaseModel
         return $this->hasMany(EncounterParticipant::class);
     }
 
-    public function vitalSigns()
+    public function vitalSigns(): HasMany
     {
         return $this->hasMany(VitalSign::class, 'encounter_id');
     }
 
-    public function clinicalNotes()
+    public function clinicalNotes(): HasMany
     {
         return $this->hasMany(ClinicalNote::class, 'encounter_id');
     }
