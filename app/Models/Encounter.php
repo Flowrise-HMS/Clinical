@@ -16,14 +16,17 @@ use Modules\Clinical\Enums\EncounterPriority;
 use Modules\Clinical\Enums\EncounterStatus;
 use Modules\Clinical\Enums\EncounterType;
 use Modules\Clinical\Enums\ParticipantStatus;
+use Modules\Core\Contracts\ProvidesClientIdentity;
 use Modules\Core\Enums\CoverageType;
 use Modules\Core\Models\BaseModel;
 use Modules\Core\Models\Branch;
 use Modules\Core\Models\Department;
 use Modules\Core\Models\Location;
+use Modules\Core\Support\ClientIdentity;
+use Modules\Core\Support\ClientIdentityResolver;
 use Modules\Patient\Models\Patient;
 
-class Encounter extends BaseModel
+class Encounter extends BaseModel implements ProvidesClientIdentity
 {
     /** @use HasFactory<EncounterFactory> */
     use HasFactory, HasUuids;
@@ -230,10 +233,21 @@ class Encounter extends BaseModel
     public function getDisplayName(): string
     {
         if ($this->isGuest()) {
-            return $this->guest_name ?? 'Guest Encounter';
+            return $this->clientIdentity()->name;
         }
 
-        return $this->patient?->full_name ?? 'Unknown Patient';
+        return $this->patient?->full_name ?? 'N/A';
+    }
+
+    public function clientIdentity(): ClientIdentity
+    {
+        return ClientIdentityResolver::resolve(
+            patientFullName: $this->patient?->full_name,
+            patientMrn: $this->patient?->mrn,
+            guestName: $this->guest_name,
+            guestPhone: $this->guest_phone,
+            guestEmail: $this->guest_email,
+        );
     }
 
     public function getDurationAttribute(): ?string

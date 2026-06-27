@@ -16,6 +16,7 @@ use Modules\Clinical\Enums\EncounterPriority;
 use Modules\Clinical\Enums\EncounterStatus;
 use Modules\Clinical\Enums\EncounterType;
 use Modules\Clinical\Filament\Clusters\Clinical\Resources\Encounters\EncounterResource;
+use Modules\Core\Filament\Support\ClientIdentityColumn;
 
 class EncountersTable
 {
@@ -29,10 +30,7 @@ class EncountersTable
                     ->sortable()
                     ->weight('bold'),
 
-                TextColumn::make('patient.full_name')
-                    ->label('Patient')
-                    ->sortable()
-                    ->placeholder('Guest'),
+                ClientIdentityColumn::make(),
 
                 TextColumn::make('type')
                     ->label('Type')

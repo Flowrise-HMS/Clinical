@@ -5,6 +5,7 @@ namespace Modules\Clinical\Filament\Clusters\Clinical\Resources\Tasks\Schemas;
 use Filament\Infolists\Components\TextEntry;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
+use Modules\Clinical\Models\Task;
 
 class TaskInfolist
 {
@@ -38,9 +39,9 @@ class TaskInfolist
                     ->schema([
                         TextEntry::make('requestItem.serviceRequest.request_number')
                             ->label('Request Number'),
-                        TextEntry::make('requestItem.serviceRequest.patient.full_name')
-                            ->label('Patient')
-                            ->placeholder('Guest'),
+                        TextEntry::make('client')
+                            ->label('Client')
+                            ->state(fn (Task $record): string => $record->clientIdentity()->displayWithIdentifier()),
                     ]),
 
                 Section::make('Performance')

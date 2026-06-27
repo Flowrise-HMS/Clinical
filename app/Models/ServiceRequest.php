@@ -14,12 +14,15 @@ use Modules\Clinical\Database\Factories\ServiceRequestFactory;
 use Modules\Clinical\Enums\RequestItemStatus;
 use Modules\Clinical\Enums\RequestPriority;
 use Modules\Clinical\Enums\RequestStatus;
+use Modules\Core\Contracts\ProvidesClientIdentity;
 use Modules\Core\Models\BaseModel;
 use Modules\Core\Models\Branch;
 use Modules\Core\Models\Service;
+use Modules\Core\Support\ClientIdentity;
+use Modules\Core\Support\ClientIdentityResolver;
 use Modules\Patient\Models\Patient;
 
-class ServiceRequest extends BaseModel
+class ServiceRequest extends BaseModel implements ProvidesClientIdentity
 {
     /** @use HasFactory<ServiceRequestFactory> */
     use HasFactory, HasUuids;
@@ -139,10 +142,21 @@ class ServiceRequest extends BaseModel
     public function getDisplayName(): string
     {
         if ($this->isGuest()) {
-            return "Guest Request - {$this->guest_name}";
+            return "Guest Request - {$this->clientIdentity()->name}";
         }
 
         return "{$this->patient?->full_name} - {$this->request_number}";
+    }
+
+    public function clientIdentity(): ClientIdentity
+    {
+        return ClientIdentityResolver::resolve(
+            patientFullName: $this->patient?->full_name,
+            patientMrn: $this->patient?->mrn,
+            guestName: $this->guest_name,
+            guestPhone: $this->guest_phone,
+            guestEmail: $this->guest_email,
+        );
     }
 
     public function getTotalAmountAttribute(): float

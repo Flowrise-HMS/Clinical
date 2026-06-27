@@ -12,6 +12,7 @@ use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
 use Modules\Clinical\Enums\TaskOutcome;
 use Modules\Clinical\Enums\TaskStatus;
+use Modules\Core\Filament\Support\ClientIdentityColumn;
 
 class TasksTable
 {
@@ -31,10 +32,7 @@ class TasksTable
                     ->searchable()
                     ->sortable(),
 
-                TextColumn::make('requestItem.serviceRequest.patient.full_name')
-                    ->label('Patient')
-                    ->sortable()
-                    ->placeholder('Guest'),
+                ClientIdentityColumn::make(),
 
                 TextColumn::make('status')
                     ->label('Status')

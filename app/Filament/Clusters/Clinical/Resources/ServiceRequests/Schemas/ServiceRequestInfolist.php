@@ -6,6 +6,7 @@ use Filament\Infolists\Components\RepeatableEntry;
 use Filament\Infolists\Components\TextEntry;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
+use Modules\Clinical\Models\ServiceRequest;
 use Modules\Core\Filament\Infolists\Components\CurrencyEntry;
 
 class ServiceRequestInfolist
@@ -25,17 +26,19 @@ class ServiceRequestInfolist
                             ->label('Priority'),
                     ]),
 
-                Section::make('Patient Information')
+                Section::make('Client Information')
                     ->columns(2)
                     ->schema([
-                        TextEntry::make('patient.full_name')
-                            ->label('Patient')
-                            ->placeholder('Guest Request'),
-                        TextEntry::make('guest_name')
-                            ->label('Guest Name')
-                            ->placeholder('-'),
+                        TextEntry::make('client')
+                            ->label('Client')
+                            ->state(fn (ServiceRequest $record): string => $record->clientIdentity()->displayWithIdentifier()),
                         TextEntry::make('guest_phone')
-                            ->label('Guest Phone')
+                            ->label('Phone')
+                            ->visible(fn (ServiceRequest $record): bool => $record->isGuest())
+                            ->placeholder('-'),
+                        TextEntry::make('guest_email')
+                            ->label('Email')
+                            ->visible(fn (ServiceRequest $record): bool => $record->isGuest())
                             ->placeholder('-'),
                     ]),
 

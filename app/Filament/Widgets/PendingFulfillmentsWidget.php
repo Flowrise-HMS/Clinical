@@ -15,6 +15,7 @@ use Modules\Clinical\Classes\Services\MedicationFulfillmentPolicy;
 use Modules\Clinical\Filament\Support\MarRecordDoseFormSchema;
 use Modules\Clinical\Models\RequestItem;
 use Modules\Core\Classes\Services\BranchService;
+use Modules\Core\Filament\Support\ClientIdentityColumn;
 use Modules\Pharmacy\Classes\Services\DispenseService;
 
 class PendingFulfillmentsWidget extends BaseTableWidget
@@ -55,9 +56,9 @@ class PendingFulfillmentsWidget extends BaseTableWidget
 
         return [
             TextColumn::make('#')->rowIndex(),
-            TextColumn::make('serviceRequest.patient.display_name')
-                ->label('Patient')
-                ->sortable(),
+            ClientIdentityColumn::make(
+                resolve: fn (RequestItem $record) => $record->serviceRequest?->clientIdentity(),
+            ),
             TextColumn::make('service.name')
                 ->label('Service')
                 ->searchable()

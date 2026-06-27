@@ -5,6 +5,7 @@ namespace Modules\Clinical\Filament\Clusters\Clinical\Resources\Encounters\Schem
 use Filament\Infolists\Components\TextEntry;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
+use Modules\Clinical\Models\Encounter;
 
 class EncounterInfolist
 {
@@ -23,17 +24,19 @@ class EncounterInfolist
                             ->label('Status'),
                     ]),
 
-                Section::make('Patient Information')
+                Section::make('Client Information')
                     ->columns(2)
                     ->schema([
-                        TextEntry::make('patient.full_name')
-                            ->label('Patient')
-                            ->placeholder('Guest Encounter'),
-                        TextEntry::make('guest_name')
-                            ->label('Guest Name')
-                            ->placeholder('-'),
+                        TextEntry::make('client')
+                            ->label('Client')
+                            ->state(fn (Encounter $record): string => $record->clientIdentity()->displayWithIdentifier()),
                         TextEntry::make('guest_phone')
-                            ->label('Guest Phone')
+                            ->label('Phone')
+                            ->visible(fn (Encounter $record): bool => $record->isGuest())
+                            ->placeholder('-'),
+                        TextEntry::make('guest_email')
+                            ->label('Email')
+                            ->visible(fn (Encounter $record): bool => $record->isGuest())
                             ->placeholder('-'),
                     ]),
 

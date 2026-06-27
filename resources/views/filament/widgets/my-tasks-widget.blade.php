@@ -14,7 +14,7 @@
                                     {{ $task->title }}
                                 </p>
                                 <p class="text-xs text-gray-500 mt-0.5 truncate">
-                                    {{ $task->patient?->full_name ?? 'Unknown Patient' }}
+                                    {{ $task->clientIdentity()->displayName() }}
                                 </p>
                             </div>
                             @if($task->due_date && \Carbon\Carbon::parse($task->due_date)->isPast())

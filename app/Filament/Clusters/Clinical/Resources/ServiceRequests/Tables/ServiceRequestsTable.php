@@ -15,6 +15,7 @@ use Filament\Tables\Table;
 use Modules\Clinical\Enums\RequestPriority;
 use Modules\Clinical\Enums\RequestStatus;
 use Modules\Clinical\Filament\Clusters\Clinical\Resources\ServiceRequests\ServiceRequestResource;
+use Modules\Core\Filament\Support\ClientIdentityColumn;
 use Modules\Core\Filament\Tables\Columns\CurrencyColumn;
 
 class ServiceRequestsTable
@@ -30,10 +31,7 @@ class ServiceRequestsTable
                     ->sortable()
                     ->weight('bold'),
 
-                TextColumn::make('patient.full_name')
-                    ->label('Patient')
-                    ->sortable()
-                    ->placeholder('Guest'),
+                ClientIdentityColumn::make(),
 
                 TextColumn::make('status')
                     ->label('Status')

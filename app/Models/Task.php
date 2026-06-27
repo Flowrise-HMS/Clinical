@@ -14,10 +14,13 @@ use Modules\Clinical\Classes\Services\MedicationFulfillmentPolicy;
 use Modules\Clinical\Database\Factories\TaskFactory;
 use Modules\Clinical\Enums\TaskOutcome;
 use Modules\Clinical\Enums\TaskStatus;
+use Modules\Core\Contracts\ProvidesClientIdentity;
 use Modules\Core\Models\Service;
+use Modules\Core\Support\ClientIdentity;
+use Modules\Core\Support\ClientIdentityResolver;
 use Modules\Patient\Models\Patient;
 
-class Task extends Model
+class Task extends Model implements ProvidesClientIdentity
 {
     /** @use HasFactory<TaskFactory> */
     use HasFactory, HasUuids;
@@ -115,6 +118,12 @@ class Task extends Model
     public function getPatientAttribute(): ?Patient
     {
         return $this->requestItem?->serviceRequest?->patient;
+    }
+
+    public function clientIdentity(): ClientIdentity
+    {
+        return $this->requestItem?->serviceRequest?->clientIdentity()
+            ?? ClientIdentityResolver::resolve();
     }
 
     public function start(?int $performedBy = null): void

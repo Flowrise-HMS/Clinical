@@ -28,7 +28,7 @@ class MedicationDueDoseNotification extends Notification implements ShouldQueue
     public function toMail(object $notifiable): MailMessage
     {
         $item = $this->requestItem->loadMissing(['service', 'serviceRequest.patient']);
-        $patient = $item->serviceRequest?->patient?->full_name ?? 'Patient';
+        $client = $item->serviceRequest?->clientIdentity()->name ?? 'N/A';
         $drug = $item->service?->name ?? 'Medication';
 
         $subject = match ($this->reminderType) {
@@ -39,7 +39,7 @@ class MedicationDueDoseNotification extends Notification implements ShouldQueue
 
         return (new MailMessage)
             ->subject($subject)
-            ->line(__('Patient: :patient', ['patient' => $patient]))
+            ->line(__('Client: :client', ['client' => $client]))
             ->line(__('Medication: :drug', ['drug' => $drug]))
             ->line(__('Due at: :time', ['time' => $this->slot->dueAt->toDayDateTimeString()]))
             ->line(__('Please record the dose in the MAR.'));
@@ -48,12 +48,12 @@ class MedicationDueDoseNotification extends Notification implements ShouldQueue
     public function toSms(object $notifiable): string
     {
         $item = $this->requestItem->loadMissing(['service', 'serviceRequest.patient']);
-        $patient = $item->serviceRequest?->patient?->full_name ?? 'Patient';
+        $client = $item->serviceRequest?->clientIdentity()->name ?? 'N/A';
         $drug = $item->service?->name ?? 'Medication';
 
-        return __('MAR: :drug for :patient due :time', [
+        return __('MAR: :drug for :client due :time', [
             'drug' => $drug,
-            'patient' => $patient,
+            'client' => $client,
             'time' => $this->slot->dueAt->format('H:i'),
         ]);
     }
@@ -64,11 +64,12 @@ class MedicationDueDoseNotification extends Notification implements ShouldQueue
     public function toDatabase(object $notifiable): array
     {
         $item = $this->requestItem->loadMissing(['service', 'serviceRequest.patient']);
+        $clientIdentity = $item->serviceRequest?->clientIdentity();
 
         return [
             'request_item_id' => $item->id,
             'patient_id' => $item->serviceRequest?->patient_id,
-            'patient_name' => $item->serviceRequest?->patient?->full_name,
+            'patient_name' => $clientIdentity?->name,
             'medication' => $item->service?->name,
             'due_at' => $this->slot->dueAt->toIso8601String(),
             'reminder_type' => $this->reminderType,
