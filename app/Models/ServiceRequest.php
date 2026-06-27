@@ -22,6 +22,12 @@ use Modules\Core\Support\ClientIdentity;
 use Modules\Core\Support\ClientIdentityResolver;
 use Modules\Patient\Models\Patient;
 
+/**
+ * @property string|null $patient_id
+ * @property string|null $guest_name
+ * @property string|null $guest_phone
+ * @property string|null $guest_email
+ */
 class ServiceRequest extends BaseModel implements ProvidesClientIdentity
 {
     /** @use HasFactory<ServiceRequestFactory> */
