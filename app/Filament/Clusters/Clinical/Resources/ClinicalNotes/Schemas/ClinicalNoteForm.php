@@ -66,7 +66,6 @@ class ClinicalNoteForm
 
                     RichEditor::make('content')
                         ->label('Note Content')
-
                         ->fileAttachmentsDisk('local')
                         ->fileAttachmentsDirectory('notes'),
                 ]),

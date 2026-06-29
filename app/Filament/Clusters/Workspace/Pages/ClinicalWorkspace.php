@@ -4,13 +4,13 @@ namespace Modules\Clinical\Filament\Clusters\Workspace\Pages;
 
 use BezhanSalleh\FilamentShield\Traits\HasPageShield;
 use Filament\Forms\Components\Checkbox;
-use Filament\Forms\Components\Placeholder;
 use Filament\Forms\Components\Repeater;
 use Filament\Forms\Components\RichEditor;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TagsInput;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
+use Filament\Infolists\Components\TextEntry;
 use Filament\Notifications\Notification;
 use Filament\Pages\Page;
 use Filament\Schemas\Components\Grid;
@@ -509,9 +509,9 @@ class ClinicalWorkspace extends Page implements HasSchemas
 
         if ($schema === []) {
             $schema = [
-                Placeholder::make('select_pending_lab')
+                TextEntry::make('select_pending_lab')
                     ->hiddenLabel()
-                    ->content('Select a pending lab item to load the result form.'),
+                    ->state('Select a pending lab item to load the result form.'),
             ];
         }
 
