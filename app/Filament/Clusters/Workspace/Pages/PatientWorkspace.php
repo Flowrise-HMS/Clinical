@@ -48,6 +48,7 @@ class PatientWorkspace extends Page implements HasActions, HasSchemas, HasTable
     protected static string|\BackedEnum|null $navigationIcon = LucideIcon::HeartPulse;
 
     protected static bool $shouldRegisterNavigation = false;
+     protected static bool $isDiscovered = false;
 
     protected string $view = 'clinical::clinical.workspace.patient-list';
 
