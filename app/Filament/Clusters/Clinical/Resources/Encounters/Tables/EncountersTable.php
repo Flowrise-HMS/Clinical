@@ -24,6 +24,7 @@ class EncountersTable
     {
         return $table
             ->columns([
+                TextColumn::make('branch.name'),
                 TextColumn::make('encounter_number')
                     ->label('Number')
                     ->searchable()
@@ -59,6 +60,10 @@ class EncountersTable
                     ->sortable(),
             ])
             ->filters([
+                SelectFilter::make('branch')
+                    ->relationship('branch','name')
+                    ->preload()
+                    ->searchable(),
                 SelectFilter::make('type')
                     ->options(EncounterType::class),
 
