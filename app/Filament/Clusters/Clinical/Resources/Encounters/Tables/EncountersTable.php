@@ -61,7 +61,7 @@ class EncountersTable
             ])
             ->filters([
                 SelectFilter::make('branch')
-                    ->relationship('branch','name')
+                    ->relationship('branch', 'name')
                     ->preload()
                     ->searchable(),
                 SelectFilter::make('type')
