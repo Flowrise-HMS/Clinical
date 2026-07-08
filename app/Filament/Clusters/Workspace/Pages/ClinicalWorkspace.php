@@ -37,6 +37,7 @@ use Modules\Clinical\Enums\NoteType;
 use Modules\Clinical\Filament\Clusters\Clinical\Resources\Allergies\Schemas\AllergyForm;
 use Modules\Clinical\Filament\Clusters\Clinical\Resources\ServiceRequests\Schemas\ServiceRequestForm;
 use Modules\Clinical\Filament\Clusters\Clinical\Resources\VitalSigns\Schemas\VitalSignForm;
+use Modules\Clinical\Filament\Clusters\Workspace\Concerns\ManagesWorkspacePatient;
 use Modules\Clinical\Filament\Clusters\Workspace\WorkspaceCluster;
 use Modules\Clinical\Filament\Widgets\CriticalPatientsWidget;
 use Modules\Clinical\Filament\Widgets\MyTasksWidget;
@@ -65,7 +66,7 @@ use Modules\Pharmacy\Models\Medication;
 
 class ClinicalWorkspace extends Page implements HasSchemas
 {
-    use HasPageShield, InteractsWithSchemas;
+    use HasPageShield, InteractsWithSchemas, ManagesWorkspacePatient;
 
     protected static ?string $slug = '';
 
@@ -168,14 +169,25 @@ class ClinicalWorkspace extends Page implements HasSchemas
         }
     }
 
-    public function selectPatient(string $id): void
+    public function selectPatient(string $id, bool $fromRegistration = false): void
     {
         $this->patientId = $id;
         $this->mode = 'patient';
         $this->loadPatientContext();
-        $this->setDefaultTab();
+        $this->fillPatientFormDataFromCurrentPatient();
+
+        if ($fromRegistration) {
+            $this->postRegistrationFlow = true;
+            $this->activeTab = $this->getPostRegistrationTab();
+        } else {
+            $this->postRegistrationFlow = false;
+            $this->setDefaultTab();
+        }
+
         $this->searchTerm = '';
         $this->searchResults = [];
+        $this->registerFormData = [];
+        $this->confirmDuplicateRegistration = false;
     }
 
     #[On('select-patient')]
@@ -192,6 +204,7 @@ class ClinicalWorkspace extends Page implements HasSchemas
         $this->currentEncounter = null;
         $this->activeTab = '';
         $this->resetFormStates();
+        $this->resetPatientManagementState();
     }
 
     protected function resetFormStates(): void
@@ -243,6 +256,13 @@ class ClinicalWorkspace extends Page implements HasSchemas
         if ($this->activeTab) {
             return;
         }
+
+        if ($this->postRegistrationFlow) {
+            $this->activeTab = $this->getPostRegistrationTab();
+
+            return;
+        }
+
         $this->activeTab = match ($this->getUserRoleKey()) {
             'nurse' => 'encounter',
             'lab' => 'pending-labs',
@@ -389,6 +409,18 @@ class ClinicalWorkspace extends Page implements HasSchemas
 
         $this->vitalsData = [];
         $this->loadPatientContext();
+
+        if ($this->postRegistrationFlow) {
+            $this->postRegistrationFlow = false;
+            Notification::make()
+                ->title('Vital signs recorded')
+                ->body('Ready for consultation.')
+                ->success()
+                ->send();
+
+            return;
+        }
+
         Notification::make()->title('Vital signs recorded')->success()->send();
     }
 
@@ -451,6 +483,17 @@ class ClinicalWorkspace extends Page implements HasSchemas
         $this->currentEncounter = $encounter->fresh();
         $this->encounterFormData = [];
         $this->activeTab = 'vitals';
+
+        if ($this->postRegistrationFlow) {
+            Notification::make()
+                ->title('OPD encounter created')
+                ->body('Record vitals next.')
+                ->success()
+                ->send();
+
+            return;
+        }
+
         Notification::make()->title('OPD encounter created')->success()->send();
     }
 
@@ -650,7 +693,7 @@ class ClinicalWorkspace extends Page implements HasSchemas
 
     protected function registerForms(): array
     {
-        return [
+        return array_merge([
             'encounterForm' => $this->makeSchema()
                 ->schema([
                     Grid::make(2)
@@ -665,6 +708,10 @@ class ClinicalWorkspace extends Page implements HasSchemas
                                 ])
                                 ->required()
                                 ->native(false),
+                            TextInput::make('chief_complaint')
+                                ->label('Chief Complaint')
+                                ->placeholder('Reason for visit')
+                                ->columnSpanFull(),
                         ]),
                 ])
                 ->statePath('encounterFormData'),
@@ -848,12 +895,12 @@ class ClinicalWorkspace extends Page implements HasSchemas
                         ->label('Referral Notes'),
                 ])
                 ->statePath('referralData'),
-        ];
+        ], $this->registerPatientManagementForms());
     }
 
     public function getClinicianTabs(): array
     {
-        return [
+        $tabs = [
             'vitals' => [
                 'label' => 'Vitals',
                 'icon' => 'heroicon-m-heart',
@@ -883,11 +930,15 @@ class ClinicalWorkspace extends Page implements HasSchemas
                 'icon' => 'heroicon-m-clock',
             ],
         ];
+
+        $tabs = $this->prependEncounterTab($tabs);
+
+        return $this->prependPatientDetailsTab($tabs);
     }
 
     public function getNurseTabs(): array
     {
-        return [
+        $tabs = [
             'encounter' => [
                 'label' => 'Encounter',
                 'icon' => 'heroicon-m-plus-circle',
@@ -909,11 +960,13 @@ class ClinicalWorkspace extends Page implements HasSchemas
                 'icon' => 'heroicon-m-clock',
             ],
         ];
+
+        return $this->prependPatientDetailsTab($tabs);
     }
 
     public function getLabTabs(): array
     {
-        return [
+        $tabs = [
             'pending-labs' => [
                 'label' => 'Pending Labs',
                 'icon' => 'heroicon-m-clock',
@@ -927,6 +980,8 @@ class ClinicalWorkspace extends Page implements HasSchemas
                 'icon' => 'heroicon-m-check-badge',
             ],
         ];
+
+        return $this->prependPatientDetailsTab($tabs);
     }
 
     #[Computed]

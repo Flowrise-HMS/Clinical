@@ -67,15 +67,12 @@ class PatientProfile extends Page implements HasActions, HasForms, HasInfolists
         return [
             PatientVitalsOverviewWidget::make([
                 'patientId' => $this->currentPatient->id,
-                'encounterId' => $this->currentEncounter?->id,
             ]),
             PatientVitalsChartWidget::make([
                 'patientId' => $this->currentPatient->id,
-                'encounterId' => $this->currentEncounter?->id,
             ]),
             PatientVitalsHistoryWidget::make([
                 'patientId' => $this->currentPatient->id,
-                'encounterId' => $this->currentEncounter?->id,
             ]),
             PatientNotesWidget::make([
                 'patientId' => $this->currentPatient->id,

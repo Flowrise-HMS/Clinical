@@ -22,7 +22,7 @@ class VitalSignService
         ?VitalSignType $type = null,
         ?int $recordedBy = null
     ): VitalSign {
-        return DB::transaction(function () use ($patient, $vitalData, $type, $recordedBy) {
+        return DB::transaction(function () use ($patient, $vitalData, $encounterId, $type, $recordedBy) {
             $data = [
                 'patient_id' => $patient->id,
                 'branch_id' => $patient->branch_id,
@@ -43,6 +43,10 @@ class VitalSignService
                 if (isset($vitalData[$field]) && $vitalData[$field] !== '') {
                     $data[$field] = $vitalData[$field];
                 }
+            }
+
+            if (empty($data['encounter_id']) && $encounterId) {
+                $data['encounter_id'] = $encounterId;
             }
 
             return VitalSign::create($data);

@@ -102,14 +102,14 @@ trait HasPatientContext
                             ->formatStateUsing(fn ($record) => $record->allergies->count()),
                         TextEntry::make('bp')
                             ->label('BP')
-                            ->formatStateUsing(fn () => $this->latestVitals->blood_pressure),
+                            ->formatStateUsing(fn () => $this->latestVitals?->blood_pressure ?? '—'),
                         TextEntry::make('hr')
                             ->label('Heart Rate')
-                            ->visible(isset($this->latestVitals) && ! empty($this->latestVitals?->heart_rate))
+                            ->visible(filled($this->latestVitals?->heart_rate))
                             ->formatStateUsing(fn () => $this->latestVitals->heart_rate.' bpm'),
                         TextEntry::make('spo2')
                             ->label('SpO2')
-                            ->visible(isset($this->latestVitals) && ! empty($this->latestVitals?->spo2))
+                            ->visible(filled($this->latestVitals?->spo2))
                             ->formatStateUsing(fn () => $this->latestVitals->spo2.'%'),
                         TextEntry::make('encounter_type')
                             ->label('Type')

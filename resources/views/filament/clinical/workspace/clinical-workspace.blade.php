@@ -1,10 +1,11 @@
 <x-filament-panels::page>
     <div>
-        @if ($mode === 'home')
-            {{-- ===== HOME MODE ===== --}}
+        @if ($mode === 'home' || $mode === 'register')
+            {{-- ===== HOME / REGISTER MODE ===== --}}
             <div class="space-y-4 sm:space-y-6">
                 {{-- Patient Search --}}
-                <div class="relative" x-data="{ open: @entangle('searchTerm').live }">
+                <div class="flex flex-col sm:flex-row gap-2 sm:items-start">
+                    <div class="relative flex-1" x-data="{ open: @entangle('searchTerm').live }">
                     <x-filament::input.wrapper>
                         <x-slot name="prefix">
                             <svg class="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -49,7 +50,12 @@
                             @endforeach
                         </div>
                     @endif
+                    </div>
                 </div>
+
+                @if ($mode === 'register')
+                    @include('clinical::clinical.workspace.partials.patient-register')
+                @endif
 
                 {{-- Recent Patients --}}
                 @if (count($searchResults) === 0 && strlen($searchTerm) < 2)
@@ -80,12 +86,18 @@
                 @endif
 
                 {{-- No results state --}}
-                @if (strlen($searchTerm) >= 2 && count($searchResults) === 0)
+                @if ($mode === 'home' && strlen($searchTerm) >= 2 && count($searchResults) === 0)
                     <div class="flex flex-col items-center justify-center py-16 text-center">
                         <x-filament::icon name="heroicon-o-user-group"
-                            class="w-16 h-16 text-gray-300 dark:text-gray-600 mb-4" />
-                        <h3 class="text-lg font-medium text-gray-500 dark:text-gray-400">No patients found</h3>
-                        <p class="text-sm text-gray-400 dark:text-gray-500 mt-1">Try a different search term</p>
+                            class="w-16 h-16 text-gray-300 dark:text-gray-600" />
+                        <h3 class="text-lg font-medium text-gray-500 dark:text-gray-400 mt-3">No patients found</h3>
+                        <p class="text-sm text-gray-400 dark:text-gray-500 mb-3">Try a different search term or register a new patient</p>
+                        @if ($this->canCreatePatient())
+                            <x-filament::button wire:click="startRegistration" color="primary" icon="heroicon-m-user-plus"
+                                class="mt-4">
+                                Register New Patient
+                            </x-filament::button>
+                        @endif
                     </div>
                 @endif
             </div>
@@ -144,12 +156,18 @@
                         @endif
                     </div>
 
-                    {{-- Clear Button --}}
+                    {{-- Clear / Edit Buttons --}}
                     <div class="flex items-end gap-2 shrink-0">
                         @if ($currentEncounter)
                             <x-filament::badge :color="$currentEncounter->status?->getColor() ?? 'gray'" class="text-xs">
                                 {{ $currentEncounter->status?->getLabel() ?? 'N/A' }}
                             </x-filament::badge>
+                        @endif
+                        @if ($this->canUpdateCurrentPatient())
+                            <x-filament::button wire:click="$set('activeTab', 'patient-details')" color="gray"
+                                size="sm" outlined icon="heroicon-m-pencil-square">
+                                <span class="hidden sm:inline">Edit</span>
+                            </x-filament::button>
                         @endif
                         <x-filament::button wire:click="clearPatient" color="info" size="sm" outlined
                             icon="heroicon-m-x-mark">
@@ -158,6 +176,8 @@
                     </div>
                 </div>
             </div>
+
+            @include('clinical::clinical.workspace.partials.post-registration-banner')
 
             {{-- Role-Specific Content --}}
             @php $role = $this->getUserRoleKey(); @endphp
@@ -186,48 +206,11 @@
                     {{-- Tab Content --}}
                     <div
                         class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4 sm:p-6">
-                        @if ($activeTab === 'encounter')
-                            @if ($currentEncounter?->isActive())
-                                <div class="space-y-4">
-                                    <h3 class="text-lg font-semibold text-gray-900 dark:text-white">Active Encounter</h3>
-                                    <x-filament::section>
-                                        <div class="flex items-center justify-between">
-                                            <div>
-                                                <p class="font-medium">{{ $currentEncounter->encounter_number }}</p>
-                                                <p class="text-sm text-gray-500">
-                                                    {{ $currentEncounter->type?->getLabel() }} &middot;
-                                                    {{ $currentEncounter->status?->getLabel() }}
-                                                    @if ($currentEncounter->coverage_type ?? null)
-                                                        &middot; {{ $currentEncounter->coverage_type->getLabel() }}
-                                                    @endif
-                                                </p>
-                                            </div>
-                                            <x-filament::badge color="success">Active</x-filament::badge>
-                                        </div>
-                                    </x-filament::section>
-                                    <p class="text-sm text-gray-500 dark:text-gray-400">
-                                        This patient already has an active encounter. Record vitals or proceed with assessment.
-                                    </p>
-                                    <div class="flex justify-end">
-                                        <x-filament::button wire:click="$set('activeTab', 'vitals')" color="primary"
-                                            icon="heroicon-m-heart">
-                                            Go to Vitals
-                                        </x-filament::button>
-                                    </div>
-                                </div>
-                            @else
-                                <div class="space-y-4 mt-4">
-                                    <h3 class="text-lg font-semibold text-gray-900 dark:text-white">Create OPD Encounter</h3>
-                                    {{ $this->encounterForm }}
-                                    <div class="flex justify-end pt-4">
-                                        <x-filament::button wire:click="createEncounter" color="primary"
-                                            icon="heroicon-m-plus-circle">
-                                            Create Encounter
-                                        </x-filament::button>
-                                    </div>
-                                </div>
-                            @endif
-                        @elseif($activeTab === 'vitals')
+                        @if ($activeTab === 'patient-details')
+                            @include('clinical::clinical.workspace.partials.patient-details-tab')
+                        @elseif ($activeTab === 'encounter')
+                            @include('clinical::clinical.workspace.partials.encounter-tab')
+                        @elseif ($activeTab === 'vitals')
                             <div class="space-y-4">
                                 <h3 class="text-lg font-semibold text-gray-900 dark:text-white">Record Vitals</h3>
                                 {{ $this->vitalsForm }}
@@ -310,7 +293,9 @@
                     {{-- Tab Content --}}
                     <div
                         class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4 sm:p-6">
-                        @if ($activeTab === 'pending-labs')
+                        @if ($activeTab === 'patient-details')
+                            @include('clinical::clinical.workspace.partials.patient-details-tab')
+                        @elseif ($activeTab === 'pending-labs')
                             <div class="space-y-3">
                                 <h3 class="text-lg font-semibold text-gray-900 dark:text-white">Pending Lab Requests</h3>
                                 @php $pendingItems = $this->pendingLabItems; @endphp
@@ -443,7 +428,11 @@
 
                         {{-- Tab Panel --}}
                         <div class="p-4 sm:p-6 border-t border-gray-200 dark:border-gray-700">
-                            @if ($activeTab === 'vitals')
+                            @if ($activeTab === 'patient-details')
+                                @include('clinical::clinical.workspace.partials.patient-details-tab')
+                            @elseif ($activeTab === 'encounter')
+                                @include('clinical::clinical.workspace.partials.encounter-tab')
+                            @elseif ($activeTab === 'vitals')
                                 <div class="space-y-4">
                                     <h4 class="text-base font-semibold text-gray-900 dark:text-white">Record Vitals</h4>
                                     {{ $this->vitalsForm }}

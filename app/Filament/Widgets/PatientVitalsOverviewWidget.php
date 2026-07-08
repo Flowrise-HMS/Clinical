@@ -21,15 +21,7 @@ class PatientVitalsOverviewWidget extends BaseWidget
 
     protected function getStats(): array
     {
-        if (! $this->patientId) {
-            return [];
-        }
-
-        $vitals = VitalSign::query()
-            ->where('patient_id', $this->patientId)
-            ->when($this->encounterId, fn ($q) => $q->where('encounter_id', $this->encounterId))
-            ->latest('recorded_at')
-            ->first();
+        $vitals = $this->resolveCurrentVitals();
 
         if (! $vitals) {
             return [
@@ -56,5 +48,29 @@ class PatientVitalsOverviewWidget extends BaseWidget
                 ->description('Oxygen Saturation')
                 ->color($vitals->isLowOxygenSaturation() ? 'danger' : 'success'),
         ];
+    }
+
+    protected function resolveCurrentVitals(): ?VitalSign
+    {
+        if (! $this->patientId) {
+            return null;
+        }
+
+        if ($this->encounterId) {
+            $encounterVitals = VitalSign::query()
+                ->where('patient_id', $this->patientId)
+                ->where('encounter_id', $this->encounterId)
+                ->latest('recorded_at')
+                ->first();
+
+            if ($encounterVitals) {
+                return $encounterVitals;
+            }
+        }
+
+        return VitalSign::query()
+            ->where('patient_id', $this->patientId)
+            ->latest('recorded_at')
+            ->first();
     }
 }

@@ -6,6 +6,7 @@ use App\Models\User;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Modules\Clinical\Classes\Services\VitalSignService;
 use Modules\Clinical\Enums\VitalSignType;
+use Modules\Clinical\Models\Encounter;
 use Modules\Clinical\Models\VitalSign;
 use Modules\Core\Models\Branch;
 use Modules\Patient\Models\Patient;
@@ -41,6 +42,25 @@ class VitalSignServiceTest extends TestCase
         $this->assertSame($patient->id, $vital->patient_id);
         $this->assertSame(120, $vital->systolic_bp);
         $this->assertSame(VitalSignType::ROUTINE, $vital->type);
+    }
+
+    public function test_record_persists_encounter_id_from_parameter(): void
+    {
+        $branch = Branch::factory()->create();
+        $patient = Patient::factory()->create(['branch_id' => $branch->id]);
+        $user = User::factory()->create();
+
+        $encounter = Encounter::factory()->create([
+            'patient_id' => $patient->id,
+            'branch_id' => $branch->id,
+        ]);
+
+        $vital = $this->service->record($patient, [
+            'systolic_bp' => 118,
+            'diastolic_bp' => 76,
+        ], encounterId: $encounter->id, recordedBy: $user->id);
+
+        $this->assertSame($encounter->id, $vital->encounter_id);
     }
 
     public function test_get_latest_returns_most_recent_vital_sign(): void
