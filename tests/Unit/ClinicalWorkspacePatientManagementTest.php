@@ -18,6 +18,7 @@ use Modules\Clinical\Models\Encounter;
 use Modules\Core\Models\Branch;
 use Modules\Patient\Enums\Gender;
 use Modules\Patient\Models\Patient;
+use Nnjeim\World\Models\Country;
 use Spatie\Permission\Models\Permission;
 use Spatie\Permission\Models\Role;
 use Tests\TestCase;
@@ -34,6 +35,7 @@ class ClinicalWorkspacePatientManagementTest extends TestCase
     {
         parent::setUp();
         $this->migrateModules(['Core', 'Patient', 'Clinical', 'Staff']);
+        $this->ensureDefaultCountryExists();
 
         $this->branch = Branch::factory()->default()->create();
         $this->nurse = User::factory()->create(['branch_id' => $this->branch->id]);
@@ -148,6 +150,23 @@ class ClinicalWorkspacePatientManagementTest extends TestCase
             $user->givePermissionTo($permission);
         }
     }
+
+    protected function ensureDefaultCountryExists(): void
+    {
+        $countryCode = config('core.default_country_code', 'GH');
+
+        Country::query()->firstOrCreate(
+            ['iso2' => $countryCode],
+            [
+                'name' => 'Ghana',
+                'status' => 1,
+                'phone_code' => '233',
+                'iso3' => 'GHA',
+                'region' => 'Africa',
+                'subregion' => 'Western Africa',
+            ],
+        );
+    }
 }
 
 class ClinicalWorkspacePatientHarness extends Component implements HasSchemas
@@ -157,6 +176,8 @@ class ClinicalWorkspacePatientHarness extends Component implements HasSchemas
     public ?string $patientId = null;
 
     public string $mode = 'home';
+
+    public string $searchTerm = '';
 
     public string $activeTab = '';
 
