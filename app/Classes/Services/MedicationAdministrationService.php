@@ -10,13 +10,16 @@ use Modules\Clinical\Enums\MedicationAdministrationStatus;
 use Modules\Clinical\Models\Allergy;
 use Modules\Clinical\Models\MedicationAdministration;
 use Modules\Clinical\Models\RequestItem;
+use Modules\Core\Contracts\WardMedicationConsumptionContract;
 use Modules\Pharmacy\Enums\AdministrationContext;
+use Modules\Pharmacy\Models\Medication;
 
 class MedicationAdministrationService
 {
     public function __construct(
         protected MedicationFulfillmentPolicy $policy,
         protected MedicationDoseScheduleService $scheduleService,
+        protected WardMedicationConsumptionContract $wardMedicationConsumption,
     ) {}
 
     public function administerBatch(array $administrations, ?string $notes = null, ?User $user = null): array
@@ -155,8 +158,49 @@ class MedicationAdministrationService
                 $item->markAsFulfilled($user->id);
             }
 
+            $this->recordWardConsumptionIfApplicable($item, $administration, $quantityGiven);
+
             return $administration;
         });
+    }
+
+    protected function recordWardConsumptionIfApplicable(
+        RequestItem $item,
+        MedicationAdministration $administration,
+        int $quantityGiven,
+    ): void {
+        if ($quantityGiven <= 0 || $administration->status !== MedicationAdministrationStatus::GIVEN) {
+            return;
+        }
+
+        $detail = $item->prescriptionDetail;
+        if ($detail === null || $detail->administration_context !== AdministrationContext::IN_FACILITY) {
+            return;
+        }
+
+        $serviceRequest = $item->serviceRequest;
+        $departmentId = $serviceRequest?->encounter?->department_id;
+        $branchId = $serviceRequest?->branch_id;
+
+        if ($departmentId === null || $branchId === null || $item->service_id === null) {
+            return;
+        }
+
+        $medicationId = Medication::query()
+            ->where('service_id', $item->service_id)
+            ->value('id');
+
+        if ($medicationId === null) {
+            return;
+        }
+
+        $this->wardMedicationConsumption->consumeMedicationFromWard(
+            medicationId: (string) $medicationId,
+            branchId: (string) $branchId,
+            departmentId: (string) $departmentId,
+            qty: $quantityGiven,
+            reference: $administration,
+        );
     }
 
     public function discontinueCourse(RequestItem $item, User $user, string $reason): void
