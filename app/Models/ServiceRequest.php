@@ -14,6 +14,7 @@ use Modules\Clinical\Database\Factories\ServiceRequestFactory;
 use Modules\Clinical\Enums\RequestItemStatus;
 use Modules\Clinical\Enums\RequestPriority;
 use Modules\Clinical\Enums\RequestStatus;
+use Modules\Core\Classes\Support\DocumentNumberGenerator;
 use Modules\Core\Contracts\ProvidesClientIdentity;
 use Modules\Core\Models\BaseModel;
 use Modules\Core\Models\Branch;
@@ -73,11 +74,10 @@ class ServiceRequest extends BaseModel implements ProvidesClientIdentity
 
     public static function generateRequestNumber(): string
     {
-        $prefix = 'SRQ';
-        $date = now()->format('Ymd');
-        $sequence = static::whereDate('created_at', today())->count() + 1;
-
-        return sprintf('%s-%s-%04d', $prefix, $date, $sequence);
+        return app(DocumentNumberGenerator::class)->next(
+            documentKey: 'service_request',
+            prefix: 'SRQ',
+        );
     }
 
     public function patient(): BelongsTo
@@ -167,6 +167,14 @@ class ServiceRequest extends BaseModel implements ProvidesClientIdentity
 
     public function getTotalAmountAttribute(): float
     {
+        if (array_key_exists('items_total_amount', $this->attributes)) {
+            return (float) $this->attributes['items_total_amount'];
+        }
+
+        if (isset($this->items_total_amount)) {
+            return (float) $this->items_total_amount;
+        }
+
         return $this->items->sum('total_price');
     }
 
@@ -182,13 +190,17 @@ class ServiceRequest extends BaseModel implements ProvidesClientIdentity
 
     public function getProgressPercentageAttribute(): float
     {
-        $total = $this->items->count();
+        $total = (int) ($this->items_count ?? $this->items()->count());
 
         if ($total === 0) {
             return 0;
         }
 
-        return round(($this->completed_items_count / $total) * 100, 1);
+        $completed = (int) ($this->completed_items_count ?? $this->items()
+            ->where('status', RequestItemStatus::COMPLETED)
+            ->count());
+
+        return round(($completed / $total) * 100, 1);
     }
 
     public function isFullyFulfilled(): bool

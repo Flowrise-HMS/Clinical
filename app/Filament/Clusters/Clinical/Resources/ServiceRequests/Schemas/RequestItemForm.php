@@ -11,8 +11,7 @@ use Filament\Schemas\Components\Utilities\Get;
 use Filament\Schemas\Components\Utilities\Set;
 use Filament\Schemas\Schema;
 use Modules\Clinical\Enums\RequestItemStatus;
-use Modules\Core\Models\Service;
-use Modules\Core\Models\ServiceVariant;
+use Modules\Core\Classes\Support\BillableServiceCatalog;
 
 class RequestItemForm
 {
@@ -21,52 +20,32 @@ class RequestItemForm
         return [
             Select::make('service_id')
                 ->label('Service')
-                ->options(fn () => Service::active()->billable()->nonMedication()->with('category')->get()->groupBy('category.name')->map(fn ($group) => $group->pluck('name', 'id'))->toArray())
                 ->searchable()
-                ->preload()
+                ->getSearchResultsUsing(fn (string $search): array => BillableServiceCatalog::search($search))
+                ->getOptionLabelUsing(fn ($value): ?string => BillableServiceCatalog::labelForId($value))
                 ->required()
                 ->live()
-                ->afterStateUpdated(function ($state, Set $set) {
+                ->afterStateUpdated(function ($state, Set $set): void {
                     $set('service_variant_id', null);
-                    if ($state) {
-                        $service = Service::find($state);
-                        $set('unit_price', $service?->price ?? 0);
-                    }
+                    $set('unit_price', BillableServiceCatalog::defaultPrice($state));
                 }),
 
             Select::make('service_variant_id')
                 ->label('Variant')
-                ->options(function (Get $get) {
-                    $serviceId = $get('service_id');
-                    if (! $serviceId) {
-                        return [];
-                    }
-                    $service = Service::find($serviceId);
-                    if (! $service) {
-                        return [];
-                    }
-
-                    return $service->variants()->active()->pluck('name', 'id')->toArray();
-                })
+                ->options(fn (Get $get): array => BillableServiceCatalog::variantsForService($get('service_id')))
                 ->searchable()
-                ->preload()
                 ->nullable()
                 ->live()
-                ->afterStateUpdated(function ($state, Set $set, Get $get) {
-                    if ($state) {
-                        $variant = ServiceVariant::find($state);
-                        if ($variant) {
-                            $set('unit_price', $variant->price);
-                        }
-                    } else {
-                        $serviceId = $get('service_id');
-                        if ($serviceId) {
-                            $service = Service::find($serviceId);
-                            if ($service) {
-                                $set('unit_price', $service->getDefaultPrice());
-                            }
-                        }
+                ->afterStateUpdated(function ($state, Set $set, Get $get): void {
+                    $variantPrice = BillableServiceCatalog::variantPrice($state);
+
+                    if ($variantPrice !== null) {
+                        $set('unit_price', $variantPrice);
+
+                        return;
                     }
+
+                    $set('unit_price', BillableServiceCatalog::defaultPrice($get('service_id')));
                 }),
 
             TextInput::make('quantity')

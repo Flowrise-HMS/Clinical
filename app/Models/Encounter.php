@@ -16,6 +16,7 @@ use Modules\Clinical\Enums\EncounterPriority;
 use Modules\Clinical\Enums\EncounterStatus;
 use Modules\Clinical\Enums\EncounterType;
 use Modules\Clinical\Enums\ParticipantStatus;
+use Modules\Core\Classes\Support\DocumentNumberGenerator;
 use Modules\Core\Contracts\ProvidesClientIdentity;
 use Modules\Core\Enums\CoverageType;
 use Modules\Core\Models\BaseModel;
@@ -100,11 +101,10 @@ class Encounter extends BaseModel implements ProvidesClientIdentity
 
     public static function generateEncounterNumber(): string
     {
-        $prefix = 'ENC';
-        $date = now()->format('Ymd');
-        $sequence = static::whereDate('created_at', today())->count() + 1;
-
-        return sprintf('%s-%s-%04d', $prefix, $date, $sequence);
+        return app(DocumentNumberGenerator::class)->next(
+            documentKey: 'encounter',
+            prefix: 'ENC',
+        );
     }
 
     public function patient(): BelongsTo

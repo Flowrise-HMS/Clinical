@@ -7,11 +7,15 @@ use Filament\Forms\Components\Textarea;
 use Filament\Notifications\Notification;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Widgets\TableWidget as BaseTableWidget;
+use Illuminate\Contracts\Pagination\CursorPaginator;
+use Illuminate\Contracts\Pagination\Paginator;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Auth;
 use Modules\Clinical\Classes\Services\FulfillmentService;
 use Modules\Clinical\Classes\Services\MedicationAdministrationService;
 use Modules\Clinical\Classes\Services\MedicationFulfillmentPolicy;
+use Modules\Clinical\Classes\Support\RequestItemTableEnricher;
 use Modules\Clinical\Filament\Support\MarRecordDoseFormSchema;
 use Modules\Clinical\Models\RequestItem;
 use Modules\Core\Classes\Services\BranchService;
@@ -39,13 +43,14 @@ class PendingFulfillmentsWidget extends BaseTableWidget
             ->whereHas('serviceRequest', fn (Builder $q) => $q->when($branchId, fn (Builder $q) => $q->where('branch_id', $branchId)))
             ->where(fn (Builder $q) => $q->whereDoesntHave('service.roles')
                 ->orWhereHas('service.roles', fn (Builder $q) => $q->whereIn('name', $user->getRoleNames()->toArray())))
+            ->withFulfillmentAggregates()
             ->with([
                 'serviceRequest.patient',
                 'serviceRequest.orderedBy',
                 'serviceRequest.encounter',
                 'service.category',
                 'prescriptionDetail.doseUnit',
-                'medicationAdministrations' => fn ($q) => $q->latest(),
+                'invoiceLine',
             ])
             ->latest();
     }
@@ -92,7 +97,7 @@ class PendingFulfillmentsWidget extends BaseTableWidget
                     if (! $detail || ! $detail->total_administrations) {
                         return null;
                     }
-                    $given = $policy->countGivenDoses($record);
+                    $given = $policy->givenDosesCount($record);
                     $unit = $detail->doseUnit?->label ?? '';
 
                     return max(0, $detail->total_administrations - $given).'/'.$detail->total_administrations.' '.$unit;
@@ -215,6 +220,17 @@ class PendingFulfillmentsWidget extends BaseTableWidget
                     Notification::make()->title('Fulfillment failed')->body($e->getMessage())->danger()->persistent()->send();
                 }
             });
+    }
+
+    protected function paginateTableQuery(Builder $query): Paginator|CursorPaginator
+    {
+        $paginator = parent::paginateTableQuery($query);
+
+        RequestItemTableEnricher::applyFinancialHolds(
+            Collection::make($paginator->items()),
+        );
+
+        return $paginator;
     }
 
     protected function getTablePollingInterval(): ?string

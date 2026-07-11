@@ -5,6 +5,7 @@ namespace Modules\Clinical\Filament\Clusters\Clinical\Resources\Encounters;
 use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
 use Filament\Tables\Table;
+use Illuminate\Database\Eloquent\Builder;
 use Modules\Billing\Filament\RelationManagers\EncounterInvoicesRelationManager;
 use Modules\Clinical\Filament\Clusters\Clinical\ClinicalCluster;
 use Modules\Clinical\Filament\Clusters\Clinical\Resources\Encounters\Pages\CreateEncounter;
@@ -74,5 +75,11 @@ class EncounterResource extends Resource
             'edit' => EditEncounter::route('/{record}/edit'),
             'activities' => ListEncounterActivities::route('/{record}/activities'),
         ];
+    }
+
+    public static function getEloquentQuery(): Builder
+    {
+        return parent::getEloquentQuery()
+            ->with(['branch', 'patient', 'department']);
     }
 }

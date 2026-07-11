@@ -55,7 +55,8 @@ class MedicationAdministrationBoard extends Page implements HasTable
                         'serviceRequest',
                         fn (Builder $q) => $q->where('branch_id', $branchId)
                     ))
-                    ->with(['serviceRequest.patient', 'service', 'prescriptionDetail', 'medicationAdministrations'])
+                    ->withFulfillmentAggregates()
+                    ->with(['serviceRequest.patient', 'service', 'prescriptionDetail'])
             )
             ->defaultSort('prescriptionDetail.next_dose_at')
             ->columns([
@@ -64,7 +65,7 @@ class MedicationAdministrationBoard extends Page implements HasTable
                 TextColumn::make('prescriptionDetail.frequency')->label('SIG'),
                 TextColumn::make('remaining')
                     ->label('Doses left')
-                    ->getStateUsing(fn (RequestItem $record) => $policy->countGivenDoses($record).'/'.($record->prescriptionDetail?->total_administrations ?? '∞')),
+                    ->getStateUsing(fn (RequestItem $record) => $policy->givenDosesCount($record).'/'.($record->prescriptionDetail?->total_administrations ?? '∞')),
                 TextColumn::make('prescriptionDetail.next_dose_at')
                     ->label('Next due')
                     ->dateTime('M j H:i')

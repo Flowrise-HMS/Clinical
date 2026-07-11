@@ -18,6 +18,9 @@ use Modules\Pharmacy\Models\PrescriptionDetail;
 
 class MedicationFulfillmentPolicy
 {
+    /** @var array<string, ?Medication> */
+    protected array $medicationByServiceId = [];
+
     public function requiresMar(PrescriptionDetail $detail): bool
     {
         return $detail->administration_context === AdministrationContext::IN_FACILITY;
@@ -73,7 +76,7 @@ class MedicationFulfillmentPolicy
         }
 
         if ($detail->total_administrations !== null) {
-            $given = $this->countGivenDoses($item);
+            $given = $this->givenDosesCount($item);
             if ($given >= $detail->total_administrations) {
                 return false;
             }
@@ -181,7 +184,7 @@ class MedicationFulfillmentPolicy
         }
 
         if ($detail->total_administrations !== null) {
-            return $this->countGivenDoses($item) >= $detail->total_administrations;
+            return $this->givenDosesCount($item) >= $detail->total_administrations;
         }
 
         return $detail->course_end_at !== null && now()->gt($detail->course_end_at);
@@ -194,6 +197,15 @@ class MedicationFulfillmentPolicy
             ->sum('quantity_given');
     }
 
+    public function givenDosesCount(RequestItem $item): int
+    {
+        if (isset($item->given_doses)) {
+            return (int) $item->given_doses;
+        }
+
+        return $this->countGivenDoses($item);
+    }
+
     public function countConsumedSlots(RequestItem $item): int
     {
         return $item->medicationAdministrations()->count();
@@ -201,16 +213,27 @@ class MedicationFulfillmentPolicy
 
     public function requiresWitness(PrescriptionDetail $detail, RequestItem $item): bool
     {
-        $medication = Medication::query()->where('service_id', $item->service_id)->first();
+        $medication = $this->medicationForService((string) $item->service_id);
 
         return $medication?->controlled_schedule !== null;
     }
 
     public function isControlledMedication(RequestItem $item): bool
     {
-        $medication = Medication::query()->where('service_id', $item->service_id)->first();
+        $medication = $this->medicationForService((string) $item->service_id);
 
         return $medication?->controlled_schedule !== null;
+    }
+
+    protected function medicationForService(string $serviceId): ?Medication
+    {
+        if (! array_key_exists($serviceId, $this->medicationByServiceId)) {
+            $this->medicationByServiceId[$serviceId] = Medication::query()
+                ->where('service_id', $serviceId)
+                ->first();
+        }
+
+        return $this->medicationByServiceId[$serviceId];
     }
 
     protected function isParenteralRoute(?string $route): bool

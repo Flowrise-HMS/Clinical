@@ -15,6 +15,7 @@ use Illuminate\Database\Eloquent\Relations\MorphOne;
 use Modules\Billing\Enums\InvoiceLineStatus;
 use Modules\Billing\Models\InvoiceLine;
 use Modules\Clinical\Database\Factories\RequestItemFactory;
+use Modules\Clinical\Enums\MedicationAdministrationStatus;
 use Modules\Clinical\Enums\RequestItemStatus;
 use Modules\Core\Contracts\PatientFinancialHoldChecker;
 use Modules\Core\Models\Service;
@@ -27,6 +28,8 @@ class RequestItem extends Model
 {
     /** @use HasFactory<RequestItemFactory> */
     use HasFactory, HasUuids;
+
+    public ?bool $financialHoldResolved = null;
 
     protected $keyType = 'string';
 
@@ -116,6 +119,17 @@ class RequestItem extends Model
     public function getPaymentStatusAttribute(): ?InvoiceLineStatus
     {
         return $this->invoiceLine?->line_status;
+    }
+
+    public function scopeWithFulfillmentAggregates(Builder $query): Builder
+    {
+        return $query->withSum(
+            ['medicationAdministrations as given_doses' => fn (Builder $q) => $q->where(
+                'status',
+                MedicationAdministrationStatus::GIVEN,
+            )],
+            'quantity_given',
+        );
     }
 
     public function scopePending(Builder $query): Builder
@@ -208,6 +222,10 @@ class RequestItem extends Model
 
     public function hasActiveFinancialHold(): bool
     {
+        if ($this->financialHoldResolved !== null) {
+            return $this->financialHoldResolved;
+        }
+
         $settings = app(AppSettings::class);
 
         if (! $settings->billing()->financial_hold_enabled) {

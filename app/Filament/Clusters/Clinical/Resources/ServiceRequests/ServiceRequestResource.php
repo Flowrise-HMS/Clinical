@@ -5,6 +5,8 @@ namespace Modules\Clinical\Filament\Clusters\Clinical\Resources\ServiceRequests;
 use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
 use Filament\Tables\Table;
+use Illuminate\Database\Eloquent\Builder;
+use Modules\Clinical\Enums\RequestItemStatus;
 use Modules\Clinical\Filament\Clusters\Clinical\ClinicalCluster;
 use Modules\Clinical\Filament\Clusters\Clinical\Resources\ServiceRequests\Pages\CreateServiceRequest;
 use Modules\Clinical\Filament\Clusters\Clinical\Resources\ServiceRequests\Pages\EditServiceRequest;
@@ -61,5 +63,19 @@ class ServiceRequestResource extends Resource
             'edit' => EditServiceRequest::route('/{record}/edit'),
             'activities' => ListServiceRequestActivities::route('/{record}/activities'),
         ];
+    }
+
+    public static function getEloquentQuery(): Builder
+    {
+        return parent::getEloquentQuery()
+            ->with(['patient', 'orderedBy'])
+            ->withSum('items as items_total_amount', 'total_price')
+            ->withCount([
+                'items',
+                'items as completed_items_count' => fn (Builder $query) => $query->where(
+                    'status',
+                    RequestItemStatus::COMPLETED,
+                ),
+            ]);
     }
 }
