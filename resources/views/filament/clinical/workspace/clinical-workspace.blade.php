@@ -104,15 +104,17 @@
         @endif
         @if ($mode === 'patient' && $currentPatient)
             {{-- ===== PATIENT CONTEXT MODE ===== --}}
-
+            @livewire(\Modules\Clinical\Filament\Widgets\PatientVitalsOverviewWidget::class,[
+                'patientId' => $currentPatient->id,
+            ])
             {{-- Patient Banner --}}
             <div
-                class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm overflow-hidden">
+                class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm mt-5 mb-5 overflow-hidden">
                 <div class="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4 p-3 sm:p-4">
                     {{-- Patient Photo / Initials --}}
                     <div class="flex items-center gap-3 sm:gap-4 flex-1 min-w-0">
                         @if ($currentPatient->photo)
-                            <img src="{{ $currentPatient->photo_url }}" alt=""
+                            <img src="{{ $currentPatient->photo_url }}" alt="client photo"
                                 class="w-8 h-8 rounded-full object-cover shrink-0 border-2 border-gray-200 dark:border-gray-600">
                         @else
                             <div
@@ -187,7 +189,7 @@
                 <div class="space-y-4">
                     {{-- Tab Bar --}}
                     <div class="overflow-x-auto -mx-1 px-1">
-                        <div class="flex gap-1 min-w-max p-0.5 bg-gray-100 dark:bg-gray-800/50 rounded-xl">
+                        <div class="flex gap-1 min-w-max p-0.5 rounded-xl">
                             @foreach ($this->getNurseTabs() as $tabKey => $tab)
                                 <button wire:click="$set('activeTab', '{{ $tabKey }}')"
                                     class="flex items-center gap-1.5 px-3 sm:px-4 py-2 rounded-lg text-sm font-medium transition-all whitespace-nowrap

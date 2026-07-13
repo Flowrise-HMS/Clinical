@@ -14,6 +14,9 @@ use Modules\Patient\Filament\Clusters\Patient\Resources\Patients\Schemas\Patient
 use Modules\Patient\Models\Patient;
 use Modules\Patient\Policies\PatientPolicy;
 
+/**
+ * @property ?Patient $currentPatient
+ */
 trait ManagesWorkspacePatient
 {
     public array $registerFormData = [];
@@ -110,7 +113,7 @@ trait ManagesWorkspacePatient
         $schema->model($patient)->saveRelationships();
 
         if (config('insurance.enabled', true) && app()->bound(PatientInsuranceService::class)) {
-            app(PatientInsuranceService::class)->createPolicyFromData($patient->id, $data);
+            app(PatientInsuranceService::class)->syncFromFormData($patient->id, $data);
         }
 
         if (class_exists(PatientRegistered::class)) {
@@ -147,6 +150,10 @@ trait ManagesWorkspacePatient
         $data = $schema->getState();
 
         $this->currentPatient->update($data);
+
+        if (config('insurance.enabled', true) && app()->bound(PatientInsuranceService::class)) {
+            app(PatientInsuranceService::class)->syncFromFormData($this->currentPatient->id, $data);
+        }
 
         $this->loadPatientContext();
         $this->fillPatientFormDataFromCurrentPatient();
@@ -256,9 +263,18 @@ trait ManagesWorkspacePatient
             return;
         }
 
-        $patient = $this->currentPatient->loadMissing(['identifiers', 'emergencyContacts', 'schools']);
+        $patient = $this->currentPatient->loadMissing(['identifiers', 'emergencyContacts', 'schools', 'insurancePolicies']);
 
         if (! method_exists($this, 'getSchema')) {
+            $insuranceData = [];
+            if (config('insurance.enabled', true) && app()->bound(PatientInsuranceService::class)) {
+                $policy = $patient->insurancePolicies
+                    ->where('is_active', true)
+                    ->sortByDesc('is_primary')
+                    ->first();
+                $insuranceData = app(PatientInsuranceService::class)->formDataFromPolicy($policy);
+            }
+
             $this->patientFormData = [
                 'mrn' => $patient->mrn,
                 'title' => $patient->title?->value ?? $patient->title,
@@ -279,16 +295,28 @@ trait ManagesWorkspacePatient
                 'preferred_language' => $patient->preferred_language,
                 'address' => $patient->address ?? [],
                 'photo' => $patient->photo,
+                ...$insuranceData,
             ];
 
             return;
         }
 
         $schema = $this->getSchema('patientDetailsForm');
-        $schema->model($patient)->fill([
+        $data = [
             ...$patient->attributesToArray(),
             'is_student' => $patient->schools->isNotEmpty(),
-        ]);
+        ];
+
+        if (config('insurance.enabled', true) && app()->bound(PatientInsuranceService::class)) {
+            $policy = $patient->insurancePolicies
+                ->where('is_active', true)
+                ->sortByDesc('is_primary')
+                ->first();
+            $insuranceData = app(PatientInsuranceService::class)->formDataFromPolicy($policy);
+            $data = [...$data, ...$insuranceData];
+        }
+
+        $schema->model($patient)->fill($data);
         $schema->loadStateFromRelationships(shouldHydrate: true);
     }
 

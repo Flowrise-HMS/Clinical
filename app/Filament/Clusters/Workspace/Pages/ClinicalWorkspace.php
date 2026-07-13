@@ -94,8 +94,6 @@ class ClinicalWorkspace extends Page implements HasSchemas
 
     public string $activeTab = '';
 
-    public ?Patient $currentPatient = null;
-
     public ?Encounter $currentEncounter = null;
 
     public string $searchTerm = '';
@@ -248,7 +246,43 @@ class ClinicalWorkspace extends Page implements HasSchemas
                     : $dx['label'], $existing['diagnoses']);
                 $this->diagnosisNotes = $existing['notes'];
             }
+
+            $this->fillEncounterFormData();
         }
+    }
+
+    public function hasOpenEncounter(): bool
+    {
+        return $this->getOpenEncounter() !== null;
+    }
+
+    public function getOpenEncounter(): ?Encounter
+    {
+        if (! $this->currentPatient) {
+            return null;
+        }
+
+        if ($this->currentPatient->relationLoaded('activeEncounter')) {
+            return $this->currentPatient->activeEncounter;
+        }
+
+        return $this->currentPatient->activeEncounter()->first();
+    }
+
+    protected function fillEncounterFormData(): void
+    {
+        $openEncounter = $this->getOpenEncounter();
+
+        if (! $openEncounter) {
+            $this->encounterFormData = [];
+
+            return;
+        }
+
+        $this->encounterFormData = [
+            'coverage_type' => $openEncounter->coverage_type?->value ?? $openEncounter->coverage_type ?? 'none',
+            'chief_complaint' => $openEncounter->chief_complaint,
+        ];
     }
 
     protected function setDefaultTab(): void
@@ -314,13 +348,15 @@ class ClinicalWorkspace extends Page implements HasSchemas
 
     protected function getHeaderWidgets(): array
     {
+        $widgets = [];
         if ($this->mode !== 'home') {
-            return [];
+            return $widgets;
         }
 
         return [
             CriticalPatientsWidget::class,
             MyTasksWidget::class,
+            ...$widgets,
             ...($this->hasAppointmentModule() ? [WorkspaceTodayAppointmentsWidget::class] : []),
         ];
     }
@@ -459,10 +495,10 @@ class ClinicalWorkspace extends Page implements HasSchemas
             return;
         }
 
-        if ($this->currentEncounter?->isActive()) {
+        if ($this->hasOpenEncounter()) {
             Notification::make()
                 ->title('Active encounter exists')
-                ->body('This patient already has an active encounter. Switch to the Vitals tab to continue.')
+                ->body('This patient already has an open encounter. Switch to the Vitals tab to continue.')
                 ->warning()
                 ->send();
 
@@ -481,7 +517,7 @@ class ClinicalWorkspace extends Page implements HasSchemas
         }
 
         $this->currentEncounter = $encounter->fresh();
-        $this->encounterFormData = [];
+        $this->fillEncounterFormData();
         $this->activeTab = 'vitals';
 
         if ($this->postRegistrationFlow) {
@@ -695,12 +731,12 @@ class ClinicalWorkspace extends Page implements HasSchemas
     {
         return array_merge([
             'encounterForm' => $this->makeSchema()
+                ->model(fn (): ?Encounter => $this->getOpenEncounter())
                 ->schema([
                     Grid::make(2)
                         ->schema([
                             Select::make('coverage_type')
                                 ->label('Coverage Type')
-                                ->default('none')
                                 ->options([
                                     'nhis' => 'NHIS',
                                     'private' => 'Private Insurance',
@@ -708,12 +744,13 @@ class ClinicalWorkspace extends Page implements HasSchemas
                                 ])
                                 ->required()
                                 ->native(false),
-                            TextInput::make('chief_complaint')
+                            Textarea::make('chief_complaint')
                                 ->label('Chief Complaint')
                                 ->placeholder('Reason for visit')
                                 ->columnSpanFull(),
                         ]),
                 ])
+                ->disabled(fn (): bool => $this->hasOpenEncounter())
                 ->statePath('encounterFormData'),
             'vitalsForm' => $this->makeSchema()
                 ->schema(VitalSignForm::quickElements())
