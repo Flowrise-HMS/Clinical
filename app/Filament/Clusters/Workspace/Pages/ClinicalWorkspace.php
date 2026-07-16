@@ -94,6 +94,7 @@ class ClinicalWorkspace extends Page implements HasSchemas
 
     public string $activeTab = '';
 
+
     public ?Encounter $currentEncounter = null;
 
     public string $searchTerm = '';
