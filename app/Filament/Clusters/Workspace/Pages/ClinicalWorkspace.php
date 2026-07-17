@@ -21,7 +21,9 @@ use Livewire\Attributes\Computed;
 use Livewire\Attributes\On;
 use Livewire\Attributes\Url;
 use Modules\Clinical\Classes\Actions\PatientActions;
+use Modules\Clinical\Classes\Services\AdtService;
 use Modules\Clinical\Classes\Services\AllergyService;
+use Modules\Clinical\Classes\Services\BedAssignmentService;
 use Modules\Clinical\Classes\Services\ClinicalNoteService;
 use Modules\Clinical\Classes\Services\ClinicalWorkspaceService;
 use Modules\Clinical\Classes\Services\DiagnosisService;
@@ -29,6 +31,7 @@ use Modules\Clinical\Classes\Services\EncounterService;
 use Modules\Clinical\Classes\Services\FulfillmentService;
 use Modules\Clinical\Classes\Services\ServiceRequestService;
 use Modules\Clinical\Classes\Services\VitalSignService;
+use Modules\Clinical\Enums\AdtDestinationType;
 use Modules\Clinical\Enums\DischargeDisposition;
 use Modules\Clinical\Enums\EncounterPriority;
 use Modules\Clinical\Enums\EncounterType;
@@ -50,7 +53,9 @@ use Modules\Clinical\Models\DiagnosisCode;
 use Modules\Clinical\Models\Encounter;
 use Modules\Clinical\Models\EncounterDiagnosis;
 use Modules\Clinical\Models\RequestItem;
+use Modules\Core\Classes\Services\BranchService;
 use Modules\Core\Classes\Support\PageHeaderActionsRegistry;
+use Modules\Core\Models\Branch;
 use Modules\Core\Models\Service;
 use Modules\Core\Settings\FeatureSettings;
 use Modules\Patient\Classes\Services\PatientSearchService;
@@ -125,6 +130,8 @@ class ClinicalWorkspace extends Page implements HasSchemas
 
     public array $dischargeData = [];
 
+    public array $adtFormData = [];
+
     public array $referralData = [];
 
     protected ?ClinicalWorkspaceService $workspaceService = null;
@@ -139,6 +146,10 @@ class ClinicalWorkspace extends Page implements HasSchemas
 
     protected ?EncounterService $encounterService = null;
 
+    protected ?AdtService $adtService = null;
+
+    protected ?BedAssignmentService $bedAssignmentService = null;
+
     protected ?AllergyService $allergyService = null;
 
     protected ?DiagnosisService $diagnosisService = null;
@@ -151,6 +162,8 @@ class ClinicalWorkspace extends Page implements HasSchemas
         $this->clinicalNoteService ??= app(ClinicalNoteService::class);
         $this->serviceRequestService ??= app(ServiceRequestService::class);
         $this->encounterService ??= app(EncounterService::class);
+        $this->adtService ??= app(AdtService::class);
+        $this->bedAssignmentService ??= app(BedAssignmentService::class);
         $this->allergyService ??= app(AllergyService::class);
         $this->diagnosisService ??= app(DiagnosisService::class);
 
@@ -220,6 +233,7 @@ class ClinicalWorkspace extends Page implements HasSchemas
         $this->allergyData = [];
         $this->medicationData = [];
         $this->dischargeData = [];
+        $this->adtFormData = [];
         $this->referralData = [];
     }
 
@@ -231,8 +245,10 @@ class ClinicalWorkspace extends Page implements HasSchemas
 
         $this->currentPatient = Patient::with([
             'allergies',
-            'activeEncounter',
-            'latestEncounter',
+            'activeEncounter.bed',
+            'activeEncounter.location',
+            'latestEncounter.bed',
+            'latestEncounter.location',
             'latestVitals',
         ])->find($this->patientId);
 
@@ -281,8 +297,39 @@ class ClinicalWorkspace extends Page implements HasSchemas
         }
 
         $this->encounterFormData = [
+            'type' => $openEncounter->type?->value ?? EncounterType::OUTPATIENT->value,
             'coverage_type' => $openEncounter->coverage_type?->value ?? $openEncounter->coverage_type ?? 'none',
             'chief_complaint' => $openEncounter->chief_complaint,
+        ];
+    }
+
+    /**
+     * @return array{type: ?string, status: ?string, status_color: string, ward: ?string, bed: ?string, los: ?string}
+     */
+    public function getEncounterStatusChip(): array
+    {
+        $encounter = $this->getOpenEncounter() ?? $this->currentEncounter;
+
+        if (! $encounter) {
+            return [
+                'type' => null,
+                'status' => null,
+                'status_color' => 'gray',
+                'ward' => null,
+                'bed' => null,
+                'los' => null,
+            ];
+        }
+
+        $encounter->loadMissing(['bed', 'location']);
+
+        return [
+            'type' => $encounter->type?->getLabel(),
+            'status' => $encounter->status?->getLabel(),
+            'status_color' => $encounter->status?->getColor() ?? 'gray',
+            'ward' => $encounter->location?->name,
+            'bed' => $encounter->bed?->name,
+            'los' => $encounter->duration,
         ];
     }
 
@@ -506,32 +553,259 @@ class ClinicalWorkspace extends Page implements HasSchemas
             return;
         }
 
+        $type = EncounterType::tryFrom($this->encounterFormData['type'] ?? '')
+            ?? EncounterType::OUTPATIENT;
+
+        $priority = $type === EncounterType::EMERGENCY
+            ? EncounterPriority::URGENT
+            : EncounterPriority::ROUTINE;
+
         $encounter = $this->encounterService->createForPatient(
             patient: $this->currentPatient,
-            type: EncounterType::OUTPATIENT,
+            type: $type,
             chiefComplaint: $this->encounterFormData['chief_complaint'] ?? null,
-            priority: EncounterPriority::ROUTINE,
+            priority: $priority,
         );
 
         if ($coverage = $this->encounterFormData['coverage_type'] ?? null) {
             $encounter->update(['coverage_type' => $coverage]);
         }
 
-        $this->currentEncounter = $encounter->fresh();
+        $this->currentEncounter = $encounter->fresh(['bed', 'location']);
+        $this->currentPatient?->unsetRelation('activeEncounter');
         $this->fillEncounterFormData();
-        $this->activeTab = 'vitals';
+        $this->activeTab = $type === EncounterType::INPATIENT ? 'adt' : 'vitals';
+
+        $label = $type->getLabel();
 
         if ($this->postRegistrationFlow) {
             Notification::make()
-                ->title('OPD encounter created')
-                ->body('Record vitals next.')
+                ->title("{$label} encounter created")
+                ->body($type === EncounterType::INPATIENT
+                    ? 'Assign a ward and bed next.'
+                    : 'Record vitals next.')
                 ->success()
                 ->send();
 
             return;
         }
 
-        Notification::make()->title('OPD encounter created')->success()->send();
+        Notification::make()->title("{$label} encounter created")->success()->send();
+    }
+
+    public function admitToBed(): void
+    {
+        if (! $this->currentPatient) {
+            Notification::make()->title('No patient selected')->danger()->send();
+
+            return;
+        }
+
+        $bedId = $this->adtFormData['bed_id'] ?? null;
+        if (blank($bedId)) {
+            Notification::make()->title('Select a bed')->danger()->send();
+
+            return;
+        }
+
+        $open = $this->getOpenEncounter();
+        if ($open) {
+            $this->authorizeEncounterUpdate($open);
+        } elseif (! Auth::user()?->can('Create Encounter')) {
+            Notification::make()->title('Not authorized')->danger()->send();
+
+            return;
+        }
+
+        try {
+            $encounter = $this->adtService->admit(
+                $this->currentPatient,
+                $bedId,
+                departmentId: $this->adtFormData['department_id'] ?? null,
+                chiefComplaint: $this->adtFormData['chief_complaint']
+                    ?? $this->encounterFormData['chief_complaint']
+                    ?? null,
+                notes: $this->adtFormData['notes'] ?? null,
+            );
+
+            $this->refreshAdtContext($encounter);
+            $this->adtFormData = [];
+            Notification::make()->title('Patient admitted')->success()->send();
+        } catch (\Throwable $e) {
+            Notification::make()->title('Admit failed')->body($e->getMessage())->danger()->send();
+        }
+    }
+
+    public function transferInternal(): void
+    {
+        $encounter = $this->getOpenEncounter();
+        if (! $encounter) {
+            Notification::make()->title('No active encounter')->danger()->send();
+
+            return;
+        }
+
+        $this->authorizeEncounterUpdate($encounter);
+
+        $bedId = $this->adtFormData['transfer_bed_id'] ?? null;
+        if (blank($bedId)) {
+            Notification::make()->title('Select a destination bed')->danger()->send();
+
+            return;
+        }
+
+        try {
+            $encounter = $this->adtService->transferInternal(
+                $encounter,
+                $bedId,
+                toDepartmentId: $this->adtFormData['transfer_department_id'] ?? null,
+                notes: $this->adtFormData['transfer_notes'] ?? null,
+            );
+
+            $this->refreshAdtContext($encounter);
+            $this->adtFormData = [];
+            Notification::make()->title('Patient transferred')->success()->send();
+        } catch (\Throwable $e) {
+            Notification::make()->title('Transfer failed')->body($e->getMessage())->danger()->send();
+        }
+    }
+
+    public function transferOut(): void
+    {
+        $encounter = $this->getOpenEncounter();
+        if (! $encounter) {
+            Notification::make()->title('No active encounter')->danger()->send();
+
+            return;
+        }
+
+        $this->authorizeEncounterDischarge($encounter);
+
+        try {
+            $destinationType = AdtDestinationType::from(
+                $this->adtFormData['destination_type'] ?? AdtDestinationType::ExternalFacility->value
+            );
+
+            $this->adtService->transferOut(
+                $encounter,
+                $destinationType,
+                destinationLabel: $this->adtFormData['destination_label'] ?? null,
+                destinationBranchId: $this->adtFormData['destination_branch_id'] ?? null,
+                notes: $this->adtFormData['transfer_out_notes'] ?? null,
+            );
+
+            $this->adtFormData = [];
+            $this->currentEncounter = null;
+            $this->currentPatient?->unsetRelation('activeEncounter');
+            $this->loadPatientContext();
+            Notification::make()->title('Patient transferred out')->success()->send();
+        } catch (\Throwable $e) {
+            Notification::make()->title('Transfer out failed')->body($e->getMessage())->danger()->send();
+        }
+    }
+
+    public function transferIn(): void
+    {
+        if (! $this->currentPatient) {
+            Notification::make()->title('No patient selected')->danger()->send();
+
+            return;
+        }
+
+        if ($this->hasOpenEncounter()) {
+            Notification::make()
+                ->title('Active encounter exists')
+                ->body('Finish or cancel the open encounter before admitting from transfer.')
+                ->warning()
+                ->send();
+
+            return;
+        }
+
+        if (! Auth::user()?->can('Create Encounter')) {
+            Notification::make()->title('Not authorized')->danger()->send();
+
+            return;
+        }
+
+        $bedId = $this->adtFormData['transfer_in_bed_id'] ?? null;
+        if (blank($bedId)) {
+            Notification::make()->title('Select a bed')->danger()->send();
+
+            return;
+        }
+
+        $isLocal = ($this->adtFormData['admission_source'] ?? 'local') === 'local';
+
+        try {
+            $encounter = $this->adtService->transferIn(
+                $this->currentPatient,
+                $bedId,
+                sourceLabel: $this->adtFormData['source_label'] ?? null,
+                fromBranchId: $this->adtFormData['from_branch_id'] ?? null,
+                chiefComplaint: $this->adtFormData['transfer_in_chief_complaint'] ?? null,
+                notes: $this->adtFormData['transfer_in_notes'] ?? null,
+            );
+
+            $this->refreshAdtContext($encounter);
+            $this->adtFormData = [];
+            $this->activeTab = 'vitals';
+            Notification::make()->title($isLocal ? 'Patient admitted successfully' : 'Patient admitted from transfer')->success()->send();
+        } catch (\Throwable $e) {
+            Notification::make()->title($isLocal ? 'Admission failed' : 'Transfer in failed')->body($e->getMessage())->danger()->send();
+        }
+    }
+
+    protected function authorizeEncounterUpdate(Encounter $encounter): void
+    {
+        if (! Auth::user()?->can('update', $encounter)) {
+            throw new \Illuminate\Auth\Access\AuthorizationException(__('Not authorized to update this encounter.'));
+        }
+    }
+
+    protected function authorizeEncounterDischarge(Encounter $encounter): void
+    {
+        $user = Auth::user();
+
+        if (! ($user?->can('discharge_patient') || $user?->can('update', $encounter))) {
+            throw new \Illuminate\Auth\Access\AuthorizationException(__('Not authorized to discharge this encounter.'));
+        }
+    }
+
+    protected function refreshAdtContext(Encounter $encounter): void
+    {
+        $this->currentEncounter = $encounter->fresh(['bed', 'location']);
+        $this->currentPatient?->unsetRelation('activeEncounter');
+        $this->currentPatient?->unsetRelation('latestEncounter');
+        $this->loadPatientContext();
+        $this->fillEncounterFormData();
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    public function getWardOptions(): array
+    {
+        $branchId = $this->currentEncounter?->branch_id
+            ?? $this->currentPatient?->branch_id;
+
+        if (blank($branchId)) {
+            return [];
+        }
+
+        return $this->bedAssignmentService->getWardsForBranch($branchId)->all();
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    public function getAvailableBedOptions(?string $wardId): array
+    {
+        if (blank($wardId)) {
+            return [];
+        }
+
+        return $this->bedAssignmentService->getAvailableBeds($wardId)->all();
     }
 
     public function saveDiagnoses(): void
@@ -671,21 +945,28 @@ class ClinicalWorkspace extends Page implements HasSchemas
 
     public function saveDischarge(): void
     {
-        if (! $this->currentEncounter) {
+        $encounter = $this->getOpenEncounter();
+
+        if (! $encounter) {
             Notification::make()->title('No active encounter')->danger()->send();
 
             return;
         }
 
+        $this->authorizeEncounterDischarge($encounter);
+
         try {
-            $this->encounterService->discharge(
-                $this->currentEncounter,
+            $this->adtService->discharge(
+                $encounter,
                 DischargeDisposition::from($this->dischargeData['discharge_disposition'] ?? 'completed'),
                 $this->dischargeData['transfer_destination'] ?? null,
+                notes: $this->dischargeData['discharge_notes'] ?? null,
             );
 
             $this->dischargeData = [];
             $this->currentEncounter = null;
+            $this->currentPatient?->unsetRelation('activeEncounter');
+            $this->loadPatientContext();
             Notification::make()->title('Patient discharged')->success()->send();
         } catch (\Exception $e) {
             Notification::make()
@@ -736,6 +1017,16 @@ class ClinicalWorkspace extends Page implements HasSchemas
                 ->schema([
                     Grid::make(2)
                         ->schema([
+                            Select::make('type')
+                                ->label('Encounter Type')
+                                ->options([
+                                    EncounterType::OUTPATIENT->value => EncounterType::OUTPATIENT->getLabel(),
+                                    EncounterType::INPATIENT->value => EncounterType::INPATIENT->getLabel(),
+                                    EncounterType::EMERGENCY->value => EncounterType::EMERGENCY->getLabel(),
+                                ])
+                                ->default(EncounterType::OUTPATIENT->value)
+                                ->required()
+                                ->native(false),
                             Select::make('coverage_type')
                                 ->label('Coverage Type')
                                 ->options([
@@ -753,6 +1044,111 @@ class ClinicalWorkspace extends Page implements HasSchemas
                 ])
                 ->disabled(fn (): bool => $this->hasOpenEncounter())
                 ->statePath('encounterFormData'),
+            'adtAdmitForm' => $this->makeSchema()
+                ->schema([
+                    Select::make('ward_id')
+                        ->label('Ward / Room')
+                        ->options(fn (): array => $this->getWardOptions())
+                        ->searchable()
+                        ->live()
+                        ->afterStateUpdated(fn ($state, callable $set) => $set('bed_id', null)),
+                    Select::make('bed_id')
+                        ->label('Bed')
+                        ->options(fn (callable $get): array => $this->getAvailableBedOptions($get('ward_id')))
+                        ->searchable()
+                        ->required()
+                        ->disabled(fn (callable $get) => blank($get('ward_id'))),
+                    Textarea::make('notes')
+                        ->label('Notes')
+                        ->rows(2),
+                ])
+                ->statePath('adtFormData'),
+            'adtTransferInternalForm' => $this->makeSchema()
+                ->schema([
+                    Select::make('transfer_ward_id')
+                        ->label('Destination ward / room')
+                        ->options(fn (): array => $this->getWardOptions())
+                        ->searchable()
+                        ->live()
+                        ->afterStateUpdated(fn ($state, callable $set) => $set('transfer_bed_id', null)),
+                    Select::make('transfer_bed_id')
+                        ->label('Destination bed')
+                        ->options(fn (callable $get): array => $this->getAvailableBedOptions($get('transfer_ward_id')))
+                        ->searchable()
+                        ->required()
+                        ->disabled(fn (callable $get) => blank($get('transfer_ward_id'))),
+                    Textarea::make('transfer_notes')
+                        ->label('Notes')
+                        ->rows(2),
+                ])
+                ->statePath('adtFormData'),
+            'adtTransferOutForm' => $this->makeSchema()
+                ->schema([
+                    Select::make('destination_type')
+                        ->label('Destination type')
+                        ->options([
+                            AdtDestinationType::Branch->value => AdtDestinationType::Branch->getLabel(),
+                            AdtDestinationType::ExternalFacility->value => AdtDestinationType::ExternalFacility->getLabel(),
+                        ])
+                        ->default(AdtDestinationType::ExternalFacility->value)
+                        ->live()
+                        ->required(),
+                    Select::make('destination_branch_id')
+                        ->label('Destination branch')
+                        ->options(fn (): array => Branch::query()->orderBy('name')->pluck('name', 'id')->all())
+                        ->searchable()
+                        ->visible(fn (callable $get) => $get('destination_type') === AdtDestinationType::Branch->value)
+                        ->required(fn (callable $get) => $get('destination_type') === AdtDestinationType::Branch->value),
+                    TextInput::make('destination_label')
+                        ->label('Destination facility')
+                        ->visible(fn (callable $get) => $get('destination_type') === AdtDestinationType::ExternalFacility->value)
+                        ->required(fn (callable $get) => $get('destination_type') === AdtDestinationType::ExternalFacility->value),
+                    Textarea::make('transfer_out_notes')
+                        ->label('Notes')
+                        ->rows(2),
+                ])
+                ->statePath('adtFormData'),
+            'adtTransferInForm' => $this->makeSchema()
+                ->schema([
+                    Select::make('admission_source')
+                        ->label('Admission source')
+                        ->options([
+                            'local' => 'Local (Admit from Consultation / ER)',
+                            'transfer_in' => 'Transfer In (Referral from other Branch / Hospital)',
+                        ])
+                        ->default('local')
+                        ->live()
+                        ->required(),
+                    TextInput::make('source_label')
+                        ->label('Transferring facility')
+                        ->placeholder('Hospital or clinic name')
+                        ->visible(fn (callable $get) => $get('admission_source') === 'transfer_in'),
+                    Select::make('from_branch_id')
+                        ->label('From branch (same org)')
+                        ->options(fn (): array => Branch::query()->orderBy('name')->pluck('name', 'id')->all())
+                        ->searchable()
+                        ->visible(fn (callable $get) => $get('admission_source') === 'transfer_in'),
+                    Textarea::make('transfer_in_chief_complaint')
+                        ->label('Chief complaint')
+                        ->rows(2),
+                    Select::make('transfer_in_ward_id')
+                        ->label('Ward / Room')
+                        ->required()
+                        ->options(fn (): array => $this->getWardOptions())
+                        ->searchable()
+                        ->live()
+                        ->afterStateUpdated(fn ($state, callable $set) => $set('transfer_in_bed_id', null)),
+                    Select::make('transfer_in_bed_id')
+                        ->label('Bed')
+                        ->options(fn (callable $get): array => $this->getAvailableBedOptions($get('transfer_in_ward_id')))
+                        ->searchable()
+                        ->required()
+                        ->disabled(fn (callable $get) => blank($get('transfer_in_ward_id'))),
+                    Textarea::make('transfer_in_notes')
+                        ->label('Notes')
+                        ->rows(2),
+                ])
+                ->statePath('adtFormData'),
             'vitalsForm' => $this->makeSchema()
                 ->schema(VitalSignForm::quickElements())
                 ->statePath('vitalsData'),
@@ -955,6 +1351,10 @@ class ClinicalWorkspace extends Page implements HasSchemas
                 'label' => 'Allergies',
                 'icon' => 'heroicon-m-exclamation-triangle',
             ],
+            'adt' => [
+                'label' => 'ADT',
+                'icon' => 'heroicon-m-arrows-right-left',
+            ],
             'discharge' => [
                 'label' => 'Discharge',
                 'icon' => 'heroicon-m-arrow-right-on-rectangle',
@@ -980,6 +1380,10 @@ class ClinicalWorkspace extends Page implements HasSchemas
             'encounter' => [
                 'label' => 'Encounter',
                 'icon' => 'heroicon-m-plus-circle',
+            ],
+            'adt' => [
+                'label' => 'ADT',
+                'icon' => 'heroicon-m-arrows-right-left',
             ],
             'vitals' => [
                 'label' => 'Vitals',

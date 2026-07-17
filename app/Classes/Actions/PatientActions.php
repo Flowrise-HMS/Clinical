@@ -561,8 +561,40 @@ class PatientActions
             ->name('discharge_patient')
             ->label('Discharge patient')
             ->visible(fn () => $encounter->canTransitionTo(EncounterStatus::FINISHED)
-                && (Auth::user()?->can('discharge_patient') ?? false))
+                && (
+                    (Auth::user()?->can('discharge_patient') ?? false)
+                    || (Auth::user()?->can('update', $encounter) ?? false)
+                ))
             ->successNotificationTitle('Patient discharged successfully');
+    }
+
+    public function transferInternalAction(): Action
+    {
+        $encounter = $this->patient?->activeEncounter()->first();
+
+        if (! $encounter) {
+            return Action::make('transfer_internal')->hidden();
+        }
+
+        return EncounterActions::transferInternal($encounter)
+            ->visible(fn () => ! $encounter->isCompleted()
+                && filled($encounter->bed_id)
+                && Auth::user()->can('update', $encounter))
+            ->successNotificationTitle('Patient transferred internally');
+    }
+
+    public function transferOutAction(): Action
+    {
+        $encounter = $this->patient?->activeEncounter()->first();
+
+        if (! $encounter) {
+            return Action::make('transfer_out')->hidden();
+        }
+
+        return EncounterActions::transferOut($encounter)
+            ->visible(fn () => $encounter->canTransitionTo(EncounterStatus::FINISHED)
+                && Auth::user()->can('update', $encounter))
+            ->successNotificationTitle('Patient transferred out');
     }
 
     public function encounter(): Action

@@ -11,7 +11,6 @@ use Modules\Clinical\Enums\EncounterType;
 use Modules\Clinical\Enums\ParticipantRole;
 use Modules\Clinical\Enums\ParticipantStatus;
 use Modules\Clinical\Events\EncounterCancelled;
-use Modules\Clinical\Events\EncounterFinished;
 use Modules\Clinical\Models\Encounter;
 use Modules\Clinical\Models\EncounterParticipant;
 use Modules\Core\Classes\Services\BranchService;
@@ -174,6 +173,7 @@ class EncounterService
             'discharged_at' => now(),
             'discharge_disposition' => $disposition ?? DischargeDisposition::COMPLETED,
             'bed_id' => null,
+            'location_id' => null,
         ];
 
         if ($transferDestination) {
@@ -189,7 +189,7 @@ class EncounterService
                 'left_at' => now(),
             ]);
 
-        EncounterFinished::dispatch($encounter);
+        // EncounterFinished is dispatched once by EncounterObserver when status becomes FINISHED.
 
         return $encounter->fresh();
     }

@@ -28,6 +28,12 @@ class EncounterDiagnosis extends BaseModel
         'is_active' => 'boolean',
     ];
 
+    protected static function bootBelongsToBranch(): void
+    {
+        // Encounter diagnoses inherit branch context via the parent encounter.
+        // The table has no branch_id column.
+    }
+
     public function encounter(): BelongsTo
     {
         return $this->belongsTo(Encounter::class);

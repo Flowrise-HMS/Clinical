@@ -137,9 +137,19 @@
                                 <span class="text-gray-300 dark:text-gray-600">|</span>
                                 <span>{{ $currentPatient->gender?->getLabel() ?? 'N/A' }}</span>
                                 @if ($currentEncounter)
+                                    @php $chip = $this->getEncounterStatusChip(); @endphp
                                     <span class="text-gray-300 dark:text-gray-600 hidden sm:inline">|</span>
-                                    <span
-                                        class="hidden sm:inline">{{ $currentEncounter->type?->getLabel() ?? 'Encounter' }}</span>
+                                    <span class="hidden sm:inline">{{ $chip['type'] ?? 'Encounter' }}</span>
+                                    @if ($chip['ward'] || $chip['bed'])
+                                        <x-filament::badge color="gray" class="text-xs">
+                                            {{ collect([$chip['ward'], $chip['bed']])->filter()->implode(' · ') }}
+                                        </x-filament::badge>
+                                    @endif
+                                    @if ($chip['los'])
+                                        <x-filament::badge color="info" class="text-xs">
+                                            LOS {{ $chip['los'] }}
+                                        </x-filament::badge>
+                                    @endif
                                     @if ($currentEncounter->coverage_type ?? null)
                                         <x-filament::badge :color="$currentEncounter->coverage_type->getColor() ?? 'gray'" class="text-xs">
                                             {{ $currentEncounter->coverage_type->getLabel() }}
@@ -188,14 +198,14 @@
                 {{-- ===== NURSE VIEW ===== --}}
                 <div class="space-y-4">
                     {{-- Tab Bar --}}
-                    <div class="overflow-x-auto -mx-1 px-1">
-                        <div class="flex gap-1 min-w-max p-0.5 rounded-xl">
+                    <div class="overflow-x-auto -mx-1 px-1 pb-1">
+                        <div class="flex gap-1 min-w-max p-1 bg-gray-100/80 dark:bg-gray-900/60 border border-gray-200/50 dark:border-gray-800/50 rounded-xl backdrop-blur-sm shadow-inner">
                             @foreach ($this->getNurseTabs() as $tabKey => $tab)
                                 <button wire:click="$set('activeTab', '{{ $tabKey }}')"
-                                    class="flex items-center gap-1.5 px-3 sm:px-4 py-2 rounded-lg text-sm font-medium transition-all whitespace-nowrap
+                                    class="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 whitespace-nowrap
                                         {{ $activeTab === $tabKey
-                                            ? 'bg-white dark:bg-gray-700 text-primary-700 dark:text-primary-300 shadow-sm'
-                                            : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 hover:bg-white/50 dark:hover:bg-gray-700/50' }}">
+                                            ? 'bg-white dark:bg-gray-800 text-primary-600 dark:text-primary-400 shadow-sm border border-gray-200/40 dark:border-gray-700/40 font-semibold transform scale-[1.02]'
+                                            : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 hover:bg-white/40 dark:hover:bg-gray-800/40' }}">
                                     @isset($tab['icon'])
                                         <x-filament::icon name="{{ $tab['icon'] }}" class="w-4 h-4" />
                                     @endisset
@@ -212,6 +222,8 @@
                             @include('clinical::clinical.workspace.partials.patient-details-tab')
                         @elseif ($activeTab === 'encounter')
                             @include('clinical::clinical.workspace.partials.encounter-tab')
+                        @elseif ($activeTab === 'adt')
+                            @include('clinical::clinical.workspace.partials.adt-tab')
                         @elseif ($activeTab === 'vitals')
                             <div class="space-y-4">
                                 <h3 class="text-lg font-semibold text-gray-900 dark:text-white">Record Vitals</h3>
@@ -275,14 +287,14 @@
                 {{-- ===== LAB TECHNICIAN VIEW ===== --}}
                 <div class="space-y-4">
                     {{-- Tab Bar --}}
-                    <div class="overflow-x-auto -mx-1 px-1">
-                        <div class="flex gap-1 min-w-max p-0.5 bg-gray-100 dark:bg-gray-800/50 rounded-xl">
+                    <div class="overflow-x-auto -mx-1 px-1 pb-1">
+                        <div class="flex gap-1 min-w-max p-1 bg-gray-100/80 dark:bg-gray-900/60 border border-gray-200/50 dark:border-gray-800/50 rounded-xl backdrop-blur-sm shadow-inner">
                             @foreach ($this->getLabTabs() as $tabKey => $tab)
                                 <button wire:click="$set('activeTab', '{{ $tabKey }}')"
-                                    class="flex items-center gap-1.5 px-3 sm:px-4 py-2 rounded-lg text-sm font-medium transition-all whitespace-nowrap
+                                    class="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 whitespace-nowrap
                                         {{ $activeTab === $tabKey
-                                            ? 'bg-white dark:bg-gray-700 text-primary-700 dark:text-primary-300 shadow-sm'
-                                            : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 hover:bg-white/50 dark:hover:bg-gray-700/50' }}">
+                                            ? 'bg-white dark:bg-gray-800 text-primary-600 dark:text-primary-400 shadow-sm border border-gray-200/40 dark:border-gray-700/40 font-semibold transform scale-[1.02]'
+                                            : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 hover:bg-white/40 dark:hover:bg-gray-800/40' }}">
                                     @isset($tab['icon'])
                                         <x-filament::icon name="{{ $tab['icon'] }}" class="w-4 h-4" />
                                     @endisset
@@ -411,14 +423,14 @@
                     {{-- Action Tabs --}}
                     <div class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700">
                         {{-- Tab Bar --}}
-                        <div class="overflow-x-auto -mx-1 px-1 pt-1">
-                            <div class="flex gap-1 min-w-max p-0.5 bg-gray-100 dark:bg-gray-800/50 rounded-t-xl mx-1">
+                        <div class="overflow-x-auto -mx-1 px-1 pt-1 pb-1">
+                            <div class="flex gap-1 min-w-max p-1 bg-gray-100/80 dark:bg-gray-900/60 border border-gray-200/50 dark:border-gray-800/50 rounded-t-xl mx-1 backdrop-blur-sm shadow-inner">
                                 @foreach ($this->getClinicianTabs() as $tabKey => $tab)
                                     <button wire:click="$set('activeTab', '{{ $tabKey }}')"
-                                        class="flex items-center gap-1.5 px-3 sm:px-4 py-2 rounded-lg text-sm font-medium transition-all whitespace-nowrap
+                                        class="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 whitespace-nowrap
                                             {{ $activeTab === $tabKey
-                                                ? 'bg-white dark:bg-gray-700 text-primary-700 dark:text-primary-300 shadow-sm'
-                                                : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 hover:bg-white/50 dark:hover:bg-gray-700/50' }}">
+                                                ? 'bg-white dark:bg-gray-800 text-primary-600 dark:text-primary-400 shadow-sm border border-gray-200/40 dark:border-gray-700/40 font-semibold transform scale-[1.02]'
+                                                : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 hover:bg-white/40 dark:hover:bg-gray-800/40' }}">
                                         @isset($tab['icon'])
                                             <x-filament::icon name="{{ $tab['icon'] }}" class="w-4 h-4" />
                                         @endisset
@@ -434,6 +446,8 @@
                                 @include('clinical::clinical.workspace.partials.patient-details-tab')
                             @elseif ($activeTab === 'encounter')
                                 @include('clinical::clinical.workspace.partials.encounter-tab')
+                            @elseif ($activeTab === 'adt')
+                                @include('clinical::clinical.workspace.partials.adt-tab')
                             @elseif ($activeTab === 'vitals')
                                 <div class="space-y-4">
                                     <h4 class="text-base font-semibold text-gray-900 dark:text-white">Record Vitals</h4>
@@ -500,7 +514,7 @@
                                 <div class="space-y-4">
                                     <h4 class="text-base font-semibold text-gray-900 dark:text-white">Discharge Patient
                                     </h4>
-                                    @if(!$currentEncounter)
+                                    @if(!$this->hasOpenEncounter())
                                         <x-filament::badge color="warning">No active encounter to discharge</x-filament::badge>
                                     @else
                                         {{ $this->dischargeForm }}

@@ -9,7 +9,6 @@ use Illuminate\Database\Eloquent\Factories\Factory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
-use Illuminate\Support\Facades\Auth;
 use Modules\Clinical\Database\Factories\EncounterFactory;
 use Modules\Clinical\Enums\DischargeDisposition;
 use Modules\Clinical\Enums\EncounterPriority;
@@ -130,6 +129,11 @@ class Encounter extends BaseModel implements ProvidesClientIdentity
     public function bed(): BelongsTo
     {
         return $this->belongsTo(Location::class, 'bed_id');
+    }
+
+    public function locationEvents(): HasMany
+    {
+        return $this->hasMany(EncounterLocationEvent::class)->orderByDesc('occurred_at');
     }
 
     public function admittedBy(): BelongsTo
@@ -306,19 +310,12 @@ class Encounter extends BaseModel implements ProvidesClientIdentity
 
     public function discharge(?int $dischargedBy = null, ?DischargeDisposition $disposition = null): void
     {
-        $this->update([
-            'status' => EncounterStatus::FINISHED,
-            'discharged_by' => $dischargedBy ?? Auth::id(),
-            'discharged_at' => now(),
-            'discharge_disposition' => $disposition ?? DischargeDisposition::COMPLETED,
-        ]);
-
-        $this->participants()
-            ->where('status', ParticipantStatus::ACTIVE)
-            ->update([
-                'status' => ParticipantStatus::COMPLETED,
-                'left_at' => now(),
-            ]);
+        app(\Modules\Clinical\Classes\Services\AdtService::class)->discharge(
+            $this,
+            $disposition,
+            null,
+            actedBy: $dischargedBy,
+        );
     }
 
     public function transferParticipant(int $userId, int $newUserId, string $newRole): void

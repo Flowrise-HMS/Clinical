@@ -8,12 +8,15 @@ use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
 use Illuminate\Database\Eloquent\Model;
+use Modules\Clinical\Classes\Services\AdtService;
 use Modules\Clinical\Classes\Services\BedAssignmentService;
 use Modules\Clinical\Classes\Services\EncounterService;
+use Modules\Clinical\Enums\AdtDestinationType;
 use Modules\Clinical\Enums\DischargeDisposition;
 use Modules\Clinical\Enums\EncounterPriority;
 use Modules\Clinical\Enums\EncounterStatus;
 use Modules\Clinical\Enums\EncounterType;
+use Modules\Core\Models\Branch;
 
 class EncounterActions
 {
@@ -23,7 +26,8 @@ class EncounterActions
             ->label('Admit Patient')
             ->icon('heroicon-m-arrow-right-start-on-rectangle')
             ->color('success')
-            ->visible(fn () => $encounter->canTransitionTo(EncounterStatus::ARRIVED))
+            ->visible(fn () => $encounter->canTransitionTo(EncounterStatus::ARRIVED)
+                || ($encounter->type === EncounterType::INPATIENT && $encounter->status?->isActive() && blank($encounter->bed_id)))
             ->modalHeading(__('Admit Patient'))
             ->modalDescription(__('Admit the patient to a ward and bed. This will mark the encounter as Arrived and assign the selected bed. Only beds not currently occupied by another active patient are shown.'))
             ->slideOver()
@@ -42,10 +46,14 @@ class EncounterActions
                     ->searchable()
                     ->required()
                     ->disabled(fn (callable $get) => blank($get('ward_id'))),
+                Textarea::make('notes')
+                    ->label('Notes')
+                    ->rows(2),
             ])
-            ->action(fn (array $data) => app(EncounterService::class)->admitPatient(
+            ->action(fn (array $data) => app(AdtService::class)->assignBed(
                 $encounter,
-                bedId: $data['bed_id'] ?? null
+                $data['bed_id'],
+                notes: $data['notes'] ?? null,
             ));
     }
 
@@ -68,6 +76,84 @@ class EncounterActions
             ));
     }
 
+    public static function transferInternal(Model $encounter): Action
+    {
+        return Action::make('transfer_internal')
+            ->label('Transfer (internal)')
+            ->icon('heroicon-m-arrows-right-left')
+            ->color('info')
+            ->visible(fn () => ! $encounter->isCompleted()
+                && ($encounter->status?->isActive() || $encounter->status === EncounterStatus::PLANNED)
+                && filled($encounter->bed_id))
+            ->modalHeading(__('Internal transfer'))
+            ->modalDescription(__('Move the patient to another ward/bed within this facility. The encounter continues.'))
+            ->slideOver()
+            ->schema([
+                Select::make('ward_id')
+                    ->label('Ward / Room')
+                    ->options(fn () => app(BedAssignmentService::class)->getWardsForBranch($encounter->branch_id))
+                    ->searchable()
+                    ->live()
+                    ->afterStateUpdated(fn ($state, callable $set) => $set('bed_id', null)),
+                Select::make('bed_id')
+                    ->label('Bed')
+                    ->options(fn (callable $get) => $get('ward_id')
+                        ? app(BedAssignmentService::class)->getAvailableBeds($get('ward_id'))
+                        : [])
+                    ->searchable()
+                    ->required()
+                    ->disabled(fn (callable $get) => blank($get('ward_id'))),
+                Textarea::make('notes')
+                    ->label('Notes')
+                    ->rows(2),
+            ])
+            ->action(fn (array $data) => app(AdtService::class)->transferInternal(
+                $encounter,
+                $data['bed_id'],
+                notes: $data['notes'] ?? null,
+            ));
+    }
+
+    public static function transferOut(Model $encounter): Action
+    {
+        return Action::make('transfer_out')
+            ->label('Transfer out')
+            ->icon('heroicon-m-building-office-2')
+            ->color('warning')
+            ->visible(fn () => $encounter->canTransitionTo(EncounterStatus::FINISHED))
+            ->modalHeading(__('Transfer out'))
+            ->modalDescription(__('End this encounter and transfer the patient to another branch or external facility.'))
+            ->slideOver()
+            ->schema([
+                Select::make('destination_type')
+                    ->label('Destination type')
+                    ->options(AdtDestinationType::class)
+                    ->default(AdtDestinationType::ExternalFacility->value)
+                    ->live()
+                    ->required(),
+                Select::make('destination_branch_id')
+                    ->label('Destination branch')
+                    ->options(fn () => Branch::query()->orderBy('name')->pluck('name', 'id')->all())
+                    ->searchable()
+                    ->visible(fn (callable $get) => $get('destination_type') === AdtDestinationType::Branch->value)
+                    ->required(fn (callable $get) => $get('destination_type') === AdtDestinationType::Branch->value),
+                TextInput::make('destination_label')
+                    ->label('Destination')
+                    ->visible(fn (callable $get) => $get('destination_type') !== AdtDestinationType::Branch->value)
+                    ->required(fn (callable $get) => $get('destination_type') === AdtDestinationType::ExternalFacility->value),
+                Textarea::make('notes')
+                    ->label('Notes')
+                    ->rows(2),
+            ])
+            ->action(fn (array $data) => app(AdtService::class)->transferOut(
+                $encounter,
+                AdtDestinationType::from($data['destination_type']),
+                destinationLabel: $data['destination_label'] ?? null,
+                destinationBranchId: $data['destination_branch_id'] ?? null,
+                notes: $data['notes'] ?? null,
+            ));
+    }
+
     public static function discharge(Model $encounter): Action
     {
         return Action::make('discharge')
@@ -83,15 +169,20 @@ class EncounterActions
                     ->label('Disposition')
                     ->options(DischargeDisposition::class)
                     ->default('completed')
-                    ->required(),
+                    ->required()
+                    ->live(),
                 TextInput::make('transfer_destination')
                     ->label('Transfer Destination')
                     ->visible(fn (callable $get) => $get('discharge_disposition') === 'transferred'),
+                Textarea::make('notes')
+                    ->label('Discharge notes')
+                    ->rows(2),
             ])
-            ->action(fn (array $data) => app(EncounterService::class)->discharge(
+            ->action(fn (array $data) => app(AdtService::class)->discharge(
                 $encounter,
                 DischargeDisposition::from($data['discharge_disposition']),
-                $data['transfer_destination'] ?? null
+                $data['transfer_destination'] ?? null,
+                notes: $data['notes'] ?? null,
             ));
     }
 
@@ -142,12 +233,15 @@ class EncounterActions
                     ->searchable()
                     ->required()
                     ->disabled(fn (callable $get) => blank($get('ward_id'))),
+                Textarea::make('notes')
+                    ->label('Notes')
+                    ->rows(2),
             ])
-            ->action(function (array $data) use ($encounter, $bedAssignmentService, $onSuccess) {
-                $bedAssignmentService->assignBed(
+            ->action(function (array $data) use ($encounter, $onSuccess) {
+                app(AdtService::class)->assignBed(
                     $encounter,
                     $data['bed_id'],
-                    auth()->id()
+                    notes: $data['notes'] ?? null,
                 );
 
                 if ($onSuccess) {
