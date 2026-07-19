@@ -16,6 +16,7 @@ use Filament\Pages\Page;
 use Filament\Schemas\Components\Grid;
 use Filament\Schemas\Concerns\InteractsWithSchemas;
 use Filament\Schemas\Contracts\HasSchemas;
+use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Support\Facades\Auth;
 use Livewire\Attributes\Computed;
 use Livewire\Attributes\On;
@@ -53,7 +54,6 @@ use Modules\Clinical\Models\DiagnosisCode;
 use Modules\Clinical\Models\Encounter;
 use Modules\Clinical\Models\EncounterDiagnosis;
 use Modules\Clinical\Models\RequestItem;
-use Modules\Core\Classes\Services\BranchService;
 use Modules\Core\Classes\Support\PageHeaderActionsRegistry;
 use Modules\Core\Models\Branch;
 use Modules\Core\Models\Service;
@@ -98,7 +98,6 @@ class ClinicalWorkspace extends Page implements HasSchemas
     public string $mode = 'home';
 
     public string $activeTab = '';
-
 
     public ?Encounter $currentEncounter = null;
 
@@ -759,7 +758,7 @@ class ClinicalWorkspace extends Page implements HasSchemas
     protected function authorizeEncounterUpdate(Encounter $encounter): void
     {
         if (! Auth::user()?->can('update', $encounter)) {
-            throw new \Illuminate\Auth\Access\AuthorizationException(__('Not authorized to update this encounter.'));
+            throw new AuthorizationException(__('Not authorized to update this encounter.'));
         }
     }
 
@@ -768,7 +767,7 @@ class ClinicalWorkspace extends Page implements HasSchemas
         $user = Auth::user();
 
         if (! ($user?->can('discharge_patient') || $user?->can('update', $encounter))) {
-            throw new \Illuminate\Auth\Access\AuthorizationException(__('Not authorized to discharge this encounter.'));
+            throw new AuthorizationException(__('Not authorized to discharge this encounter.'));
         }
     }
 

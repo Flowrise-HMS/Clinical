@@ -12,6 +12,7 @@ use Modules\Clinical\Enums\EncounterStatus;
 use Modules\Clinical\Enums\EncounterType;
 use Modules\Clinical\Models\Encounter;
 use Modules\Clinical\Models\EncounterLocationEvent;
+use Modules\Core\Models\Branch;
 use Modules\Core\Models\Location;
 use Modules\Patient\Models\Patient;
 
@@ -124,7 +125,7 @@ class AdtService
 
             $label = $destinationLabel;
             if ($destinationType === AdtDestinationType::Branch && filled($destinationBranchId)) {
-                $label = $label ?: (string) \Modules\Core\Models\Branch::query()->find($destinationBranchId)?->name;
+                $label = $label ?: (string) Branch::query()->find($destinationBranchId)?->name;
             }
 
             $from = $this->snapshot($encounter);

@@ -2,6 +2,7 @@
 
 namespace Modules\Clinical\Filament\Clusters\Clinical\Resources\Encounters\Pages;
 
+use Filament\Notifications\Notification;
 use Filament\Resources\Pages\EditRecord;
 use Modules\Clinical\Classes\Actions\EncounterActions;
 use Modules\Clinical\Classes\Services\AdtService;
@@ -28,7 +29,10 @@ class EditEncounter extends EditRecord
                         notes: $data['notes'] ?? null,
                     );
                     $this->refreshFormData(['status', 'bed_id', 'location_id', 'admitted_at']);
-                    $this->notify('success', 'Patient admitted successfully');
+                    Notification::make()
+                        ->title('Patient admitted successfully')
+                        ->success()
+                        ->send();
                 }),
 
             EncounterActions::triage($record)
@@ -38,7 +42,10 @@ class EditEncounter extends EditRecord
                         EncounterPriority::from($data['priority'])
                     );
                     $this->refreshFormData(['status', 'priority']);
-                    $this->notify('success', 'Patient triaged successfully');
+                    Notification::make()
+                        ->title('Patient triaged successfully')
+                        ->success()
+                        ->send();
                 }),
 
             EncounterActions::transferInternal($record)
@@ -49,7 +56,10 @@ class EditEncounter extends EditRecord
                         notes: $data['notes'] ?? null,
                     );
                     $this->refreshFormData(['bed_id', 'location_id', 'department_id']);
-                    $this->notify('success', 'Patient transferred internally');
+                    Notification::make()
+                        ->title('Patient transferred internally')
+                        ->success()
+                        ->send();
                 }),
 
             EncounterActions::transferOut($record)
@@ -62,7 +72,10 @@ class EditEncounter extends EditRecord
                         notes: $data['notes'] ?? null,
                     );
                     $this->refreshFormData(['status', 'discharge_disposition', 'discharged_at', 'transfer_destination', 'bed_id']);
-                    $this->notify('success', 'Patient transferred out');
+                    Notification::make()
+                        ->title('Patient transferred out')
+                        ->success()
+                        ->send();
                 }),
 
             EncounterActions::discharge($record)
@@ -74,14 +87,20 @@ class EditEncounter extends EditRecord
                         notes: $data['notes'] ?? null,
                     );
                     $this->refreshFormData(['status', 'discharge_disposition', 'discharged_at', 'bed_id']);
-                    $this->notify('success', 'Patient discharged successfully');
+                    Notification::make()
+                        ->title('Patient discharged successfully')
+                        ->success()
+                        ->send();
                 }),
 
             EncounterActions::cancel($record)
                 ->action(function (array $data) use ($record) {
                     app(EncounterService::class)->cancelEncounter($record, $data['reason']);
                     $this->refreshFormData(['status', 'bed_id']);
-                    $this->notify('warning', 'Encounter cancelled');
+                    Notification::make()
+                        ->title('Encounter cancelled')
+                        ->warning()
+                        ->send();
                 }),
         ];
     }

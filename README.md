@@ -37,7 +37,8 @@ flowchart LR
 - **Place service requests** (orders such as lab, imaging, or other services your catalog defines) and track **request items**.
 - **Track tasks** so departments know what must be done and whether it is done.
 - **Record allergies** where that workflow is enabled.
-- **Administer medications (MAR)** via the medication administration board, workspace actions, and patient relation manager.
+- **Administer medications (MAR)** via the medication administration board, dose reminders, workspace actions, and patient relation manager.
+- Track **ADT location events** (admit/transfer/discharge bed moves) on encounters.
 - Use **workspace** pages (patient list, timeline, profile) to work in a patient-centric way rather than only from generic admin lists.
 
 For laboratory, radiology, and pathology fulfillment after an order is placed, see [Diagnostics Workflows](../../docs/user-guide/diagnostics.md).

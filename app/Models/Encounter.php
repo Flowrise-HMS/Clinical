@@ -9,6 +9,7 @@ use Illuminate\Database\Eloquent\Factories\Factory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Modules\Clinical\Classes\Services\AdtService;
 use Modules\Clinical\Database\Factories\EncounterFactory;
 use Modules\Clinical\Enums\DischargeDisposition;
 use Modules\Clinical\Enums\EncounterPriority;
@@ -310,7 +311,7 @@ class Encounter extends BaseModel implements ProvidesClientIdentity
 
     public function discharge(?int $dischargedBy = null, ?DischargeDisposition $disposition = null): void
     {
-        app(\Modules\Clinical\Classes\Services\AdtService::class)->discharge(
+        app(AdtService::class)->discharge(
             $this,
             $disposition,
             null,

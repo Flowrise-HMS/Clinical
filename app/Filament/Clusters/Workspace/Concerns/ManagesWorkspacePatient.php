@@ -30,7 +30,7 @@ trait ManagesWorkspacePatient
     public int $registrationFormKey = 0;
 
     public ?Patient $currentPatient = null;
-    
+
     public function startRegistration(): void
     {
         Gate::authorize('create', Patient::class);
