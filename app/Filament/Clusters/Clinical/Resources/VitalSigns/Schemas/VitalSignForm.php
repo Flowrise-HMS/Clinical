@@ -93,7 +93,7 @@ class VitalSignForm
 
                             TextInput::make('respiratory_rate')
                                 ->label('Respiratory Rate')
-                                ->suffix('bpm')
+                                ->suffix('cpm')
                                 ->numeric(),
                         ]),
 

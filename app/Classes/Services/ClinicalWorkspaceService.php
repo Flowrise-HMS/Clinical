@@ -270,6 +270,8 @@ class ClinicalWorkspaceService
 
     protected function createNoteEvent(ClinicalNote $note): array
     {
+        $note = $note->load(['author', 'patient', 'encounter', 'serviceRequest']);
+
         $noteType = $note->note_type?->getLabel() ?? 'Clinical';
         $content = is_array($note->content) ? ($note->content['text'] ?? '') : ($note->content ?? '');
 

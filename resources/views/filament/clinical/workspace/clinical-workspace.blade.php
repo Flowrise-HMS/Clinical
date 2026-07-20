@@ -409,7 +409,7 @@
                         <div class="space-y-3">
                             {{ $this->diagnosisForm }}
 
-                            @if ($currentEncounter && count($diagnosisCodes) > 0)
+                            @if ($currentEncounter)
                                 <div class="flex justify-end pt-2">
                                     <x-filament::button wire:click="saveDiagnoses" color="primary"
                                         icon="heroicon-m-document-check">

@@ -111,7 +111,7 @@ class ClinicalWorkspace extends Page implements HasSchemas
 
     public array $diagnosisCodes = [];
 
-    public string $diagnosisNotes = '';
+    public $diagnosisNotes = null;
 
     public array $vitalsData = [];
 
@@ -225,7 +225,7 @@ class ClinicalWorkspace extends Page implements HasSchemas
         $this->consultationNotes = '';
         $this->consultationData = [];
         $this->diagnosisCodes = [];
-        $this->diagnosisNotes = '';
+        $this->diagnosisNotes = null;
         $this->vitalsData = [];
         $this->serviceRequestData = [];
         $this->labResultData = [];
@@ -456,6 +456,12 @@ class ClinicalWorkspace extends Page implements HasSchemas
     {
         if (! $this->currentPatient || ! $this->currentEncounter) {
             Notification::make()->title('No active encounter')->danger()->send();
+
+            return;
+        }
+
+        if (blank($this->consultationData['notes'] ?? null) && blank($this->consultationChiefComplaint)) {
+            Notification::make()->title('Nothing to save')->warning()->send();
 
             return;
         }
@@ -809,6 +815,8 @@ class ClinicalWorkspace extends Page implements HasSchemas
 
     public function saveDiagnoses(): void
     {
+        $this->diagnosisCodes = array_values(array_filter($this->diagnosisCodes));
+
         if (! $this->currentEncounter || empty($this->diagnosisCodes)) {
             Notification::make()->title('No diagnoses to save')->warning()->send();
 
@@ -832,7 +840,7 @@ class ClinicalWorkspace extends Page implements HasSchemas
             $items,
             $this->currentEncounter->id,
             Auth::id(),
-            $this->diagnosisNotes ?: null,
+            is_string($this->diagnosisNotes) ? $this->diagnosisNotes : null,
         );
 
         $this->loadPatientContext();
