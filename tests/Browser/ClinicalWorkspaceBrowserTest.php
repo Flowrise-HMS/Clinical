@@ -7,8 +7,9 @@ use Database\Seeders\ShieldSeeder;
 use Modules\Clinical\Models\Encounter;
 use Modules\Core\Models\Branch;
 use Modules\Patient\Models\Patient;
+use Tests\TestCase;
 
-uses(\Tests\TestCase::class);
+uses(TestCase::class);
 
 it('navigates the clinical workspace and transitions modern tabs smoothly', function () {
     $this->migrateModules();

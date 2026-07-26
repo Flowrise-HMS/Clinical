@@ -11,6 +11,7 @@ use Filament\Actions\ViewAction;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
 use Modules\Clinical\Filament\Clusters\Clinical\Resources\VitalSigns\VitalSignResource;
+use Modules\Core\Support\SuperAdmin;
 
 class VitalSignsTable
 {
@@ -38,6 +39,7 @@ class VitalSignsTable
                 EditAction::make(),
                 DeleteAction::make(),
                 Action::make('activities')
+                    ->visible(fn (): bool => SuperAdmin::check())
                     ->label('Activities')
                     ->icon('heroicon-o-bell-alert')
                     ->url(fn ($record) => VitalSignResource::getUrl('activities', ['record' => $record])),

@@ -17,6 +17,7 @@ use Modules\Clinical\Enums\EncounterStatus;
 use Modules\Clinical\Enums\EncounterType;
 use Modules\Clinical\Filament\Clusters\Clinical\Resources\Encounters\EncounterResource;
 use Modules\Core\Filament\Support\ClientIdentityColumn;
+use Modules\Core\Support\SuperAdmin;
 
 class EncountersTable
 {
@@ -79,6 +80,7 @@ class EncountersTable
                     EditAction::make(),
                     DeleteAction::make(),
                     Action::make('activities')
+                        ->visible(fn (): bool => SuperAdmin::check())
                         ->label('Activities')
                         ->icon('heroicon-o-bell-alert')
                         ->url(fn ($record) => EncounterResource::getUrl('activities', ['record' => $record])),

@@ -6,6 +6,7 @@ use Filament\Actions\Action;
 use Filament\Actions\EditAction;
 use Filament\Resources\Pages\ViewRecord;
 use Modules\Clinical\Filament\Clusters\Clinical\Resources\Encounters\EncounterResource;
+use Modules\Core\Support\SuperAdmin;
 
 class ViewEncounter extends ViewRecord
 {
@@ -16,6 +17,7 @@ class ViewEncounter extends ViewRecord
         return [
             EditAction::make(),
             Action::make('activities')
+                ->visible(fn (): bool => SuperAdmin::check())
                 ->label('Activities')
                 ->icon('heroicon-o-bell-alert')
                 ->url(fn () => EncounterResource::getUrl('activities', ['record' => $this->getRecord()])),

@@ -17,6 +17,7 @@ use Modules\Clinical\Enums\RequestStatus;
 use Modules\Clinical\Filament\Clusters\Clinical\Resources\ServiceRequests\ServiceRequestResource;
 use Modules\Core\Filament\Support\ClientIdentityColumn;
 use Modules\Core\Filament\Tables\Columns\CurrencyColumn;
+use Modules\Core\Support\SuperAdmin;
 
 class ServiceRequestsTable
 {
@@ -86,6 +87,7 @@ class ServiceRequestsTable
                     EditAction::make(),
                     DeleteAction::make(),
                     Action::make('activities')
+                        ->visible(fn (): bool => SuperAdmin::check())
                         ->label('Activities')
                         ->icon('heroicon-o-bell-alert')
                         ->url(fn ($record) => ServiceRequestResource::getUrl('activities', ['record' => $record])),
