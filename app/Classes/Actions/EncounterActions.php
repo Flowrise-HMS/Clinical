@@ -72,7 +72,7 @@ class EncounterActions
             ])
             ->action(fn (array $data) => app(EncounterService::class)->triage(
                 $encounter,
-                EncounterPriority::from($data['priority'])
+                is_object($data['priority']) ? $data['priority']: EncounterPriority::from($data['priority'])
             ));
     }
 

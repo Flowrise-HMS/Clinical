@@ -14,7 +14,6 @@ use Filament\Schemas\Components\Fieldset;
 use Filament\Schemas\Components\Utilities\Set;
 use Illuminate\Support\Facades\Auth;
 use Modules\Clinical\Classes\Services\AllergyService;
-use Modules\Clinical\Classes\Services\BedAssignmentService;
 use Modules\Clinical\Classes\Services\ClinicalNoteService;
 use Modules\Clinical\Classes\Services\DiagnosisCodeService;
 use Modules\Clinical\Classes\Services\DiagnosisService;
@@ -24,13 +23,12 @@ use Modules\Clinical\Classes\Services\MedicationAdministrationService;
 use Modules\Clinical\Classes\Services\MedicationFulfillmentPolicy;
 use Modules\Clinical\Classes\Services\ServiceRequestService;
 use Modules\Clinical\Classes\Services\VitalSignService;
-use Modules\Clinical\Enums\EncounterStatus;
-use Modules\Clinical\Enums\EncounterType;
 use Modules\Clinical\Filament\Clusters\Clinical\Resources\Allergies\Schemas\AllergyForm;
 use Modules\Clinical\Filament\Clusters\Clinical\Resources\ClinicalNotes\Schemas\ClinicalNoteForm;
 use Modules\Clinical\Filament\Clusters\Clinical\Resources\Encounters\Schemas\EncounterForm;
 use Modules\Clinical\Filament\Clusters\Clinical\Resources\ServiceRequests\Schemas\ServiceRequestForm;
 use Modules\Clinical\Filament\Clusters\Clinical\Resources\VitalSigns\Schemas\VitalSignForm;
+use Modules\Clinical\Filament\Clusters\Workspace\Pages\CarePlanWorkspace;
 use Modules\Clinical\Filament\Clusters\Workspace\Pages\PatientProfile;
 use Modules\Clinical\Filament\Clusters\Workspace\Pages\Timeline;
 use Modules\Clinical\Filament\Support\MarRecordDoseFormSchema;
@@ -43,6 +41,7 @@ use Modules\Clinical\Models\RequestItem;
 use Modules\Clinical\Models\ServiceRequest;
 use Modules\Clinical\Models\VitalSign;
 use Modules\Clinical\Policies\AllergyPolicy;
+use Modules\Clinical\Policies\CarePlanPolicy;
 use Modules\Clinical\Policies\ClinicalNotePolicy;
 use Modules\Clinical\Policies\EncounterPolicy;
 use Modules\Clinical\Policies\ServiceRequestPolicy;
@@ -60,13 +59,14 @@ class PatientActions
         protected EncounterService $encounterService,
         protected FulfillmentService $fulfillmentService,
         protected MedicationAdministrationService $medicationAdminService,
-        protected BedAssignmentService $bedAssignmentService,
         protected DiagnosisService $diagnosisService,
     ) {}
 
     protected ?Patient $patient = null;
 
     protected int|string|null $encounterId = null;
+
+    protected ?Encounter $encounter = null;
 
     public static function make(): static
     {
@@ -78,7 +78,6 @@ class PatientActions
             app(EncounterService::class),
             app(FulfillmentService::class),
             app(MedicationAdministrationService::class),
-            app(BedAssignmentService::class),
             app(DiagnosisService::class),
         );
     }
@@ -112,7 +111,9 @@ class PatientActions
             $this->printHospitalCardAction(),
             $this->encounter(),
             $this->cancelEncounterAction(),
-            $this->assignToWardAction(),
+            $this->admitAction(),
+            $this->triageAction(),
+            $this->carePlanAction(),
             $this->medicationAdminAction(),
             $this->fulfillServiceAction(),
             $this->note(),
@@ -132,20 +133,47 @@ class PatientActions
     public function forPatient(Patient $patient): static
     {
         $this->patient = $patient;
+        $this->encounter = null;
 
         return $this;
     }
 
     public function withEncounter(object|string|null $encounterId): static
     {
-        if (is_object($encounterId) && $encounterId instanceof Encounter) {
-            $this->encounterId = $encounterId?->id;
+        if ($encounterId instanceof Encounter) {
+            $this->encounter = $encounterId;
+            $this->encounterId = $encounterId->id;
 
             return $this;
         }
+
+        $this->encounter = null;
         $this->encounterId = $encounterId;
 
         return $this;
+    }
+
+    protected function resolveEncounter(): ?Encounter
+    {
+        if ($this->encounter instanceof Encounter) {
+            if ($this->patient === null || $this->encounter->patient_id === $this->patient->id) {
+                return $this->encounter;
+            }
+
+            $this->encounter = null;
+        }
+
+        if (filled($this->encounterId)) {
+            $query = Encounter::query()->whereKey($this->encounterId);
+
+            if ($this->patient !== null) {
+                $query->where('patient_id', $this->patient->id);
+            }
+
+            return $this->encounter = $query->first();
+        }
+
+        return $this->encounter = $this->patient?->activeEncounter()->first();
     }
 
     public function allergy(): Action
@@ -296,6 +324,22 @@ class PatientActions
             ->record($this->patient)
             ->visible(fn ($record) => app(PatientPolicy::class)->view(Auth::user(), $record))
             ->url(fn ($record) => Timeline::getUrl(['patient' => $record?->id]), shouldOpenInNewTab: true);
+    }
+
+    public function carePlanAction(): Action
+    {
+        $patient = $this->patient;
+
+        return Action::make('care_plan')
+            ->label('Care Plan')
+            ->icon('heroicon-m-clipboard-document-check')
+            ->color('primary')
+            ->visible(fn (): bool => $patient !== null
+                && Auth::user() !== null
+                && app(CarePlanPolicy::class)->viewAny(Auth::user()))
+            ->url(fn (): string => CarePlanWorkspace::getUrl([
+                'patientId' => $patient?->id,
+            ]));
     }
 
     public function deactivate(): Action
@@ -551,7 +595,7 @@ class PatientActions
 
     public function dischargeAction(): Action
     {
-        $encounter = $this->patient?->activeEncounter()->first();
+        $encounter = $this->resolveEncounter();
 
         if (! $encounter) {
             return Action::make('discharge_patient')->hidden();
@@ -560,40 +604,37 @@ class PatientActions
         return EncounterActions::discharge($encounter)
             ->name('discharge_patient')
             ->label('Discharge patient')
-            ->visible(fn () => $encounter->canTransitionTo(EncounterStatus::FINISHED)
-                && (
-                    (Auth::user()?->can('discharge_patient') ?? false)
-                    || (Auth::user()?->can('update', $encounter) ?? false)
-                ))
+            ->record($encounter)
+            ->authorize(fn (): bool => (Auth::user()?->can('discharge_patient') ?? false)
+                || (Auth::user()?->can('can_discharge') ?? false))
             ->successNotificationTitle('Patient discharged successfully');
     }
 
     public function transferInternalAction(): Action
     {
-        $encounter = $this->patient?->activeEncounter()->first();
+        $encounter = $this->resolveEncounter();
 
         if (! $encounter) {
             return Action::make('transfer_internal')->hidden();
         }
 
         return EncounterActions::transferInternal($encounter)
-            ->visible(fn () => ! $encounter->isCompleted()
-                && filled($encounter->bed_id)
-                && Auth::user()->can('update', $encounter))
+            ->record($encounter)
+            ->authorize(fn (): bool => $this->canUpdateEncounter($encounter))
             ->successNotificationTitle('Patient transferred internally');
     }
 
     public function transferOutAction(): Action
     {
-        $encounter = $this->patient?->activeEncounter()->first();
+        $encounter = $this->resolveEncounter();
 
         if (! $encounter) {
             return Action::make('transfer_out')->hidden();
         }
 
         return EncounterActions::transferOut($encounter)
-            ->visible(fn () => $encounter->canTransitionTo(EncounterStatus::FINISHED)
-                && Auth::user()->can('update', $encounter))
+            ->record($encounter)
+            ->authorize(fn (): bool => $this->canUpdateEncounter($encounter))
             ->successNotificationTitle('Patient transferred out');
     }
 
@@ -615,7 +656,7 @@ class PatientActions
 
     public function cancelEncounterAction(): Action
     {
-        $encounter = $this->patient?->activeEncounter()->first();
+        $encounter = $this->resolveEncounter();
 
         if (! $encounter) {
             return Action::make('cancel_encounter')->hidden();
@@ -624,28 +665,53 @@ class PatientActions
         return EncounterActions::cancel($encounter)
             ->name('cancel_encounter')
             ->label('Cancel Encounter')
-            ->visible(fn () => $encounter->canTransitionTo(EncounterStatus::CANCELLED))
+            ->record($encounter)
+            ->authorize(fn (): bool => $this->canUpdateEncounter($encounter))
             ->successNotificationTitle('Encounter cancelled');
     }
 
-    public function assignToWardAction(): Action
+    public function admitAction(): Action
     {
-        $encounter = $this->patient?->activeEncounter()->first();
+        $encounter = $this->resolveEncounter();
 
         if (! $encounter) {
-            return Action::make('assign_to_ward')->hidden();
+            return Action::make('admit')->hidden();
         }
 
-        return EncounterActions::assignToWard(
-            $encounter,
-            $this->bedAssignmentService,
-        )
-            ->name('assign_to_ward')
-            ->label('Assign to Ward / Bed')
-            ->visible(fn () => $encounter->type === EncounterType::INPATIENT
-                && ($encounter->canTransitionTo(EncounterStatus::ARRIVED) || $encounter?->status?->isActive())
-                && Auth::user()->can('update', $encounter))
-            ->successNotificationTitle('Patient assigned to ward/bed successfully');
+        return EncounterActions::admit($encounter)
+            ->record($encounter)
+            ->authorize(fn (): bool => $this->canUpdateEncounter($encounter))
+            ->successNotificationTitle('Patient admitted successfully');
+    }
+
+    /**
+     * @deprecated Use admitAction() — kept as an alias so existing callers keep working.
+     */
+    public function assignToWardAction(): Action
+    {
+        return $this->admitAction()->name('assign_to_ward');
+    }
+
+    public function triageAction(): Action
+    {
+        $encounter = $this->resolveEncounter();
+
+        if (! $encounter) {
+            return Action::make('triage')->hidden();
+        }
+
+        return EncounterActions::triage($encounter)
+            ->record($encounter)
+            ->authorize(fn (): bool => $this->canUpdateEncounter($encounter))
+            ->successNotificationTitle('Patient triaged successfully');
+    }
+
+    protected function canUpdateEncounter(Encounter $encounter): bool
+    {
+        $user = Auth::user();
+
+        return $user !== null
+            && app(EncounterPolicy::class)->update($user, $encounter);
     }
 
     protected function injectEncounterData(array $data): array
