@@ -510,22 +510,6 @@
                                     </div>
                                     @endif
                                 </div>
-                            @elseif($activeTab === 'discharge')
-                                <div class="space-y-4">
-                                    <h4 class="text-base font-semibold text-gray-900 dark:text-white">Discharge Patient
-                                    </h4>
-                                    @if(!$this->hasOpenEncounter())
-                                        <x-filament::badge color="warning">No active encounter to discharge</x-filament::badge>
-                                    @else
-                                        {{ $this->dischargeForm }}
-                                        <div class="flex justify-end pt-2">
-                                            <x-filament::button wire:click="saveDischarge" color="danger"
-                                                icon="heroicon-m-arrow-right-on-rectangle">
-                                                Complete Encounter
-                                            </x-filament::button>
-                                        </div>
-                                    @endif
-                                </div>
                             @elseif($activeTab === 'referral')
                                 <div class="space-y-4">
                                     <h4 class="text-base font-semibold text-gray-900 dark:text-white">Referral</h4>

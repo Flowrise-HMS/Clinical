@@ -1,6 +1,11 @@
 @php
     $openEncounter = $this->getOpenEncounter();
     $chip = $this->getEncounterStatusChip();
+    $canCreate = $this->canCreateEncounter();
+    $canUpdate = $openEncounter ? $this->canUpdateEncounter($openEncounter) : false;
+    $canDischarge = $openEncounter ? $this->canDischargeEncounter($openEncounter) : false;
+    $hasBed = $openEncounter && filled($openEncounter->bed_id);
+    $renderedSection = false;
 @endphp
 <div class="space-y-6">
     <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
@@ -31,20 +36,24 @@
     </div>
 
     @if (! $openEncounter)
-        <div class="space-y-3 rounded-xl border border-gray-200 dark:border-gray-700 p-4">
-            <h4 class="text-sm font-semibold text-gray-900 dark:text-white">Admit Patient</h4>
-            <p class="text-sm text-gray-500 dark:text-gray-400">
-                Create a new inpatient encounter to admit the patient to a ward.
-            </p>
-            {{ $this->adtTransferInForm }}
-            <div class="flex justify-end">
-                <x-filament::button wire:click="transferIn" color="success" icon="heroicon-m-arrow-left-end-on-rectangle">
-                    Admit Patient
-                </x-filament::button>
+        @if ($canCreate)
+            @php $renderedSection = true; @endphp
+            <div class="space-y-3 rounded-xl border border-gray-200 dark:border-gray-700 p-4">
+                <h4 class="text-sm font-semibold text-gray-900 dark:text-white">Admit Patient</h4>
+                <p class="text-sm text-gray-500 dark:text-gray-400">
+                    Create a new inpatient encounter to admit the patient to a ward.
+                </p>
+                {{ $this->adtTransferInForm }}
+                <div class="flex justify-end">
+                    <x-filament::button wire:click="transferIn" color="success" icon="heroicon-m-arrow-left-end-on-rectangle">
+                        Admit Patient
+                    </x-filament::button>
+                </div>
             </div>
-        </div>
+        @endif
     @else
-        @if ($openEncounter->type?->isInpatient() && blank($openEncounter->bed_id))
+        @if ($canUpdate && $openEncounter->type?->isInpatient() && blank($openEncounter->bed_id))
+            @php $renderedSection = true; @endphp
             <div class="space-y-3 rounded-xl border border-gray-200 dark:border-gray-700 p-4">
                 <h4 class="text-sm font-semibold text-gray-900 dark:text-white">Admit / Assign bed</h4>
                 <p class="text-sm text-gray-500 dark:text-gray-400">
@@ -57,7 +66,15 @@
                     </x-filament::button>
                 </div>
             </div>
-        @elseif (filled($openEncounter->bed_id))
+        @elseif ($canUpdate && ! $openEncounter->type?->isInpatient() && ! $hasBed)
+            @php $renderedSection = true; @endphp
+            <x-filament::badge color="info">
+                Bed assignment and internal transfer are available on inpatient encounters. Create an inpatient visit or use Admit from transfer when no encounter is open.
+            </x-filament::badge>
+        @endif
+
+        @if ($canUpdate && $hasBed)
+            @php $renderedSection = true; @endphp
             <div class="space-y-3 rounded-xl border border-gray-200 dark:border-gray-700 p-4">
                 <h4 class="text-sm font-semibold text-gray-900 dark:text-white">Internal transfer</h4>
                 <p class="text-sm text-gray-500 dark:text-gray-400">
@@ -70,7 +87,10 @@
                     </x-filament::button>
                 </div>
             </div>
+        @endif
 
+        @if ($canDischarge && $hasBed)
+            @php $renderedSection = true; @endphp
             <div class="space-y-3 rounded-xl border border-gray-200 dark:border-gray-700 p-4">
                 <h4 class="text-sm font-semibold text-gray-900 dark:text-white">Transfer out</h4>
                 <p class="text-sm text-gray-500 dark:text-gray-400">
@@ -83,23 +103,28 @@
                     </x-filament::button>
                 </div>
             </div>
-        @elseif (! $openEncounter->type?->isInpatient())
-            <x-filament::badge color="info">
-                Bed assignment and internal transfer are available on inpatient encounters. Create an inpatient visit or use Admit from transfer when no encounter is open.
-            </x-filament::badge>
         @endif
 
-        <div class="space-y-3 rounded-xl border border-danger-200 dark:border-danger-900/40 p-4">
-            <h4 class="text-sm font-semibold text-gray-900 dark:text-white">Discharge</h4>
-            <p class="text-sm text-gray-500 dark:text-gray-400">
-                Complete the encounter, free the bed, and trigger billing finalization.
-            </p>
-            {{ $this->dischargeForm }}
-            <div class="flex justify-end">
-                <x-filament::button wire:click="saveDischarge" color="danger" icon="heroicon-m-arrow-right-on-rectangle">
-                    Discharge patient
-                </x-filament::button>
+        @if ($canDischarge)
+            @php $renderedSection = true; @endphp
+            <div class="space-y-3 rounded-xl border border-danger-200 dark:border-danger-900/40 p-4">
+                <h4 class="text-sm font-semibold text-gray-900 dark:text-white">Discharge</h4>
+                <p class="text-sm text-gray-500 dark:text-gray-400">
+                    Complete the encounter, free the bed, and trigger billing finalization.
+                </p>
+                {{ $this->dischargeForm }}
+                <div class="flex justify-end">
+                    <x-filament::button wire:click="saveDischarge" color="danger" icon="heroicon-m-arrow-right-on-rectangle">
+                        Discharge patient
+                    </x-filament::button>
+                </div>
             </div>
-        </div>
+        @endif
     @endif
+
+    @unless ($renderedSection)
+        <x-filament::badge color="warning">
+            You do not have permission to perform ADT actions for this patient.
+        </x-filament::badge>
+    @endunless
 </div>

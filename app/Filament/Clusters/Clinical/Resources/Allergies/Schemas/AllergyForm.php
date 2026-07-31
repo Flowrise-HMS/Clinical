@@ -36,7 +36,9 @@ class AllergyForm
         return [
             Section::make('Allergy Information')
                 ->schema([
-                    Grid::make(2)
+
+
+                    Grid::make(3)
                         ->schema([
                             Select::make('allergen_type')
                                 ->options(AllergenType::class)
@@ -47,36 +49,38 @@ class AllergyForm
                                 ->required()
                                 ->maxLength(255)
                                 ->label('Allergen Name'),
-                        ]),
-
-                    Textarea::make('reaction')
-                        ->maxLength(1000)
-                        ->label('Reaction'),
-
-                    Grid::make(3)
-                        ->schema([
+                            TextInput::make('onset_age')
+                                ->numeric()
+                                ->suffix('years')
+                                ->label('Onset Age'),
                             Select::make('severity')
                                 ->options(AllergySeverity::class)
+                                ->default(AllergySeverity::MILD->value)
+                                ->required()
                                 ->label('Severity'),
 
                             Select::make('verification_status')
                                 ->options(AllergyVerificationStatus::class)
+                                ->default(AllergyVerificationStatus::VERIFIED->value)
+                                ->required()
                                 ->label('Verification Status'),
 
                             Select::make('onset_type')
                                 ->options(OnsetType::class)
+                                ->default(OnsetType::ACUTE->value)
+                                ->required()
                                 ->label('Onset Type'),
                         ]),
 
                     Grid::make(2)
                         ->schema([
-                            TextInput::make('onset_age')
-                                ->numeric()
-                                ->suffix('years')
-                                ->label('Onset Age'),
-
+                             Textarea::make('reaction')
+                                ->maxLength(1000)
+                                ->columnSpanFull()
+                                ->label('Reaction'),
                             Textarea::make('notes')
                                 ->maxLength(2000)
+                                ->columnSpanFull()
                                 ->label('Notes'),
                         ]),
                 ]),

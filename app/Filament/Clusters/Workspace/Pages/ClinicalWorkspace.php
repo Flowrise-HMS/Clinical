@@ -54,6 +54,7 @@ use Modules\Clinical\Models\DiagnosisCode;
 use Modules\Clinical\Models\Encounter;
 use Modules\Clinical\Models\EncounterDiagnosis;
 use Modules\Clinical\Models\RequestItem;
+use Modules\Clinical\Policies\EncounterPolicy;
 use Modules\Core\Classes\Support\PageHeaderActionsRegistry;
 use Modules\Core\Models\Branch;
 use Modules\Core\Models\Service;
@@ -579,7 +580,9 @@ class ClinicalWorkspace extends Page implements HasSchemas
         $this->currentEncounter = $encounter->fresh(['bed', 'location']);
         $this->currentPatient?->unsetRelation('activeEncounter');
         $this->fillEncounterFormData();
-        $this->activeTab = $type === EncounterType::INPATIENT ? 'adt' : 'vitals';
+        $this->activeTab = $type === EncounterType::INPATIENT && $this->canAccessAdtTab()
+            ? 'adt'
+            : 'vitals';
 
         $label = $type->getLabel();
 
@@ -616,7 +619,7 @@ class ClinicalWorkspace extends Page implements HasSchemas
         $open = $this->getOpenEncounter();
         if ($open) {
             $this->authorizeEncounterUpdate($open);
-        } elseif (! Auth::user()?->can('Create Encounter')) {
+        } elseif (! $this->canCreateEncounter()) {
             Notification::make()->title('Not authorized')->danger()->send();
 
             return;
@@ -727,7 +730,7 @@ class ClinicalWorkspace extends Page implements HasSchemas
             return;
         }
 
-        if (! Auth::user()?->can('Create Encounter')) {
+        if (! $this->canCreateEncounter()) {
             Notification::make()->title('Not authorized')->danger()->send();
 
             return;
@@ -763,18 +766,58 @@ class ClinicalWorkspace extends Page implements HasSchemas
 
     protected function authorizeEncounterUpdate(Encounter $encounter): void
     {
-        if (! Auth::user()?->can('update', $encounter)) {
+        if (! $this->canUpdateEncounter($encounter)) {
             throw new AuthorizationException(__('Not authorized to update this encounter.'));
         }
     }
 
     protected function authorizeEncounterDischarge(Encounter $encounter): void
     {
-        $user = Auth::user();
-
-        if (! ($user?->can('discharge_patient') || $user?->can('update', $encounter))) {
+        if (! $this->canDischargeEncounter($encounter)) {
             throw new AuthorizationException(__('Not authorized to discharge this encounter.'));
         }
+    }
+
+    public function canCreateEncounter(): bool
+    {
+        $user = Auth::user();
+
+        return $user !== null && app(EncounterPolicy::class)->create($user);
+    }
+
+    public function canUpdateEncounter(?Encounter $encounter = null): bool
+    {
+        $user = Auth::user();
+        $encounter ??= $this->getOpenEncounter();
+
+        return $user !== null
+            && $encounter !== null
+            && app(EncounterPolicy::class)->update($user, $encounter);
+    }
+
+    public function canDischargeEncounter(?Encounter $encounter = null): bool
+    {
+        $user = Auth::user();
+        $encounter ??= $this->getOpenEncounter();
+
+        if ($user === null || $encounter === null) {
+            return false;
+        }
+
+        return $user->can('discharge_patient')
+            || $user->can('can_discharge');
+    }
+
+    public function canAccessAdtTab(): bool
+    {
+        $encounter = $this->getOpenEncounter();
+
+        if ($encounter === null) {
+            return $this->canCreateEncounter();
+        }
+
+        return $this->canUpdateEncounter($encounter)
+            || $this->canDischargeEncounter($encounter);
     }
 
     protected function refreshAdtContext(Encounter $encounter): void
@@ -1362,10 +1405,6 @@ class ClinicalWorkspace extends Page implements HasSchemas
                 'label' => 'ADT',
                 'icon' => 'heroicon-m-arrows-right-left',
             ],
-            'discharge' => [
-                'label' => 'Discharge',
-                'icon' => 'heroicon-m-arrow-right-on-rectangle',
-            ],
             'referral' => [
                 'label' => 'Referral',
                 'icon' => 'heroicon-m-arrow-path',
@@ -1376,6 +1415,7 @@ class ClinicalWorkspace extends Page implements HasSchemas
             ],
         ];
 
+        $tabs = $this->filterAdtTab($tabs);
         $tabs = $this->prependEncounterTab($tabs);
 
         return $this->prependPatientDetailsTab($tabs);
@@ -1410,7 +1450,20 @@ class ClinicalWorkspace extends Page implements HasSchemas
             ],
         ];
 
-        return $this->prependPatientDetailsTab($tabs);
+        return $this->prependPatientDetailsTab($this->filterAdtTab($tabs));
+    }
+
+    /**
+     * @param  array<string, array{label: string, icon?: string}>  $tabs
+     * @return array<string, array{label: string, icon?: string}>
+     */
+    protected function filterAdtTab(array $tabs): array
+    {
+        if (! $this->canAccessAdtTab()) {
+            unset($tabs['adt']);
+        }
+
+        return $tabs;
     }
 
     public function getLabTabs(): array

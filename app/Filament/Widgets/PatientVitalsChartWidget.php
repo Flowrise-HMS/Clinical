@@ -24,6 +24,20 @@ class PatientVitalsChartWidget extends ChartWidget
 
     protected int $limit = 30;
 
+    /**
+     * Distinct Chart.js colors per vital so series are visually distinguishable.
+     *
+     * @var array<string, string>
+     */
+    protected const SERIES_COLORS = [
+        'Temperature (°C)' => '#f59e0b',
+        'Heart Rate (bpm)' => '#ef4444',
+        'Respiratory Rate (/min)' => '#8b5cf6',
+        'SpO₂ (%)' => '#06b6d4',
+        'BP Systolic (mmHg)' => '#2563eb',
+        'BP Diastolic (mmHg)' => '#93c5fd',
+    ];
+
     protected function getData(): array
     {
         if (! $this->patientId) {
@@ -45,53 +59,38 @@ class PatientVitalsChartWidget extends ChartWidget
         $labels = $vitals->map(fn ($v) => $v->recorded_at?->format('Y-m-d H:i'))->toArray();
 
         $datasets = [
-            [
-                'label' => 'Temperature (°C)',
-                'data' => $vitals->map(fn ($v) => $v->temperature ? (float) $v->temperature : null)->toArray(),
-                'yAxisID' => 'y',
-                'tension' => 0.2,
-                'fill' => false,
-            ],
-            [
-                'label' => 'Heart Rate (bpm)',
-                'data' => $vitals->map(fn ($v) => $v->heart_rate ? (int) $v->heart_rate : null)->toArray(),
-                'yAxisID' => 'y',
-                'tension' => 0.2,
-                'fill' => false,
-            ],
-            [
-                'label' => 'Respiratory Rate (/min)',
-                'data' => $vitals->map(fn ($v) => $v->respiratory_rate ? (int) $v->respiratory_rate : null)->toArray(),
-                'yAxisID' => 'y',
-                'tension' => 0.2,
-                'fill' => false,
-            ],
-            [
-                'label' => 'SpO₂ (%)',
-                'data' => $vitals->map(fn ($v) => $v->spo2 ? (int) $v->spo2 : null)->toArray(),
-                'yAxisID' => 'y',
-                'tension' => 0.2,
-                'fill' => false,
-            ],
-            [
-                'label' => 'BP Systolic (mmHg)',
-                'data' => $vitals->map(fn ($v) => $v->systolic_bp ? (int) $v->systolic_bp : null)->toArray(),
-                'yAxisID' => 'y',
-                'tension' => 0.2,
-                'fill' => false,
-            ],
-            [
-                'label' => 'BP Diastolic (mmHg)',
-                'data' => $vitals->map(fn ($v) => $v->diastolic_bp ? (int) $v->diastolic_bp : null)->toArray(),
-                'yAxisID' => 'y',
-                'tension' => 0.2,
-                'fill' => false,
-            ],
+            $this->dataset('Temperature (°C)', $vitals->map(fn ($v) => $v->temperature ? (float) $v->temperature : null)->toArray()),
+            $this->dataset('Heart Rate (bpm)', $vitals->map(fn ($v) => $v->heart_rate ? (int) $v->heart_rate : null)->toArray()),
+            $this->dataset('Respiratory Rate (/min)', $vitals->map(fn ($v) => $v->respiratory_rate ? (int) $v->respiratory_rate : null)->toArray()),
+            $this->dataset('SpO₂ (%)', $vitals->map(fn ($v) => $v->spo2 ? (int) $v->spo2 : null)->toArray()),
+            $this->dataset('BP Systolic (mmHg)', $vitals->map(fn ($v) => $v->systolic_bp ? (int) $v->systolic_bp : null)->toArray()),
+            $this->dataset('BP Diastolic (mmHg)', $vitals->map(fn ($v) => $v->diastolic_bp ? (int) $v->diastolic_bp : null)->toArray()),
         ];
 
         return [
             'labels' => $labels,
             'datasets' => $datasets,
+        ];
+    }
+
+    /**
+     * @param  array<int, float|int|null>  $data
+     * @return array<string, mixed>
+     */
+    protected function dataset(string $label, array $data): array
+    {
+        $color = self::SERIES_COLORS[$label];
+
+        return [
+            'label' => $label,
+            'data' => $data,
+            'borderColor' => $color,
+            'backgroundColor' => $color,
+            'pointBackgroundColor' => $color,
+            'pointBorderColor' => $color,
+            'yAxisID' => 'y',
+            'tension' => 0.2,
+            'fill' => false,
         ];
     }
 
@@ -107,6 +106,12 @@ class PatientVitalsChartWidget extends ChartWidget
             'interaction' => [
                 'mode' => 'index',
                 'intersect' => false,
+            ],
+            'plugins' => [
+                'legend' => [
+                    'display' => true,
+                    'position' => 'bottom',
+                ],
             ],
             'scales' => [
                 'x' => [

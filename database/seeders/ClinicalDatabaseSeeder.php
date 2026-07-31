@@ -13,6 +13,7 @@ class ClinicalDatabaseSeeder extends Seeder
     {
         $this->call([
             DiagnosisCodeSeeder::class,
+            NursingDiagnosisCatalogueSeeder::class,
         ]);
     }
 }
