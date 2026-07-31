@@ -37,5 +37,7 @@ it('composes PES statements consistently', function (): void {
         'Acute pain',
         'surgical incision',
         'patient reports pain score of 8',
-    ))->toBe('Acute pain related to surgical incision as evidenced by patient reports pain score of 8');
+    ))->toBe('Acute pain related to surgical incision as evidenced by patient reports pain score of 8')
+        ->and(CarePlanDiagnosis::composePes(null, null, null, 'Acute pain'))->toBe('Acute pain')
+        ->and(CarePlanDiagnosis::composePes('Acute pain', null, null))->toBe('Acute pain');
 });

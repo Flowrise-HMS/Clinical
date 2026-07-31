@@ -13,7 +13,7 @@ class CarePlanOrderService
     public function addOrder(
         CarePlanDiagnosis $diagnosis,
         string $instruction,
-        string $frequency,
+        ?string $frequency = null,
         ?int $sequence = null,
     ): CarePlanOrder {
         return DB::transaction(function () use ($diagnosis, $instruction, $frequency, $sequence): CarePlanOrder {

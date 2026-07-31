@@ -22,6 +22,7 @@ class CarePlanDiagnosis extends BaseModel
         'care_plan_id',
         'care_plan_problem_id',
         'catalogue_id',
+        'label',
         'problem_statement',
         'related_to',
         'as_evidenced_by',
@@ -41,9 +42,44 @@ class CarePlanDiagnosis extends BaseModel
         return CarePlanDiagnosisFactory::new();
     }
 
-    public static function composePes(string $problem, string $relatedTo, string $asEvidencedBy): string
+    public static function composePes(
+        ?string $problem = null,
+        ?string $relatedTo = null,
+        ?string $asEvidencedBy = null,
+        ?string $fallbackLabel = null,
+    ): string {
+        $base = filled($problem) ? $problem : $fallbackLabel;
+        $segments = [];
+
+        if (filled($base)) {
+            $segments[] = $base;
+        }
+
+        if (filled($relatedTo)) {
+            $segments[] = 'related to '.$relatedTo;
+        }
+
+        if (filled($asEvidencedBy)) {
+            $segments[] = 'as evidenced by '.$asEvidencedBy;
+        }
+
+        $composed = trim(implode(' ', $segments));
+
+        return $composed !== '' ? $composed : (string) ($fallbackLabel ?? '');
+    }
+
+    public function displayLabel(): string
     {
-        return trim("{$problem} related to {$relatedTo} as evidenced by {$asEvidencedBy}");
+        if ($this->relationLoaded('catalogue') && filled($this->catalogue?->label)) {
+            return (string) $this->catalogue->label;
+        }
+
+        return (string) (
+            $this->label
+            ?? $this->problem_statement
+            ?? $this->composed_statement
+            ?? 'Nursing diagnosis'
+        );
     }
 
     public function carePlan(): BelongsTo

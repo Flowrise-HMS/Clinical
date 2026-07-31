@@ -93,6 +93,101 @@ it('composes a PES statement from the nursing diagnosis service', function (): v
         ->toBe('Acute pain related to surgical incision as evidenced by pain score of 8 out of 10');
 });
 
+it('allows diagnosis-only free text without PES or catalogue', function (): void {
+    $problem = app(CarePlanProblemService::class)->identify(
+        $this->plan,
+        'Acute pain',
+        $this->author,
+    );
+
+    $diagnosis = app(NursingDiagnosisService::class)->formulate(
+        $problem,
+        null,
+        null,
+        null,
+        null,
+        $this->author,
+        'Risk for infection',
+        false,
+    );
+
+    $order = app(CarePlanOrderService::class)->addOrder(
+        $diagnosis,
+        'Monitor incision site daily.',
+        null,
+    );
+
+    expect($diagnosis->catalogue_id)->toBeNull()
+        ->and($diagnosis->label)->toBe('Risk for infection')
+        ->and($diagnosis->composed_statement)->toBe('Risk for infection')
+        ->and($order->frequency)->toBeNull();
+});
+
+it('resolves display labels without lazy loading the catalogue relation', function (): void {
+    $catalogue = NursingDiagnosisCatalogue::factory()->create([
+        'label' => 'Acute pain',
+    ]);
+    $problem = app(CarePlanProblemService::class)->identify($this->plan, 'Acute pain', $this->author);
+
+    $diagnosis = app(NursingDiagnosisService::class)->formulate(
+        $problem,
+        $catalogue,
+        'Acute pain',
+        'surgical incision',
+        'grimacing',
+        $this->author,
+    );
+
+    $fresh = $diagnosis->fresh();
+
+    expect($fresh->relationLoaded('catalogue'))->toBeFalse()
+        ->and($fresh->label)->toBe('Acute pain')
+        ->and($fresh->displayLabel())->toBe('Acute pain');
+});
+
+it('warns but still activates when a diagnosis has fewer than three orders', function (): void {
+    $problem = app(CarePlanProblemService::class)->identify($this->plan, 'Acute pain', $this->author);
+    app(CarePlanProblemService::class)->addStrength($problem, 'Can rate pain', $this->author);
+
+    $diagnosis = app(NursingDiagnosisService::class)->formulate(
+        $problem,
+        null,
+        null,
+        null,
+        null,
+        $this->author,
+        'Acute pain',
+        false,
+    );
+    app(CarePlanOrderService::class)->addOrder($diagnosis, 'Assess pain', null);
+
+    $this->plan->update(['no_known_allergies' => true]);
+    $this->plan->routineCares()->createMany(
+        collect(\Modules\Clinical\Enums\RoutineCareItem::cases())
+            ->reject(fn ($item) => $item === \Modules\Clinical\Enums\RoutineCareItem::OTHER)
+            ->map(fn ($item): array => [
+                'item' => $item,
+                'specification' => 'As prescribed',
+                'specified_by' => $this->author->id,
+                'specified_at' => now(),
+            ])
+            ->all()
+    );
+
+    $medical = \Modules\Clinical\Models\EncounterDiagnosis::factory()->create([
+        'encounter_id' => $this->encounter->id,
+        'patient_id' => $this->patient->id,
+        'ordered_by' => $this->author->id,
+    ]);
+    app(CarePlanService::class)->attachMedicalDiagnosis($this->plan, $medical);
+
+    $warnings = app(CarePlanService::class)->activationWarnings($this->plan->fresh());
+    $activated = app(CarePlanService::class)->activate($this->plan->fresh());
+
+    expect($warnings)->not->toBeEmpty()
+        ->and($activated->status)->toBe(CarePlanStatus::ACTIVE);
+});
+
 it('appends an evaluation and updates achievement status', function (): void {
     $objective = createCarePlanObjective($this);
 

@@ -141,95 +141,221 @@
             @endcan
 
             @if ($draftCarePlan = $this->selectedCarePlan())
-                <x-filament::section>
-                    <x-slot name="heading">Care plan authoring</x-slot>
-                    <x-slot name="description">Complete each step in order before activating this draft.</x-slot>
+                @php($readiness = $this->carePlanActivationReadiness() ?? ['can_activate' => false, 'is_ready' => false, 'medical_diagnoses' => [], 'items' => [], 'by_key' => []])
+                @php($allergiesItem = $readiness['by_key']['allergies'] ?? null)
+                @php($strengthsItem = $readiness['by_key']['problem_strengths'] ?? null)
+                @php($routineItem = $readiness['by_key']['routine_care'] ?? null)
+                @php($nursingItem = $readiness['by_key']['nursing_diagnoses'] ?? null)
+                @php($ordersItem = $readiness['by_key']['orders'] ?? null)
+                @php($medicalItem = $readiness['by_key']['medical_diagnosis'] ?? null)
 
-                    <ol class="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-                        <li class="rounded-lg border border-gray-200 p-3 dark:border-gray-700">
-                            <p class="text-xs font-semibold text-primary-600 dark:text-primary-400">1. HEADER</p>
-                            <p class="mt-1 text-sm text-gray-700 dark:text-gray-200">Plan details and allergies</p>
-                            <x-filament::button type="button" wire:click="mountAction('editCarePlanHeader')" class="mt-3" color="gray" size="sm">
-                                Edit header
-                            </x-filament::button>
-                        </li>
-                        <li class="rounded-lg border border-gray-200 p-3 dark:border-gray-700">
-                            <p class="text-xs font-semibold text-primary-600 dark:text-primary-400">2. ASSESSMENT</p>
-                            <p class="mt-1 text-sm text-gray-700 dark:text-gray-200">Problems, strengths, and medical diagnoses</p>
-                            <x-filament::button type="button" wire:click="mountAction('addCarePlanAssessment')" class="mt-3" color="gray" size="sm">
-                                Add assessment
-                            </x-filament::button>
-                            <x-filament::button type="button" wire:click="mountAction('attachMedicalDiagnosis')" class="mt-2" color="gray" size="sm">
-                                Attach medical diagnosis
-                            </x-filament::button>
-                        </li>
-                        <li class="rounded-lg border border-gray-200 p-3 dark:border-gray-700">
-                            <p class="text-xs font-semibold text-primary-600 dark:text-primary-400">3. ROUTINE CARE</p>
-                            <p class="mt-1 text-sm text-gray-700 dark:text-gray-200">Specify each required routine item</p>
-                            <x-filament::button type="button" wire:click="mountAction('addRoutineCare')" class="mt-3" color="gray" size="sm">
-                                Set routine care
-                            </x-filament::button>
-                        </li>
-                        <li class="rounded-lg border border-gray-200 p-3 dark:border-gray-700">
-                            <p class="text-xs font-semibold text-primary-600 dark:text-primary-400">4. NANDA + PES</p>
-                            <p class="mt-1 text-sm text-gray-700 dark:text-gray-200">Diagnosis and at least three orders</p>
-                            <x-filament::button type="button" wire:click="mountAction('addNursingDiagnosis')" class="mt-3" color="gray" size="sm">
-                                Add nursing diagnosis
-                            </x-filament::button>
-                        </li>
-                        <li class="rounded-lg border border-gray-200 p-3 dark:border-gray-700">
-                            <p class="text-xs font-semibold text-primary-600 dark:text-primary-400">5. INTERVENTIONS</p>
-                            <p class="mt-1 text-sm text-gray-700 dark:text-gray-200">Document completed nursing actions</p>
-                            <x-filament::button type="button" wire:click="mountAction('recordIntervention')" class="mt-3" color="gray" size="sm">
-                                Record intervention
-                            </x-filament::button>
-                        </li>
-                        <li class="rounded-lg border border-gray-200 p-3 dark:border-gray-700">
-                            <p class="text-xs font-semibold text-primary-600 dark:text-primary-400">6. EVALUATION</p>
-                            <p class="mt-1 text-sm text-gray-700 dark:text-gray-200">Evaluate expected outcomes</p>
-                            <x-filament::button type="button" wire:click="mountAction('evaluateCarePlanObjective')" class="mt-3" color="gray" size="sm">
-                                Evaluate objective
-                            </x-filament::button>
-                        </li>
-                        <li class="rounded-lg border border-success-300 bg-success-50 p-3 dark:border-success-700 dark:bg-success-950/20">
-                            <p class="text-xs font-semibold text-success-700 dark:text-success-300">READY TO ACTIVATE</p>
-                            <p class="mt-1 text-sm text-gray-700 dark:text-gray-200">The service validates all prerequisites.</p>
-                            <x-filament::button type="button" wire:click="activateCarePlan('{{ $draftCarePlan->id }}')" class="mt-3" color="success" size="sm">
-                                Activate plan
-                            </x-filament::button>
-                        </li>
-                    </ol>
-
-                    <div class="mt-6 grid gap-4 lg:grid-cols-2">
-                        <div>
-                            <p class="mb-2 text-sm font-semibold text-gray-950 dark:text-white">Diagnoses</p>
-                            <div class="space-y-2">
-                                @forelse ($draftCarePlan->medicalDiagnoses as $diagnosis)
-                                    <p class="text-sm text-gray-700 dark:text-gray-200">
-                                        <x-filament::badge color="info">Medical</x-filament::badge>
-                                        {{ $diagnosis->description }}
-                                    </p>
-                                @empty
-                                    <p class="text-sm text-gray-500 dark:text-gray-400">No medical diagnosis attached.</p>
-                                @endforelse
-                                @foreach ($draftCarePlan->diagnoses as $diagnosis)
-                                    <p class="text-sm text-gray-700 dark:text-gray-200">
-                                        <x-filament::badge color="primary">Nursing</x-filament::badge>
-                                        {{ $diagnosis->composed_statement }}
-                                    </p>
-                                @endforeach
-                            </div>
-                        </div>
-                        <div>
-                            <p class="mb-2 text-sm font-semibold text-gray-950 dark:text-white">Activation checklist</p>
-                            <p class="text-sm text-gray-500 dark:text-gray-400">
-                                {{ $draftCarePlan->problems->count() }} problem(s),
-                                {{ $draftCarePlan->routineCares->count() }} routine care item(s), and
-                                {{ $draftCarePlan->diagnoses->count() }} nursing diagnosis(es) recorded.
-                            </p>
-                        </div>
+                <div class="space-y-4">
+                    <div>
+                        <h2 class="text-base font-semibold text-gray-950 dark:text-white">Care plan authoring</h2>
+                        <p class="text-sm text-gray-500 dark:text-gray-400">
+                            Open a step to review its summary, actions, and recorded data.
+                        </p>
                     </div>
-                </x-filament::section>
+
+                    <x-filament::section
+                        collapsible
+                        :collapsed="false"
+                        persist-collapsed
+                        id="care-plan-header-{{ $draftCarePlan->id }}"
+                    >
+                        <x-slot name="heading">
+                            <span class="inline-flex flex-wrap items-center gap-2">
+                                1. Header
+                                <x-filament::badge :color="$draftCarePlan->status->getColor()" size="sm">
+                                    {{ $draftCarePlan->status->getLabel() }}
+                                </x-filament::badge>
+                                @if ($readiness['is_ready'])
+                                    <x-filament::badge color="success" size="sm">Ready</x-filament::badge>
+                                @else
+                                    <x-filament::badge color="warning" size="sm">Incomplete</x-filament::badge>
+                                @endif
+                            </span>
+                        </x-slot>
+                        <x-slot name="description">
+                            {{ $allergiesItem['detail'] ?? 'Plan details and allergies' }}
+                            @if ($medicalItem && ! $medicalItem['passed'])
+                                · Medical diagnosis required
+                            @endif
+                        </x-slot>
+                        <x-slot name="afterHeader">
+                            <div class="flex flex-wrap items-center gap-2" x-on:click.stop>
+                                <x-filament::button type="button" wire:click="mountAction('editCarePlanHeader')" color="gray" size="sm">
+                                    Edit header
+                                </x-filament::button>
+                                @if ($draftCarePlan->status->canActivate())
+                                    <x-filament::button
+                                        type="button"
+                                        wire:click="activateCarePlan('{{ $draftCarePlan->id }}')"
+                                        color="success"
+                                        size="sm"
+                                        :disabled="! $readiness['can_activate']"
+                                    >
+                                        Activate plan
+                                    </x-filament::button>
+                                @else
+                                    <x-filament::badge color="success">Plan active</x-filament::badge>
+                                @endif
+                            </div>
+                        </x-slot>
+
+                        <div class="space-y-3">
+                            <div>
+                                <p class="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
+                                    Medical diagnoses
+                                </p>
+                                <div class="flex flex-wrap gap-2">
+                                    @forelse ($readiness['medical_diagnoses'] as $diagnosis)
+                                        <x-filament::badge color="info">
+                                            {{ $diagnosis['description'] }}
+                                        </x-filament::badge>
+                                    @empty
+                                        <p class="text-sm text-gray-500 dark:text-gray-400">No medical diagnosis attached yet.</p>
+                                    @endforelse
+                                </div>
+                            </div>
+                            @if ($draftCarePlan->status->canActivate() && ! $readiness['is_ready'])
+                                <p class="text-xs text-gray-500 dark:text-gray-400">
+                                    Complete the required items in each step below to enable activation.
+                                </p>
+                            @elseif ($draftCarePlan->status->canActivate() && $ordersItem && ! $ordersItem['passed'])
+                                <p class="text-xs text-warning-700 dark:text-warning-300">
+                                    You can still activate with fewer than 3 orders per diagnosis.
+                                </p>
+                            @endif
+                        </div>
+                    </x-filament::section>
+
+                    <x-filament::section
+                        collapsible
+                        collapsed
+                        persist-collapsed
+                        id="care-plan-assessment-{{ $draftCarePlan->id }}"
+                    >
+                        <x-slot name="heading">2. Assessment</x-slot>
+                        <x-slot name="description">
+                            <span @class([
+                                'text-danger-600 dark:text-danger-400' => $strengthsItem && ! $strengthsItem['passed'],
+                            ])>
+                                {{ $strengthsItem['detail'] ?? 'Problems, strengths, and medical diagnoses' }}
+                            </span>
+                        </x-slot>
+                        <x-slot name="afterHeader">
+                            <div class="flex flex-wrap items-center gap-2" x-on:click.stop>
+                                <x-filament::button type="button" wire:click="mountAction('addCarePlanAssessment')" color="gray" size="sm">
+                                    Add assessment
+                                </x-filament::button>
+                                <x-filament::button type="button" wire:click="mountAction('attachMedicalDiagnosis')" color="gray" size="sm">
+                                    Attach medical diagnosis
+                                </x-filament::button>
+                            </div>
+                        </x-slot>
+
+                        @livewire(\Modules\Clinical\Filament\Widgets\CarePlanProblemsTableWidget::class, ['carePlanId' => $draftCarePlan->id], key('cp-problems-'.$draftCarePlan->id))
+                    </x-filament::section>
+
+                    <x-filament::section
+                        collapsible
+                        collapsed
+                        persist-collapsed
+                        id="care-plan-routine-{{ $draftCarePlan->id }}"
+                    >
+                        <x-slot name="heading">3. Routine care</x-slot>
+                        <x-slot name="description">
+                            <span @class([
+                                'text-danger-600 dark:text-danger-400' => $routineItem && ! $routineItem['passed'],
+                            ])>
+                                {{ $routineItem['detail'] ?? 'Complete the full checklist in one pass' }}
+                            </span>
+                        </x-slot>
+                        <x-slot name="afterHeader">
+                            <div x-on:click.stop>
+                                <x-filament::button type="button" wire:click="mountAction('addRoutineCare')" color="gray" size="sm">
+                                    Set routine care
+                                </x-filament::button>
+                            </div>
+                        </x-slot>
+
+                        @livewire(\Modules\Clinical\Filament\Widgets\CarePlanRoutineCareTableWidget::class, ['carePlanId' => $draftCarePlan->id], key('cp-routine-'.$draftCarePlan->id))
+                    </x-filament::section>
+
+                    <x-filament::section
+                        collapsible
+                        collapsed
+                        persist-collapsed
+                        id="care-plan-nanda-{{ $draftCarePlan->id }}"
+                    >
+                        <x-slot name="heading">4. NANDA + PES</x-slot>
+                        <x-slot name="description">
+                            <span @class([
+                                'text-danger-600 dark:text-danger-400' => $nursingItem && ! $nursingItem['passed'],
+                            ])>
+                                {{ $nursingItem['detail'] ?? 'Catalogue or free-text diagnosis; PES optional' }}
+                            </span>
+                        </x-slot>
+                        <x-slot name="afterHeader">
+                            <div x-on:click.stop>
+                                <x-filament::button type="button" wire:click="mountAction('addNursingDiagnosis')" color="gray" size="sm">
+                                    Add nursing diagnosis
+                                </x-filament::button>
+                            </div>
+                        </x-slot>
+
+                        @livewire(\Modules\Clinical\Filament\Widgets\CarePlanDiagnosesTableWidget::class, ['carePlanId' => $draftCarePlan->id], key('cp-diagnoses-'.$draftCarePlan->id))
+                    </x-filament::section>
+
+                    <x-filament::section
+                        collapsible
+                        collapsed
+                        persist-collapsed
+                        id="care-plan-interventions-{{ $draftCarePlan->id }}"
+                    >
+                        <x-slot name="heading">5. Interventions</x-slot>
+                        <x-slot name="description">
+                            <span @class([
+                                'text-warning-700 dark:text-warning-300' => $ordersItem && ! $ordersItem['passed'],
+                            ])>
+                                {{ $ordersItem['detail'] ?? 'Document completed nursing actions' }}
+                            </span>
+                        </x-slot>
+                        <x-slot name="afterHeader">
+                            <div x-on:click.stop>
+                                <x-filament::button type="button" wire:click="mountAction('recordIntervention')" color="gray" size="sm">
+                                    Record intervention
+                                </x-filament::button>
+                            </div>
+                        </x-slot>
+
+                        <p class="text-sm text-gray-500 dark:text-gray-400">
+                            Record completed nursing actions against orders. Order counts are shown on nursing diagnoses in step 4.
+                        </p>
+                    </x-filament::section>
+
+                    <x-filament::section
+                        collapsible
+                        collapsed
+                        persist-collapsed
+                        id="care-plan-evaluation-{{ $draftCarePlan->id }}"
+                    >
+                        <x-slot name="heading">6. Evaluation</x-slot>
+                        <x-slot name="description">Evaluate expected outcomes</x-slot>
+                        <x-slot name="afterHeader">
+                            <div x-on:click.stop>
+                                <x-filament::button type="button" wire:click="mountAction('evaluateCarePlanObjective')" color="gray" size="sm">
+                                    Evaluate objective
+                                </x-filament::button>
+                            </div>
+                        </x-slot>
+
+                        <p class="text-sm text-gray-500 dark:text-gray-400">
+                            Evaluate objectives once interventions are underway.
+                        </p>
+                    </x-filament::section>
+                </div>
             @endif
 
             <div class="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm dark:border-gray-700 dark:bg-gray-800">

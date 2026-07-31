@@ -60,4 +60,9 @@ enum CarePlanStatus: string implements HasColor, HasDescription, HasLabel
     {
         return in_array($this, [self::DRAFT, self::ACTIVE, self::ON_HOLD]);
     }
+
+    public function canActivate(): bool
+    {
+        return in_array($this, [self::DRAFT, self::ON_HOLD], true);
+    }
 }

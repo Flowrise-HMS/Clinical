@@ -154,6 +154,29 @@ trait ManagesCarePlan
             ->find($this->draftCarePlanId);
     }
 
+    /**
+     * @return array{
+     *     can_activate: bool,
+     *     is_ready: bool,
+     *     medical_diagnoses: list<array{id: string, description: string}>,
+     *     items: list<array{key: string, label: string, passed: bool, detail: ?string, severity: 'required'|'warning'}>,
+     *     by_key: array<string, array{key: string, label: string, passed: bool, detail: ?string, severity: 'required'|'warning'}>
+     * }|null
+     */
+    public function carePlanActivationReadiness(): ?array
+    {
+        $carePlan = $this->selectedCarePlan();
+
+        if ($carePlan === null) {
+            return null;
+        }
+
+        $readiness = app(CarePlanService::class)->activationReadiness($carePlan);
+        $readiness['by_key'] = collect($readiness['items'])->keyBy('key')->all();
+
+        return $readiness;
+    }
+
     public function selectCarePlan(string $carePlanId): void
     {
         $carePlan = CarePlan::query()->findOrFail($carePlanId);
@@ -197,17 +220,37 @@ trait ManagesCarePlan
     public function activateCarePlan(string $carePlanId): void
     {
         $carePlan = CarePlan::query()->findOrFail($carePlanId);
+        Gate::authorize('update', $carePlan);
 
+        if (! $carePlan->status->canActivate()) {
+            Notification::make()
+                ->title('Care plan cannot be activated')
+                ->body($carePlan->status === CarePlanStatus::ACTIVE
+                    ? __('Care plan is already active.')
+                    : __('Only draft or on-hold care plans can be activated.'))
+                ->warning()
+                ->send();
 
+            return;
+        }
 
         try {
+            $warnings = app(CarePlanService::class)->activationWarnings($carePlan);
             app(CarePlanService::class)->activate($carePlan);
             $this->draftCarePlanId = null;
 
-            Notification::make()
+            $notification = Notification::make()
                 ->title('Care plan activated')
-                ->success()
-                ->send();
+                ->success();
+
+            if ($warnings !== []) {
+                $notification
+                    ->warning()
+                    ->title('Care plan activated with warnings')
+                    ->body(implode(' ', $warnings));
+            }
+
+            $notification->send();
         } catch (\InvalidArgumentException $exception) {
             Notification::make()
                 ->title('Care plan cannot be activated')
@@ -305,27 +348,42 @@ trait ManagesCarePlan
     {
         return Action::make('addRoutineCare')
             ->label('Set routine care')
-            ->modalHeading('Routine care')
+            ->modalHeading('Routine care checklist')
+            ->modalDescription('Complete all items in one pass. Use smart suggestions as a starting point.')
             ->slideOver()
-            ->schema(RoutineCareForm::components())
+            ->fillForm(fn (): array => [
+                'items' => collect(RoutineCareItem::cases())
+                    ->reject(fn (RoutineCareItem $item): bool => $item === RoutineCareItem::OTHER)
+                    ->map(function (RoutineCareItem $item): array {
+                        $existing = $this->selectedCarePlanOrFail()
+                            ->routineCares()
+                            ->get()
+                            ->first(fn ($row) => $row->item === $item);
+
+                        return [
+                            'item' => $item->value,
+                            'item_label' => $item->getLabel(),
+                            'specification' => $existing?->specification,
+                            'not_applicable' => (bool) ($existing?->not_applicable ?? false),
+                            'notes' => $existing?->notes,
+                            'placeholder' => $item->getDescription() ?? 'Enter care instructions',
+                        ];
+                    })
+                    ->values()
+                    ->all(),
+            ])
+            ->schema(fn (): array => RoutineCareForm::components($this->selectedCarePlanOrFail()))
             ->action(function (array $data): void {
                 $carePlan = $this->selectedCarePlanOrFail();
+                Gate::authorize('update', $carePlan);
 
                 /** @var User $user */
                 $user = Auth::user();
-                $item = $data['item'] instanceof RoutineCareItem
-                    ? $data['item']
-                    : RoutineCareItem::from($data['item']);
 
-                $carePlan->routineCares()->updateOrCreate(
-                    ['item' => $item],
-                    [
-                        'specification' => $data['specification'] ?? null,
-                        'not_applicable' => $data['not_applicable'] ?? false,
-                        'notes' => $data['notes'] ?? null,
-                        'specified_by' => $user->id,
-                        'specified_at' => now(),
-                    ],
+                app(CarePlanService::class)->syncRoutineCareChecklist(
+                    $carePlan,
+                    $data['items'] ?? [],
+                    $user,
                 );
             })
             ->successNotificationTitle('Routine care saved');
@@ -340,26 +398,35 @@ trait ManagesCarePlan
             ->schema(fn (): array => DiagnosisGridForm::components($this->selectedCarePlanOrFail()))
             ->action(function (array $data): void {
                 $carePlan = $this->selectedCarePlanOrFail();
-
+                Gate::authorize('update', $carePlan);
 
                 /** @var User $user */
                 $user = Auth::user();
                 $problem = $carePlan->problems()->findOrFail($data['care_plan_problem_id']);
-                $catalogue = NursingDiagnosisCatalogue::query()->findOrFail($data['catalogue_id']);
+                $catalogue = filled($data['catalogue_id'] ?? null)
+                    ? NursingDiagnosisCatalogue::query()->findOrFail($data['catalogue_id'])
+                    : null;
+
                 $diagnosis = app(NursingDiagnosisService::class)->formulate(
                     $problem,
                     $catalogue,
-                    $data['problem_statement'],
-                    $data['related_to'],
-                    $data['as_evidenced_by'],
+                    $data['problem_statement'] ?? null,
+                    $data['related_to'] ?? null,
+                    $data['as_evidenced_by'] ?? null,
                     $user,
+                    $data['custom_label'] ?? null,
+                    (bool) ($data['save_to_catalogue'] ?? false),
                 );
 
-                foreach ($data['orders'] as $order) {
+                foreach ($data['orders'] ?? [] as $order) {
+                    if (blank($order['instruction'] ?? null)) {
+                        continue;
+                    }
+
                     app(CarePlanOrderService::class)->addOrder(
                         $diagnosis,
                         $order['instruction'],
-                        $order['frequency'],
+                        $order['frequency'] ?? null,
                     );
                 }
 

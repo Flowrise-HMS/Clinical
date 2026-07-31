@@ -127,7 +127,37 @@ it('lists draft care plans and resumes authoring from recent care plans', functi
         ->assertSee('Care plan authoring');
 });
 
-it('saves routine care when the form submits an enum instance', function (): void {
+it('does not offer activate for an already active care plan', function (): void {
+    $encounter = Encounter::factory()
+        ->forPatient($this->patient)
+        ->active()
+        ->create(['branch_id' => $this->branch->id]);
+
+    $carePlan = CarePlan::factory()
+        ->active()
+        ->for($this->patient)
+        ->for($encounter)
+        ->create([
+            'branch_id' => $this->branch->id,
+            'author_id' => $this->user->id,
+        ]);
+
+    Livewire::actingAs($this->user)
+        ->test(CarePlanWorkspace::class, [
+            'patientId' => $this->patient->id,
+            'draftCarePlanId' => $carePlan->id,
+        ])
+        ->assertOk()
+        ->assertSee('1. Header')
+        ->assertSee('Plan active')
+        ->assertDontSeeHtml('wire:click="activateCarePlan')
+        ->call('activateCarePlan', $carePlan->id)
+        ->assertNotified('Care plan cannot be activated');
+
+    expect($carePlan->fresh()->status->value)->toBe('active');
+});
+
+it('shows collapsible authoring sections with readiness summaries and disables activate when incomplete', function (): void {
     $encounter = Encounter::factory()
         ->forPatient($this->patient)
         ->active()
@@ -146,13 +176,56 @@ it('saves routine care when the form submits an enum instance', function (): voi
             'patientId' => $this->patient->id,
             'draftCarePlanId' => $carePlan->id,
         ])
-        ->callAction('addRoutineCare', data: [
-            'item' => \Modules\Clinical\Enums\RoutineCareItem::DIET,
-            'specification' => 'Soft diet',
+        ->assertOk()
+        ->assertSeeInOrder([
+            '1. Header',
+            '2. Assessment',
+            '3. Routine care',
+            '4. NANDA + PES',
+        ])
+        ->assertSee('Incomplete')
+        ->assertSee('Medical diagnoses')
+        ->assertDontSee('Activation readiness')
+        ->assertDontSee('Activation checklist')
+        ->assertSeeHtml('disabled');
+});
+
+it('saves the routine care checklist in one action', function (): void {
+    $encounter = Encounter::factory()
+        ->forPatient($this->patient)
+        ->active()
+        ->create(['branch_id' => $this->branch->id]);
+
+    $carePlan = CarePlan::factory()
+        ->for($this->patient)
+        ->for($encounter)
+        ->create([
+            'branch_id' => $this->branch->id,
+            'author_id' => $this->user->id,
+        ]);
+
+    $items = collect(\Modules\Clinical\Enums\RoutineCareItem::cases())
+        ->reject(fn ($item) => $item === \Modules\Clinical\Enums\RoutineCareItem::OTHER)
+        ->map(fn ($item): array => [
+            'item' => $item->value,
+            'specification' => 'As prescribed',
             'not_applicable' => false,
             'notes' => null,
         ])
-        ->assertHasNoActionErrors();
+        ->values()
+        ->all();
 
-    expect($carePlan->fresh()->routineCares()->where('item', 'diet')->exists())->toBeTrue();
+    app(\Modules\Clinical\Classes\Services\CarePlanService::class)
+        ->syncRoutineCareChecklist($carePlan, $items, $this->user);
+
+    Livewire::actingAs($this->user)
+        ->test(CarePlanWorkspace::class, [
+            'patientId' => $this->patient->id,
+            'draftCarePlanId' => $carePlan->id,
+        ])
+        ->mountAction('addRoutineCare')
+        ->assertActionMounted('addRoutineCare');
+
+    expect($carePlan->fresh()->routineCares)->toHaveCount(count($items))
+        ->and($carePlan->fresh()->routineCares()->where('item', 'diet')->exists())->toBeTrue();
 });

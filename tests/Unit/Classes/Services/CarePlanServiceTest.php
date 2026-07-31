@@ -130,23 +130,33 @@ class CarePlanServiceTest extends TestCase
         $this->service->activate($plan);
     }
 
-    public function test_activate_refuses_a_nursing_diagnosis_with_fewer_than_three_orders(): void
+    public function test_activate_warns_but_allows_fewer_than_three_orders(): void
     {
         $plan = $this->completePlan(orderCount: 2);
         $this->attachMedicalDiagnosis($plan);
 
-        $this->expectException(\InvalidArgumentException::class);
-        $this->service->activate($plan);
+        $warnings = $this->service->activationWarnings($plan);
+        $activated = $this->service->activate($plan);
+
+        $this->assertNotEmpty($warnings);
+        $this->assertSame(CarePlanStatus::ACTIVE, $activated->status);
     }
 
-    public function test_activate_refuses_a_nursing_diagnosis_with_incomplete_pes_fields(): void
+    public function test_activate_allows_incomplete_pes_fields(): void
     {
         $plan = $this->completePlan();
         $this->attachMedicalDiagnosis($plan);
-        $plan->diagnoses()->firstOrFail()->update(['related_to' => '']);
+        $plan->diagnoses()->firstOrFail()->update([
+            'related_to' => null,
+            'as_evidenced_by' => null,
+            'problem_statement' => null,
+            'label' => 'Acute pain',
+            'composed_statement' => 'Acute pain',
+        ]);
 
-        $this->expectException(\InvalidArgumentException::class);
-        $this->service->activate($plan);
+        $activated = $this->service->activate($plan->fresh());
+
+        $this->assertSame(CarePlanStatus::ACTIVE, $activated->status);
     }
 
     public function test_activate_sets_active_status_and_timestamp_when_every_guard_passes(): void
@@ -158,6 +168,34 @@ class CarePlanServiceTest extends TestCase
 
         $this->assertSame(CarePlanStatus::ACTIVE, $activated->status);
         $this->assertNotNull($activated->activated_at);
+    }
+
+    public function test_activation_readiness_reports_missing_requirements_and_soft_warnings(): void
+    {
+        $incomplete = $this->completePlan(orderCount: 1);
+        $incompleteReadiness = $this->service->activationReadiness($incomplete);
+
+        $this->assertFalse($incompleteReadiness['is_ready']);
+        $this->assertFalse($incompleteReadiness['can_activate']);
+        $this->assertSame([], $incompleteReadiness['medical_diagnoses']);
+
+        $medicalItem = collect($incompleteReadiness['items'])->firstWhere('key', 'medical_diagnosis');
+        $ordersItem = collect($incompleteReadiness['items'])->firstWhere('key', 'orders');
+
+        $this->assertFalse($medicalItem['passed']);
+        $this->assertFalse($ordersItem['passed']);
+        $this->assertSame('warning', $ordersItem['severity']);
+
+        $readyPlan = $this->completePlan();
+        $this->attachMedicalDiagnosis($readyPlan);
+        $ready = $this->service->activationReadiness($readyPlan->fresh());
+
+        $this->assertTrue($ready['is_ready']);
+        $this->assertTrue($ready['can_activate']);
+        $this->assertCount(1, $ready['medical_diagnoses']);
+        $this->assertTrue(collect($ready['items'])->where('severity', 'required')->every(
+            fn (array $item): bool => $item['passed']
+        ));
     }
 
     public function test_hold_complete_and_revoke_update_the_plan_lifecycle(): void

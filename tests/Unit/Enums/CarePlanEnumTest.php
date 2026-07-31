@@ -73,3 +73,12 @@ it('identifies open care plan statuses', function (): void {
         ->and(CarePlanStatus::REVOKED->isOpen())->toBeFalse()
         ->and(CarePlanStatus::ENTERED_IN_ERROR->isOpen())->toBeFalse();
 });
+
+it('only allows activation from draft or on-hold statuses', function (): void {
+    expect(CarePlanStatus::DRAFT->canActivate())->toBeTrue()
+        ->and(CarePlanStatus::ON_HOLD->canActivate())->toBeTrue()
+        ->and(CarePlanStatus::ACTIVE->canActivate())->toBeFalse()
+        ->and(CarePlanStatus::COMPLETED->canActivate())->toBeFalse()
+        ->and(CarePlanStatus::REVOKED->canActivate())->toBeFalse()
+        ->and(CarePlanStatus::ENTERED_IN_ERROR->canActivate())->toBeFalse();
+});
