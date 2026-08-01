@@ -3,12 +3,14 @@
 use App\Models\User;
 use Livewire\Livewire;
 use Modules\Clinical\Classes\Services\CarePlanService;
+use Modules\Clinical\Enums\CarePlanStatus;
+use Modules\Clinical\Enums\RoutineCareItem;
+use Modules\Clinical\Filament\Clusters\Workspace\Pages\CarePlanWorkspace;
 use Modules\Clinical\Models\CarePlan;
 use Modules\Clinical\Models\CarePlanDiagnosis;
 use Modules\Clinical\Models\CarePlanOrder;
 use Modules\Clinical\Models\Encounter;
 use Modules\Clinical\Models\EncounterDiagnosis;
-use Modules\Clinical\Filament\Clusters\Workspace\Pages\CarePlanWorkspace;
 use Modules\Core\Models\Branch;
 use Modules\Patient\Models\Patient;
 use Spatie\Permission\Models\Permission;
@@ -127,6 +129,52 @@ it('lists draft care plans and resumes authoring from recent care plans', functi
         ->assertSee('Care plan authoring');
 });
 
+it('renders ward care plans with a native Filament table', function (): void {
+    $encounter = Encounter::factory()
+        ->forPatient($this->patient)
+        ->active()
+        ->create(['branch_id' => $this->branch->id]);
+
+    CarePlan::factory()
+        ->for($this->patient)
+        ->for($encounter)
+        ->create([
+            'branch_id' => $this->branch->id,
+            'author_id' => $this->user->id,
+        ]);
+
+    Livewire::actingAs($this->user)
+        ->test(CarePlanWorkspace::class)
+        ->assertOk()
+        ->assertSee('Recent care plans')
+        ->assertSee($this->patient->full_name)
+        ->assertSee('Resume');
+});
+
+it('renders patient previous care plans with a native Filament table', function (): void {
+    $encounter = Encounter::factory()
+        ->forPatient($this->patient)
+        ->active()
+        ->create(['branch_id' => $this->branch->id]);
+
+    CarePlan::factory()
+        ->for($this->patient)
+        ->for($encounter)
+        ->create([
+            'branch_id' => $this->branch->id,
+            'author_id' => $this->user->id,
+            'status' => CarePlanStatus::COMPLETED,
+            'completed_at' => now(),
+        ]);
+
+    Livewire::actingAs($this->user)
+        ->test(CarePlanWorkspace::class, ['patientId' => $this->patient->id])
+        ->assertOk()
+        ->assertSee('Previous care plans')
+        ->assertSee('Completed')
+        ->assertSee('Preview');
+});
+
 it('does not offer activate for an already active care plan', function (): void {
     $encounter = Encounter::factory()
         ->forPatient($this->patient)
@@ -204,8 +252,8 @@ it('saves the routine care checklist in one action', function (): void {
             'author_id' => $this->user->id,
         ]);
 
-    $items = collect(\Modules\Clinical\Enums\RoutineCareItem::cases())
-        ->reject(fn ($item) => $item === \Modules\Clinical\Enums\RoutineCareItem::OTHER)
+    $items = collect(RoutineCareItem::cases())
+        ->reject(fn ($item) => $item === RoutineCareItem::OTHER)
         ->map(fn ($item): array => [
             'item' => $item->value,
             'specification' => 'As prescribed',
@@ -215,7 +263,7 @@ it('saves the routine care checklist in one action', function (): void {
         ->values()
         ->all();
 
-    app(\Modules\Clinical\Classes\Services\CarePlanService::class)
+    app(CarePlanService::class)
         ->syncRoutineCareChecklist($carePlan, $items, $this->user);
 
     Livewire::actingAs($this->user)

@@ -11,8 +11,10 @@ use Modules\Clinical\Enums\CarePlanStatus;
 use Modules\Clinical\Enums\GoalAchievementStatus;
 use Modules\Clinical\Enums\GoalEvaluationNextAction;
 use Modules\Clinical\Enums\GoalEvaluationOutcome;
-use Modules\Clinical\Models\Encounter;
+use Modules\Clinical\Enums\RoutineCareItem;
 use Modules\Clinical\Models\CarePlanObjective;
+use Modules\Clinical\Models\Encounter;
+use Modules\Clinical\Models\EncounterDiagnosis;
 use Modules\Clinical\Models\NursingDiagnosisCatalogue;
 use Modules\Core\Models\Branch;
 use Modules\Patient\Models\Patient;
@@ -163,8 +165,8 @@ it('warns but still activates when a diagnosis has fewer than three orders', fun
 
     $this->plan->update(['no_known_allergies' => true]);
     $this->plan->routineCares()->createMany(
-        collect(\Modules\Clinical\Enums\RoutineCareItem::cases())
-            ->reject(fn ($item) => $item === \Modules\Clinical\Enums\RoutineCareItem::OTHER)
+        collect(RoutineCareItem::cases())
+            ->reject(fn ($item) => $item === RoutineCareItem::OTHER)
             ->map(fn ($item): array => [
                 'item' => $item,
                 'specification' => 'As prescribed',
@@ -174,7 +176,7 @@ it('warns but still activates when a diagnosis has fewer than three orders', fun
             ->all()
     );
 
-    $medical = \Modules\Clinical\Models\EncounterDiagnosis::factory()->create([
+    $medical = EncounterDiagnosis::factory()->create([
         'encounter_id' => $this->encounter->id,
         'patient_id' => $this->patient->id,
         'ordered_by' => $this->author->id,

@@ -8,6 +8,7 @@ use Modules\Clinical\Classes\Services\CarePlanService;
 use Modules\Clinical\Enums\CarePlanCategory;
 use Modules\Clinical\Enums\CarePlanStatus;
 use Modules\Clinical\Enums\EncounterStatus;
+use Modules\Clinical\Enums\RoutineCareItem;
 use Modules\Clinical\Models\CarePlan;
 use Modules\Clinical\Models\CarePlanDiagnosis;
 use Modules\Clinical\Models\CarePlanOrder;
@@ -255,9 +256,9 @@ class CarePlanServiceTest extends TestCase
 
         if ($withRoutineCare) {
             $plan->routineCares()->createMany(
-                collect(\Modules\Clinical\Enums\RoutineCareItem::cases())
-                    ->reject(fn (\Modules\Clinical\Enums\RoutineCareItem $item): bool => $item === \Modules\Clinical\Enums\RoutineCareItem::OTHER)
-                    ->map(fn (\Modules\Clinical\Enums\RoutineCareItem $item): array => [
+                collect(RoutineCareItem::cases())
+                    ->reject(fn (RoutineCareItem $item): bool => $item === RoutineCareItem::OTHER)
+                    ->map(fn (RoutineCareItem $item): array => [
                         'item' => $item,
                         'specification' => 'As prescribed',
                         'specified_by' => $this->author->id,

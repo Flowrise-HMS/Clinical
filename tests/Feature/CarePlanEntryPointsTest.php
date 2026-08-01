@@ -2,9 +2,12 @@
 
 use App\Models\User;
 use Livewire\Livewire;
+use Modules\Clinical\Classes\Actions\PatientActions;
 use Modules\Clinical\Filament\Clusters\Clinical\Resources\CarePlans\CarePlanResource;
 use Modules\Clinical\Filament\Clusters\Clinical\Resources\CarePlans\Pages\ListCarePlans;
 use Modules\Clinical\Filament\Clusters\Workspace\Pages\CarePlanWorkspace;
+use Modules\Clinical\Filament\Clusters\Workspace\Pages\ClinicalWorkspace;
+use Modules\Clinical\Filament\Clusters\Workspace\WorkspaceCluster;
 use Modules\Clinical\Models\CarePlan;
 use Modules\Clinical\Models\Encounter;
 use Modules\Core\Models\Branch;
@@ -47,20 +50,18 @@ it('exposes a clinical workspace header action from care plans', function (): vo
         ->assertActionExists('open_clinical_workspace')
         ->assertActionHasUrl(
             'open_clinical_workspace',
-            \Modules\Clinical\Filament\Clusters\Workspace\Pages\ClinicalWorkspace::getUrl([
+            ClinicalWorkspace::getUrl([
                 'patientId' => $this->patient->id,
             ])
         );
 });
 
-
 it('keeps care plans out of the clinical workspace cluster', function (): void {
-    $clustered = \Modules\Clinical\Filament\Clusters\Workspace\WorkspaceCluster::getClusteredComponents();
+    $clustered = WorkspaceCluster::getClusteredComponents();
 
     expect($clustered)->not->toContain(CarePlanWorkspace::class)
-        ->and($clustered)->toContain(\Modules\Clinical\Filament\Clusters\Workspace\Pages\ClinicalWorkspace::class);
+        ->and($clustered)->toContain(ClinicalWorkspace::class);
 });
-
 
 it('lists care plans from the secondary clinical resource', function (): void {
     $encounter = Encounter::factory()
@@ -87,7 +88,7 @@ it('lists care plans from the secondary clinical resource', function (): void {
 it('opens care plans from PatientActions with the selected patient', function (): void {
     $this->actingAs($this->user);
 
-    $action = \Modules\Clinical\Classes\Actions\PatientActions::make()
+    $action = PatientActions::make()
         ->forPatient($this->patient)
         ->carePlanAction();
 
@@ -98,7 +99,7 @@ it('opens care plans from PatientActions with the selected patient', function ()
         ->and($action->getUrl())->toContain($this->patient->id);
 
     $groupNames = collect(
-        \Modules\Clinical\Classes\Actions\PatientActions::make()
+        PatientActions::make()
             ->forPatient($this->patient)
             ->patientActionGroups()
             ->getActions()
