@@ -117,7 +117,7 @@ class MedicationFulfillmentPolicy
 
     public function isPharmacyStaff(User $user): bool
     {
-        return $user->hasAnyRole(['pharmacist', 'pharmacy_technician']);
+        return $user->can('dispense_medication');
     }
 
     public function requiresPaymentBeforeMarOrDispense(RequestItem $item): bool
