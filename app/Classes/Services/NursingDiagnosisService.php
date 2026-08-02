@@ -4,6 +4,7 @@ namespace Modules\Clinical\Classes\Services;
 
 use App\Models\User;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 use Modules\Clinical\Models\CarePlan;
 use Modules\Clinical\Models\CarePlanDiagnosis;
 use Modules\Clinical\Models\CarePlanProblem;
@@ -49,7 +50,7 @@ class NursingDiagnosisService
             } elseif (filled($label) && $saveToCatalogue) {
                 $catalogue = NursingDiagnosisCatalogue::query()->create([
                     'label' => $label,
-                    'code' => 'CUSTOM-'.strtoupper(substr(str_replace('-', '', (string) \Illuminate\Support\Str::uuid()), 0, 10)),
+                    'code' => 'CUSTOM-'.strtoupper(substr(str_replace('-', '', (string) Str::uuid()), 0, 10)),
                     'definition' => $label,
                     'is_active' => true,
                 ]);

@@ -2,7 +2,6 @@
 
 namespace Modules\Clinical\Filament\Widgets;
 
-use Filament\Tables\Columns\IconColumn;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Widgets\TableWidget as BaseTableWidget;
 use Illuminate\Database\Eloquent\Builder;

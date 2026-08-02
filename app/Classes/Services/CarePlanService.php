@@ -446,7 +446,7 @@ class CarePlanService
     }
 
     /**
-     * @param  list<array{item?: string|\Modules\Clinical\Enums\RoutineCareItem|null, specification?: ?string, not_applicable?: bool, notes?: ?string}>  $items
+     * @param  list<array{item?: string|RoutineCareItem|null, specification?: ?string, not_applicable?: bool, notes?: ?string}>  $items
      */
     public function syncRoutineCareChecklist(CarePlan $plan, array $items, User $user): void
     {

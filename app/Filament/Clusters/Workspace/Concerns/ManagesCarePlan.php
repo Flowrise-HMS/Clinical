@@ -10,8 +10,9 @@ use Filament\Infolists\Components\TextEntry;
 use Filament\Notifications\Notification;
 use Filament\Schemas\Components\Section;
 use Illuminate\Database\Eloquent\Collection;
+use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\Gate;
+use Livewire\Attributes\On;
 use Modules\Clinical\Classes\Services\CarePlanObjectiveService;
 use Modules\Clinical\Classes\Services\CarePlanOrderService;
 use Modules\Clinical\Classes\Services\CarePlanProblemService;
@@ -30,6 +31,7 @@ use Modules\Clinical\Filament\Clusters\Workspace\Schemas\CarePlan\RoutineCareFor
 use Modules\Clinical\Models\CarePlan;
 use Modules\Clinical\Models\CarePlanObjective;
 use Modules\Clinical\Models\CarePlanOrder;
+use Modules\Clinical\Models\Encounter;
 use Modules\Clinical\Models\EncounterDiagnosis;
 use Modules\Clinical\Models\NursingDiagnosisCatalogue;
 use Modules\Patient\Classes\Services\PatientSearchService;
@@ -65,6 +67,7 @@ trait ManagesCarePlan
             ->all();
     }
 
+    #[On('select-patient')]
     public function selectPatient(string $patientId): void
     {
         $this->patientId = $patientId;
@@ -93,7 +96,6 @@ trait ManagesCarePlan
 
     public function createCarePlan(): void
     {
-        Gate::authorize('create', CarePlan::class);
 
         $encounter = $this->getOpenEncounter();
 
@@ -177,11 +179,10 @@ trait ManagesCarePlan
         return $readiness;
     }
 
+    #[On('select-care-plan')]
     public function selectCarePlan(string $carePlanId): void
     {
         $carePlan = CarePlan::query()->findOrFail($carePlanId);
-
-
 
         if (! $carePlan->status->isOpen()) {
             Notification::make()
@@ -195,11 +196,10 @@ trait ManagesCarePlan
         $this->draftCarePlanId = $carePlan->id;
     }
 
+    #[On('resume-care-plan')]
     public function resumeCarePlan(string $carePlanId): void
     {
         $carePlan = CarePlan::query()->findOrFail($carePlanId);
-
-
 
         if (! $carePlan->status->isOpen()) {
             Notification::make()
@@ -220,7 +220,6 @@ trait ManagesCarePlan
     public function activateCarePlan(string $carePlanId): void
     {
         $carePlan = CarePlan::query()->findOrFail($carePlanId);
-        Gate::authorize('update', $carePlan);
 
         if (! $carePlan->status->canActivate()) {
             Notification::make()
@@ -260,11 +259,10 @@ trait ManagesCarePlan
         }
     }
 
+    #[On('preview-care-plan')]
     public function openPreview(string $carePlanId): void
     {
         $carePlan = CarePlan::query()->findOrFail($carePlanId);
-
-        Gate::authorize('view', $carePlan);
 
         $this->previewCarePlanId = $carePlan->id;
         $this->mountAction('previewCarePlan');
@@ -287,7 +285,6 @@ trait ManagesCarePlan
             ]))
             ->schema(HeaderForm::components())
             ->action(function (array $data, CarePlan $record): void {
-                Gate::authorize('update', $record);
                 $record->update($data);
             })
             ->successNotificationTitle('Care plan header saved');
@@ -302,7 +299,6 @@ trait ManagesCarePlan
             ->schema(AssessmentForm::components())
             ->action(function (array $data): void {
                 $carePlan = $this->selectedCarePlanOrFail();
-
 
                 /** @var User $user */
                 $user = Auth::user();
@@ -375,7 +371,6 @@ trait ManagesCarePlan
             ->schema(fn (): array => RoutineCareForm::components($this->selectedCarePlanOrFail()))
             ->action(function (array $data): void {
                 $carePlan = $this->selectedCarePlanOrFail();
-                Gate::authorize('update', $carePlan);
 
                 /** @var User $user */
                 $user = Auth::user();
@@ -398,7 +393,6 @@ trait ManagesCarePlan
             ->schema(fn (): array => DiagnosisGridForm::components($this->selectedCarePlanOrFail()))
             ->action(function (array $data): void {
                 $carePlan = $this->selectedCarePlanOrFail();
-                Gate::authorize('update', $carePlan);
 
                 /** @var User $user */
                 $user = Auth::user();
@@ -468,7 +462,6 @@ trait ManagesCarePlan
             ->action(function (array $data): void {
                 $carePlan = $this->selectedCarePlanOrFail();
 
-
                 /** @var User $user */
                 $user = Auth::user();
                 $order = CarePlanOrder::query()
@@ -508,7 +501,6 @@ trait ManagesCarePlan
             ], EvaluationForm::components()))
             ->action(function (array $data): void {
                 $carePlan = $this->selectedCarePlanOrFail();
-                Gate::authorize('evaluate', $carePlan);
 
                 /** @var User $user */
                 $user = Auth::user();
@@ -614,10 +606,10 @@ trait ManagesCarePlan
 
     protected function selectedCarePlanOrFail(): CarePlan
     {
-        return $this->selectedCarePlan() ?? throw new \Illuminate\Database\Eloquent\ModelNotFoundException;
+        return $this->selectedCarePlan() ?? throw new ModelNotFoundException;
     }
 
-    public function getOpenEncounter(): ?\Modules\Clinical\Models\Encounter
+    public function getOpenEncounter(): ?Encounter
     {
         if ($this->currentPatient === null) {
             return null;

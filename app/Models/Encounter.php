@@ -51,6 +51,7 @@ class Encounter extends BaseModel implements ProvidesClientIdentity
         'priority',
         'chief_complaint',
         'coverage_type',
+        'claim_check_code',
         'admitted_by',
         'discharged_by',
         'discharge_disposition',

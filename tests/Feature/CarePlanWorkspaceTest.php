@@ -119,11 +119,18 @@ it('lists draft care plans and resumes authoring from recent care plans', functi
         ]);
 
     Livewire::actingAs($this->user)
+        ->test(\Modules\Clinical\Filament\Widgets\CarePlanRecentTableWidget::class, [
+            'patientId' => $this->patient->id,
+        ])
+        ->assertOk()
+        ->assertCanSeeTableRecords([$carePlan])
+        ->assertSee('Resume');
+
+    Livewire::actingAs($this->user)
         ->test(CarePlanWorkspace::class, ['patientId' => $this->patient->id])
         ->assertOk()
         ->assertSee('Recent care plans')
         ->assertSee('Draft')
-        ->assertSee('Resume')
         ->call('resumeCarePlan', $carePlan->id)
         ->assertSet('draftCarePlanId', $carePlan->id)
         ->assertSee('Care plan authoring');
@@ -135,7 +142,7 @@ it('renders ward care plans with a native Filament table', function (): void {
         ->active()
         ->create(['branch_id' => $this->branch->id]);
 
-    CarePlan::factory()
+    $carePlan = CarePlan::factory()
         ->for($this->patient)
         ->for($encounter)
         ->create([
@@ -144,9 +151,9 @@ it('renders ward care plans with a native Filament table', function (): void {
         ]);
 
     Livewire::actingAs($this->user)
-        ->test(CarePlanWorkspace::class)
+        ->test(\Modules\Clinical\Filament\Widgets\CarePlanWardTableWidget::class)
         ->assertOk()
-        ->assertSee('Recent care plans')
+        ->assertCanSeeTableRecords([$carePlan])
         ->assertSee($this->patient->full_name)
         ->assertSee('Resume');
 });
@@ -157,7 +164,7 @@ it('renders patient previous care plans with a native Filament table', function 
         ->active()
         ->create(['branch_id' => $this->branch->id]);
 
-    CarePlan::factory()
+    $carePlan = CarePlan::factory()
         ->for($this->patient)
         ->for($encounter)
         ->create([
@@ -168,11 +175,82 @@ it('renders patient previous care plans with a native Filament table', function 
         ]);
 
     Livewire::actingAs($this->user)
-        ->test(CarePlanWorkspace::class, ['patientId' => $this->patient->id])
+        ->test(\Modules\Clinical\Filament\Widgets\CarePlanPreviousTableWidget::class, [
+            'patientId' => $this->patient->id,
+        ])
         ->assertOk()
-        ->assertSee('Previous care plans')
+        ->assertCanSeeTableRecords([$carePlan])
         ->assertSee('Completed')
         ->assertSee('Preview');
+});
+
+it('shows interventions and objectives tables inside authoring sections', function (): void {
+    $encounter = Encounter::factory()
+        ->forPatient($this->patient)
+        ->active()
+        ->create(['branch_id' => $this->branch->id]);
+
+    $carePlan = CarePlan::factory()
+        ->for($this->patient)
+        ->for($encounter)
+        ->create([
+            'branch_id' => $this->branch->id,
+            'author_id' => $this->user->id,
+        ]);
+
+    $problem = \Modules\Clinical\Models\CarePlanProblem::factory()
+        ->for($carePlan)
+        ->create(['identified_by' => $this->user->id]);
+
+    $diagnosis = CarePlanDiagnosis::factory()
+        ->for($carePlan)
+        ->for($problem, 'problem')
+        ->create(['formulated_by' => $this->user->id]);
+
+    $order = CarePlanOrder::factory()
+        ->for($diagnosis, 'diagnosis')
+        ->create(['sequence' => 1]);
+
+    $intervention = \Modules\Clinical\Models\CarePlanIntervention::factory()
+        ->for($order, 'order')
+        ->create([
+            'performed_by' => $this->user->id,
+            'description' => 'Repositioned patient every two hours',
+        ]);
+
+    $objective = \Modules\Clinical\Models\CarePlanObjective::factory()
+        ->for($diagnosis, 'diagnosis')
+        ->create([
+            'author_id' => $this->user->id,
+            'description' => 'Patient reports pain score below 4',
+        ]);
+
+    Livewire::actingAs($this->user)
+        ->test(\Modules\Clinical\Filament\Widgets\CarePlanInterventionsTableWidget::class, [
+            'carePlanId' => $carePlan->id,
+        ])
+        ->assertOk()
+        ->assertCanSeeTableRecords([$intervention])
+        ->assertSee('Repositioned patient every two hours');
+
+    Livewire::actingAs($this->user)
+        ->test(\Modules\Clinical\Filament\Widgets\CarePlanObjectivesTableWidget::class, [
+            'carePlanId' => $carePlan->id,
+        ])
+        ->assertOk()
+        ->assertCanSeeTableRecords([$objective])
+        ->assertSee('Patient reports pain score below 4');
+
+    Livewire::actingAs($this->user)
+        ->test(CarePlanWorkspace::class, [
+            'patientId' => $this->patient->id,
+            'draftCarePlanId' => $carePlan->id,
+        ])
+        ->assertOk()
+        ->assertSee('5. Interventions')
+        ->assertSee('6. Evaluation')
+        ->assertSee('Record intervention')
+        ->assertSee('Evaluate objective');
 });
 
 it('does not offer activate for an already active care plan', function (): void {

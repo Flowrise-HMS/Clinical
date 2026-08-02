@@ -7,6 +7,7 @@ use Filament\Forms\Components\Repeater;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Toggle;
+use Filament\Schemas\Components\Component;
 use Filament\Schemas\Components\Utilities\Get;
 use Modules\Clinical\Enums\RoutineCareItem;
 use Modules\Clinical\Models\CarePlan;
@@ -14,7 +15,7 @@ use Modules\Clinical\Models\CarePlan;
 class RoutineCareForm
 {
     /**
-     * @return array<int, \Filament\Schemas\Components\Component>
+     * @return array<int, Component>
      */
     public static function components(?CarePlan $carePlan = null): array
     {

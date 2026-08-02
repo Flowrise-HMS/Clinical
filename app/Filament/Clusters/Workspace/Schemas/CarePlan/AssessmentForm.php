@@ -4,12 +4,13 @@ namespace Modules\Clinical\Filament\Clusters\Workspace\Schemas\CarePlan;
 
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
+use Filament\Schemas\Components\Component;
 use Filament\Schemas\Components\Grid;
 
 class AssessmentForm
 {
     /**
-     * @return array<int, \Filament\Schemas\Components\Component>
+     * @return array<int, Component>
      */
     public static function components(): array
     {

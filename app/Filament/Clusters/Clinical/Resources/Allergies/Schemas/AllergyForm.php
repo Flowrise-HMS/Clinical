@@ -37,7 +37,6 @@ class AllergyForm
             Section::make('Allergy Information')
                 ->schema([
 
-
                     Grid::make(3)
                         ->schema([
                             Select::make('allergen_type')
@@ -74,7 +73,7 @@ class AllergyForm
 
                     Grid::make(2)
                         ->schema([
-                             Textarea::make('reaction')
+                            Textarea::make('reaction')
                                 ->maxLength(1000)
                                 ->columnSpanFull()
                                 ->label('Reaction'),

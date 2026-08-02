@@ -7,6 +7,7 @@ use Filament\Forms\Components\Repeater;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
+use Filament\Schemas\Components\Component;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Components\Utilities\Get;
 use Modules\Clinical\Models\CarePlan;
@@ -15,7 +16,7 @@ use Modules\Clinical\Models\NursingDiagnosisCatalogue;
 class DiagnosisGridForm
 {
     /**
-     * @return array<int, \Filament\Schemas\Components\Component>
+     * @return array<int, Component>
      */
     public static function components(CarePlan $carePlan): array
     {

@@ -4,13 +4,14 @@ namespace Modules\Clinical\Filament\Clusters\Workspace\Schemas\CarePlan;
 
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
+use Filament\Schemas\Components\Component;
 use Modules\Clinical\Enums\GoalEvaluationNextAction;
 use Modules\Clinical\Enums\GoalEvaluationOutcome;
 
 class EvaluationForm
 {
     /**
-     * @return array<int, \Filament\Schemas\Components\Component>
+     * @return array<int, Component>
      */
     public static function components(): array
     {

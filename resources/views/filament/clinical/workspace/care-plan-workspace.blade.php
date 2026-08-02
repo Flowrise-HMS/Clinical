@@ -37,77 +37,9 @@
                 @endif
             </div>
 
-            @php($carePlans = $this->wardCarePlans())
-            <div class="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm dark:border-gray-700 dark:bg-gray-800">
-                <div class="border-b border-gray-200 px-4 py-3 dark:border-gray-700">
-                    <h2 class="text-base font-semibold text-gray-950 dark:text-white">Recent care plans</h2>
-                    <p class="text-sm text-gray-500 dark:text-gray-400">Draft, active, and on-hold plans for your branch.</p>
-                </div>
-                <div class="overflow-x-auto">
-                    <table class="w-full text-left text-sm">
-                        <thead class="bg-gray-50 text-xs uppercase text-gray-500 dark:bg-gray-900/50 dark:text-gray-400">
-                            <tr>
-                                <th class="px-4 py-3">Patient</th>
-                                <th class="px-4 py-3">Status</th>
-                                <th class="px-4 py-3">Category</th>
-                                <th class="px-4 py-3">Encounter</th>
-                                <th class="px-4 py-3">Custodian</th>
-                                <th class="px-4 py-3">Period</th>
-                                <th class="px-4 py-3"><span class="sr-only">Actions</span></th>
-                            </tr>
-                        </thead>
-                        <tbody class="divide-y divide-gray-100 dark:divide-gray-700">
-                            @forelse ($carePlans as $carePlan)
-                                <tr class="text-gray-700 dark:text-gray-200">
-                                    <td class="px-4 py-3">
-                                        <button
-                                            type="button"
-                                            wire:click="selectPatient('{{ $carePlan->patient_id }}')"
-                                            class="font-medium text-primary-600 hover:underline dark:text-primary-400"
-                                        >
-                                            {{ $carePlan->patient?->full_name ?? 'Unknown patient' }}
-                                        </button>
-                                    </td>
-                                    <td class="px-4 py-3">
-                                        <x-filament::badge :color="$carePlan->status->getColor()">
-                                            {{ $carePlan->status->getLabel() }}
-                                        </x-filament::badge>
-                                    </td>
-                                    <td class="px-4 py-3">{{ $carePlan->category->getLabel() }}</td>
-                                    <td class="px-4 py-3">{{ $carePlan->encounter?->encounter_number ?? '—' }}</td>
-                                    <td class="px-4 py-3">{{ $carePlan->custodian?->name ?? '—' }}</td>
-                                    <td class="px-4 py-3">{{ $carePlan->period_start?->format('M j, Y') ?? '—' }}</td>
-                                    <td class="px-4 py-3 text-right">
-                                        @if ($carePlan->status === \Modules\Clinical\Enums\CarePlanStatus::DRAFT || $carePlan->status === \Modules\Clinical\Enums\CarePlanStatus::ON_HOLD)
-                                            <x-filament::button
-                                                type="button"
-                                                wire:click="resumeCarePlan('{{ $carePlan->id }}')"
-                                                color="primary"
-                                                size="sm"
-                                            >
-                                                Resume
-                                            </x-filament::button>
-                                        @else
-                                            <x-filament::button type="button" wire:click="openPreview('{{ $carePlan->id }}')" color="gray" size="sm">
-                                                Preview
-                                            </x-filament::button>
-                                        @endif
-                                    </td>
-                                </tr>
-                            @empty
-                                <tr>
-                                    <td colspan="7" class="px-4 py-8 text-center text-gray-500 dark:text-gray-400">No recent care plans in this branch.</td>
-                                </tr>
-                            @endforelse
-                        </tbody>
-                    </table>
-                </div>
-            </div>
+            @livewire(\Modules\Clinical\Filament\Widgets\CarePlanWardTableWidget::class, key('cp-ward-plans'))
         </div>
     @else
-        @php($recentCarePlans = $this->recentCarePlans())
-        @php($previousCarePlans = $this->previousCarePlans())
-
         <div class="space-y-6">
             <div class="flex flex-col justify-between gap-4 rounded-xl border border-gray-200 bg-white p-4 shadow-sm sm:flex-row sm:items-center dark:border-gray-700 dark:bg-gray-800">
                 <div>
@@ -187,6 +119,18 @@
                                 <x-filament::button type="button" wire:click="mountAction('editCarePlanHeader')" color="gray" size="sm">
                                     Edit header
                                 </x-filament::button>
+                                @can('view', $draftCarePlan)
+                                    <x-filament::button
+                                        tag="a"
+                                        :href="route('clinical.care-plans.pdf', $draftCarePlan)"
+                                        target="_blank"
+                                        color="gray"
+                                        size="sm"
+                                        icon="heroicon-m-printer"
+                                    >
+                                        Print / PDF
+                                    </x-filament::button>
+                                @endcan
                                 @if ($draftCarePlan->status->canActivate())
                                     <x-filament::button
                                         type="button"
@@ -333,6 +277,8 @@
                         <p class="text-sm text-gray-500 dark:text-gray-400">
                             Record completed nursing actions against orders. Order counts are shown on nursing diagnoses in step 4.
                         </p>
+
+                        @livewire(\Modules\Clinical\Filament\Widgets\CarePlanInterventionsTableWidget::class, ['carePlanId' => $draftCarePlan->id], key('cp-interventions-'.$draftCarePlan->id))
                     </x-filament::section>
 
                     <x-filament::section
@@ -354,97 +300,14 @@
                         <p class="text-sm text-gray-500 dark:text-gray-400">
                             Evaluate objectives once interventions are underway.
                         </p>
+
+                        @livewire(\Modules\Clinical\Filament\Widgets\CarePlanObjectivesTableWidget::class, ['carePlanId' => $draftCarePlan->id], key('cp-objectives-'.$draftCarePlan->id))
                     </x-filament::section>
                 </div>
             @endif
 
-            <div class="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm dark:border-gray-700 dark:bg-gray-800">
-                <div class="border-b border-gray-200 px-4 py-3 dark:border-gray-700">
-                    <h2 class="text-base font-semibold text-gray-950 dark:text-white">Recent care plans</h2>
-                </div>
-                <div class="overflow-x-auto">
-                    <table class="w-full text-left text-sm">
-                        <thead class="bg-gray-50 text-xs uppercase text-gray-500 dark:bg-gray-900/50 dark:text-gray-400">
-                            <tr>
-                                <th class="px-4 py-3">Status</th>
-                                <th class="px-4 py-3">Category</th>
-                                <th class="px-4 py-3">Encounter</th>
-                                <th class="px-4 py-3">Custodian</th>
-                                <th class="px-4 py-3">Updated</th>
-                                <th class="px-4 py-3"><span class="sr-only">Actions</span></th>
-                            </tr>
-                        </thead>
-                        <tbody class="divide-y divide-gray-100 dark:divide-gray-700">
-                            @forelse ($recentCarePlans as $carePlan)
-                                <tr class="text-gray-700 dark:text-gray-200">
-                                    <td class="px-4 py-3">
-                                        <x-filament::badge :color="$carePlan->status->getColor()">
-                                            {{ $carePlan->status->getLabel() }}
-                                        </x-filament::badge>
-                                    </td>
-                                    <td class="px-4 py-3">{{ $carePlan->category->getLabel() }}</td>
-                                    <td class="px-4 py-3">{{ $carePlan->encounter?->encounter_number ?? '—' }}</td>
-                                    <td class="px-4 py-3">{{ $carePlan->custodian?->name ?? '—' }}</td>
-                                    <td class="px-4 py-3">{{ $carePlan->updated_at?->format('M j, Y') ?? '—' }}</td>
-                                    <td class="px-4 py-3 text-right">
-                                        @if ($carePlan->status === \Modules\Clinical\Enums\CarePlanStatus::DRAFT || $carePlan->status === \Modules\Clinical\Enums\CarePlanStatus::ON_HOLD)
-                                            <x-filament::button type="button" wire:click="resumeCarePlan('{{ $carePlan->id }}')" color="primary" size="sm">
-                                                Resume
-                                            </x-filament::button>
-                                        @else
-                                            <x-filament::button type="button" wire:click="selectCarePlan('{{ $carePlan->id }}')" color="gray" size="sm">
-                                                Open
-                                            </x-filament::button>
-                                        @endif
-                                    </td>
-                                </tr>
-                            @empty
-                                <tr>
-                                    <td colspan="6" class="px-4 py-8 text-center text-gray-500 dark:text-gray-400">No recent care plans.</td>
-                                </tr>
-                            @endforelse
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-
-            <div class="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm dark:border-gray-700 dark:bg-gray-800">
-                <div class="border-b border-gray-200 px-4 py-3 dark:border-gray-700">
-                    <h2 class="text-base font-semibold text-gray-950 dark:text-white">Previous care plans</h2>
-                </div>
-                <div class="overflow-x-auto">
-                    <table class="w-full text-left text-sm">
-                        <thead class="bg-gray-50 text-xs uppercase text-gray-500 dark:bg-gray-900/50 dark:text-gray-400">
-                            <tr>
-                                <th class="px-4 py-3">Category</th>
-                                <th class="px-4 py-3">Status</th>
-                                <th class="px-4 py-3">Encounter</th>
-                                <th class="px-4 py-3">Closed</th>
-                                <th class="px-4 py-3"><span class="sr-only">Preview</span></th>
-                            </tr>
-                        </thead>
-                        <tbody class="divide-y divide-gray-100 dark:divide-gray-700">
-                            @forelse ($previousCarePlans as $carePlan)
-                                <tr class="text-gray-700 dark:text-gray-200">
-                                    <td class="px-4 py-3">{{ $carePlan->category->getLabel() }}</td>
-                                    <td class="px-4 py-3">{{ $carePlan->status->getLabel() }}</td>
-                                    <td class="px-4 py-3">{{ $carePlan->encounter?->encounter_number ?? '—' }}</td>
-                                    <td class="px-4 py-3">{{ $carePlan->completed_at?->format('M j, Y') ?? $carePlan->revoked_at?->format('M j, Y') ?? '—' }}</td>
-                                    <td class="px-4 py-3 text-right">
-                                        <x-filament::button type="button" wire:click="openPreview('{{ $carePlan->id }}')" color="gray" size="sm">
-                                            Preview
-                                        </x-filament::button>
-                                    </td>
-                                </tr>
-                            @empty
-                                <tr>
-                                    <td colspan="5" class="px-4 py-8 text-center text-gray-500 dark:text-gray-400">No previous care plans.</td>
-                                </tr>
-                            @endforelse
-                        </tbody>
-                    </table>
-                </div>
-            </div>
+            @livewire(\Modules\Clinical\Filament\Widgets\CarePlanRecentTableWidget::class, ['patientId' => $this->patientId], key('cp-recent-'.$this->patientId))
+            @livewire(\Modules\Clinical\Filament\Widgets\CarePlanPreviousTableWidget::class, ['patientId' => $this->patientId], key('cp-previous-'.$this->patientId))
         </div>
     @endif
 </x-filament-panels::page>
