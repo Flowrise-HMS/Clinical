@@ -91,6 +91,10 @@ class MedicationFulfillmentPolicy
 
     public function canDispense(RequestItem $item, ?User $user = null): bool
     {
+        if ($user !== null && ! $this->isPharmacyStaff($user)) {
+            return false;
+        }
+
         $detail = $item->prescriptionDetail;
         if (! $detail) {
             return true;
@@ -109,6 +113,11 @@ class MedicationFulfillmentPolicy
         }
 
         return $this->requiresDispense($detail);
+    }
+
+    public function isPharmacyStaff(User $user): bool
+    {
+        return $user->hasAnyRole(['pharmacist', 'pharmacy_technician']);
     }
 
     public function requiresPaymentBeforeMarOrDispense(RequestItem $item): bool

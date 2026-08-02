@@ -163,20 +163,17 @@ class PendingFulfillmentsWidget extends BaseTableWidget
             ->color('info')
             ->button()
             ->visible(function (RequestItem $record) use ($policy): bool {
-                if ($record->hasActiveFinancialHold()) {
+                $user = Auth::user();
+
+                if ($user === null || ! $policy->isPharmacyStaff($user)) {
                     return false;
                 }
 
-                if (! $record->prescriptionDetail) {
+                if ($record->hasActiveFinancialHold() || $record->prescriptionDetail === null) {
                     return false;
                 }
 
-                if ($record->prescriptionDetail->isTakeHome()) {
-                    return $policy->canDispense($record);
-                }
-
-                return $policy->requiresMar($record->prescriptionDetail)
-                    && Auth::user()?->hasAnyRole(['pharmacist', 'pharmacy_technician']);
+                return $policy->canDispense($record, $user);
             })
             ->modalHeading(fn (RequestItem $record): string => 'Dispense — '.($record->service?->name ?? 'Medication'))
             ->modalSubmitActionLabel('Dispense')
