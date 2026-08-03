@@ -103,6 +103,8 @@ class MedicationAdministrationFlowTest extends TestCase
         $pharmacist = User::factory()->create(['branch_id' => $item->serviceRequest->branch_id]);
         Role::findOrCreate('pharmacist', 'web');
         $pharmacist->assignRole('pharmacist');
+        Permission::findOrCreate('dispense_medication', 'web');
+        $pharmacist->givePermissionTo('dispense_medication');
 
         StockItem::factory()->create([
             'branch_id' => $item->serviceRequest->branch_id,
@@ -305,6 +307,8 @@ class MedicationAdministrationFlowTest extends TestCase
         $pharmacist = User::factory()->create(['branch_id' => $branch->id]);
         Role::findOrCreate('pharmacist', 'web');
         $pharmacist->assignRole('pharmacist');
+        Permission::findOrCreate('dispense_medication', 'web');
+        $pharmacist->givePermissionTo('dispense_medication');
 
         $category = $this->medicationServiceCategory();
         $service = Service::factory()->create([

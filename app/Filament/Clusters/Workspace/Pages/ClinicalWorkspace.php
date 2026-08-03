@@ -14,6 +14,7 @@ use Filament\Infolists\Components\TextEntry;
 use Filament\Notifications\Notification;
 use Filament\Pages\Page;
 use Filament\Schemas\Components\Grid;
+use Filament\Schemas\Components\Utilities\Get;
 use Filament\Schemas\Concerns\InteractsWithSchemas;
 use Filament\Schemas\Contracts\HasSchemas;
 use Illuminate\Auth\Access\AuthorizationException;
@@ -56,6 +57,7 @@ use Modules\Clinical\Models\EncounterDiagnosis;
 use Modules\Clinical\Models\RequestItem;
 use Modules\Clinical\Policies\EncounterPolicy;
 use Modules\Core\Classes\Support\PageHeaderActionsRegistry;
+use Modules\Core\Enums\CoverageType;
 use Modules\Core\Models\Branch;
 use Modules\Core\Models\Service;
 use Modules\Core\Settings\FeatureSettings;
@@ -299,6 +301,7 @@ class ClinicalWorkspace extends Page implements HasSchemas
         $this->encounterFormData = [
             'type' => $openEncounter->type?->value ?? EncounterType::OUTPATIENT->value,
             'coverage_type' => $openEncounter->coverage_type?->value ?? $openEncounter->coverage_type ?? 'none',
+            'claim_check_code' => $openEncounter->claim_check_code,
             'chief_complaint' => $openEncounter->chief_complaint,
         ];
     }
@@ -574,7 +577,10 @@ class ClinicalWorkspace extends Page implements HasSchemas
         );
 
         if ($coverage = $this->encounterFormData['coverage_type'] ?? null) {
-            $encounter->update(['coverage_type' => $coverage]);
+            $encounter->update([
+                'coverage_type' => $coverage,
+                'claim_check_code' => $this->encounterFormData['claim_check_code'] ?? null,
+            ]);
         }
 
         $this->currentEncounter = $encounter->fresh(['bed', 'location']);
@@ -1079,16 +1085,23 @@ class ClinicalWorkspace extends Page implements HasSchemas
                                 ->native(false),
                             Select::make('coverage_type')
                                 ->label('Coverage Type')
-                                ->options([
-                                    'nhis' => 'NHIS',
-                                    'private' => 'Private Insurance',
-                                    'none' => 'Cash',
-                                ])
+                                ->options(CoverageType::class)
                                 ->required()
+                                ->live()
                                 ->native(false),
                             Textarea::make('chief_complaint')
                                 ->label('Chief Complaint')
                                 ->placeholder('Reason for visit')
+                                ->columnSpanFull(),
+                            TextInput::make('claim_check_code')
+                                ->label('NHIS Claim Check Code')
+                                ->maxLength(13)
+                                ->helperText('Dial *842# from an authorized facility phone number and select option 1 ("Generate Claim Code") to verify eligibility and receive the code. Enter the returned code here.')
+                                ->visible(function (Get $get): bool {
+                                    $coverage = $get('coverage_type');
+
+                                    return $coverage === CoverageType::NHIS || $coverage === CoverageType::NHIS->value;
+                                })
                                 ->columnSpanFull(),
                         ]),
                 ])

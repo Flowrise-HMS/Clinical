@@ -9,11 +9,13 @@ use Filament\Forms\Components\TextInput;
 use Filament\Schemas\Components\Fieldset;
 use Filament\Schemas\Components\Grid;
 use Filament\Schemas\Components\Section;
+use Filament\Schemas\Components\Utilities\Get;
 use Filament\Schemas\Schema;
 use Modules\Clinical\Enums\EncounterPriority;
 use Modules\Clinical\Enums\EncounterStatus;
 use Modules\Clinical\Enums\EncounterType;
 use Modules\Core\Classes\Services\BranchService;
+use Modules\Core\Enums\CoverageType;
 
 class EncounterForm
 {
@@ -83,15 +85,23 @@ class EncounterForm
                                 ->label('Status'),
 
                             Select::make('coverage_type')
-                                ->options([
-                                    'nhis' => 'NHIS',
-                                    'private' => 'Private Insurance',
-                                    'none' => 'Cash',
-                                ])
+                                ->options(CoverageType::class)
                                 ->native(false)
                                 ->nullable()
+                                ->live()
                                 ->label('Coverage Type'),
                         ]),
+
+                    TextInput::make('claim_check_code')
+                        ->label('NHIS Claim Check Code')
+                        ->maxLength(13)
+                        ->helperText('Dial *842# from an authorized facility phone number and select option 1 ("Generate Claim Code") to verify eligibility and receive the code. Enter the returned code here.')
+                        ->visible(function (Get $get): bool {
+                            $coverage = $get('coverage_type');
+
+                            return $coverage === CoverageType::NHIS || $coverage === CoverageType::NHIS->value;
+                        })
+                        ->columnSpanFull(),
 
                     Fieldset::make('Clinical Information')
                         ->schema([

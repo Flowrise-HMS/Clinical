@@ -6,9 +6,17 @@ use Modules\Clinical\Classes\Services\CarePlanService;
 use Modules\Clinical\Enums\CarePlanStatus;
 use Modules\Clinical\Enums\RoutineCareItem;
 use Modules\Clinical\Filament\Clusters\Workspace\Pages\CarePlanWorkspace;
+use Modules\Clinical\Filament\Widgets\CarePlanInterventionsTableWidget;
+use Modules\Clinical\Filament\Widgets\CarePlanObjectivesTableWidget;
+use Modules\Clinical\Filament\Widgets\CarePlanPreviousTableWidget;
+use Modules\Clinical\Filament\Widgets\CarePlanRecentTableWidget;
+use Modules\Clinical\Filament\Widgets\CarePlanWardTableWidget;
 use Modules\Clinical\Models\CarePlan;
 use Modules\Clinical\Models\CarePlanDiagnosis;
+use Modules\Clinical\Models\CarePlanIntervention;
+use Modules\Clinical\Models\CarePlanObjective;
 use Modules\Clinical\Models\CarePlanOrder;
+use Modules\Clinical\Models\CarePlanProblem;
 use Modules\Clinical\Models\Encounter;
 use Modules\Clinical\Models\EncounterDiagnosis;
 use Modules\Core\Models\Branch;
@@ -119,7 +127,7 @@ it('lists draft care plans and resumes authoring from recent care plans', functi
         ]);
 
     Livewire::actingAs($this->user)
-        ->test(\Modules\Clinical\Filament\Widgets\CarePlanRecentTableWidget::class, [
+        ->test(CarePlanRecentTableWidget::class, [
             'patientId' => $this->patient->id,
         ])
         ->assertOk()
@@ -151,7 +159,7 @@ it('renders ward care plans with a native Filament table', function (): void {
         ]);
 
     Livewire::actingAs($this->user)
-        ->test(\Modules\Clinical\Filament\Widgets\CarePlanWardTableWidget::class)
+        ->test(CarePlanWardTableWidget::class)
         ->assertOk()
         ->assertCanSeeTableRecords([$carePlan])
         ->assertSee($this->patient->full_name)
@@ -175,7 +183,7 @@ it('renders patient previous care plans with a native Filament table', function 
         ]);
 
     Livewire::actingAs($this->user)
-        ->test(\Modules\Clinical\Filament\Widgets\CarePlanPreviousTableWidget::class, [
+        ->test(CarePlanPreviousTableWidget::class, [
             'patientId' => $this->patient->id,
         ])
         ->assertOk()
@@ -198,7 +206,7 @@ it('shows interventions and objectives tables inside authoring sections', functi
             'author_id' => $this->user->id,
         ]);
 
-    $problem = \Modules\Clinical\Models\CarePlanProblem::factory()
+    $problem = CarePlanProblem::factory()
         ->for($carePlan)
         ->create(['identified_by' => $this->user->id]);
 
@@ -211,14 +219,14 @@ it('shows interventions and objectives tables inside authoring sections', functi
         ->for($diagnosis, 'diagnosis')
         ->create(['sequence' => 1]);
 
-    $intervention = \Modules\Clinical\Models\CarePlanIntervention::factory()
+    $intervention = CarePlanIntervention::factory()
         ->for($order, 'order')
         ->create([
             'performed_by' => $this->user->id,
             'description' => 'Repositioned patient every two hours',
         ]);
 
-    $objective = \Modules\Clinical\Models\CarePlanObjective::factory()
+    $objective = CarePlanObjective::factory()
         ->for($diagnosis, 'diagnosis')
         ->create([
             'author_id' => $this->user->id,
@@ -226,7 +234,7 @@ it('shows interventions and objectives tables inside authoring sections', functi
         ]);
 
     Livewire::actingAs($this->user)
-        ->test(\Modules\Clinical\Filament\Widgets\CarePlanInterventionsTableWidget::class, [
+        ->test(CarePlanInterventionsTableWidget::class, [
             'carePlanId' => $carePlan->id,
         ])
         ->assertOk()
@@ -234,7 +242,7 @@ it('shows interventions and objectives tables inside authoring sections', functi
         ->assertSee('Repositioned patient every two hours');
 
     Livewire::actingAs($this->user)
-        ->test(\Modules\Clinical\Filament\Widgets\CarePlanObjectivesTableWidget::class, [
+        ->test(CarePlanObjectivesTableWidget::class, [
             'carePlanId' => $carePlan->id,
         ])
         ->assertOk()
