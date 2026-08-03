@@ -52,7 +52,7 @@ class PatientProfile extends Page implements HasActions, HasForms, HasInfolists
 
     public function boot(): void
     {
-        $this->patientId = request()->route('patient');
+        $this->patientId = request()->route('patient') ?? $this->patientId;
         $this->bootHasPatientContext();
         $this->loadPatientData();
     }
@@ -191,6 +191,7 @@ class PatientProfile extends Page implements HasActions, HasForms, HasInfolists
             ->withEncounter($this->currentEncounter);
 
         return [
+            $actions->clinicalWorkspaceAction(),
             $actions->timelineAction(),
             $actions->patientActionGroups(),
             ...app(PageHeaderActionsRegistry::class)->for(static::class, $this),

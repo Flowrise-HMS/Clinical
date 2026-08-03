@@ -29,6 +29,7 @@ use Modules\Clinical\Filament\Clusters\Clinical\Resources\Encounters\Schemas\Enc
 use Modules\Clinical\Filament\Clusters\Clinical\Resources\ServiceRequests\Schemas\ServiceRequestForm;
 use Modules\Clinical\Filament\Clusters\Clinical\Resources\VitalSigns\Schemas\VitalSignForm;
 use Modules\Clinical\Filament\Clusters\Workspace\Pages\CarePlanWorkspace;
+use Modules\Clinical\Filament\Clusters\Workspace\Pages\ClinicalWorkspace;
 use Modules\Clinical\Filament\Clusters\Workspace\Pages\PatientProfile;
 use Modules\Clinical\Filament\Clusters\Workspace\Pages\Timeline;
 use Modules\Clinical\Filament\Support\MarRecordDoseFormSchema;
@@ -100,6 +101,7 @@ class PatientActions
         }
 
         return [
+            $this->clinicalWorkspaceAction(),
             $this->profileAction(),
             $this->patientActionGroups(),
         ];
@@ -338,6 +340,22 @@ class PatientActions
                 && Auth::user() !== null
                 && app(CarePlanPolicy::class)->viewAny(Auth::user()))
             ->url(fn (): string => CarePlanWorkspace::getUrl([
+                'patientId' => $patient?->id,
+            ]));
+    }
+
+    public function clinicalWorkspaceAction(): Action
+    {
+        $patient = $this->patient;
+
+        return Action::make('open_clinical_workspace')
+            ->label('Clinical Workspace')
+            ->icon('heroicon-m-heart')
+            ->color('primary')
+            ->visible(fn (): bool => $patient !== null
+                && Auth::user() !== null
+                && ClinicalWorkspace::canAccess())
+            ->url(fn (): string => ClinicalWorkspace::getUrl([
                 'patientId' => $patient?->id,
             ]));
     }

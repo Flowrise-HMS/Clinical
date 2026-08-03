@@ -45,7 +45,7 @@ class Timeline extends Page
 
     public function boot(): void
     {
-        $this->patientId = request()->route('patient');
+        $this->patientId = request()->route('patient') ?? $this->patientId;
         $this->activeFilter = $this->normalizeFilter(request()->query('filter', 'all'));
         $this->bootHasPatientContext();
         $this->loadTimelineData();
