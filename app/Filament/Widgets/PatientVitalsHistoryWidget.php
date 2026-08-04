@@ -2,13 +2,10 @@
 
 namespace Modules\Clinical\Filament\Widgets;
 
-use Filament\Actions\DeleteAction;
-use Filament\Actions\EditAction;
-use Filament\Actions\ViewAction;
-use Filament\Tables\Columns\TextColumn;
 use Filament\Widgets\TableWidget as BaseTableWidget;
 use Illuminate\Database\Eloquent\Builder;
 use Livewire\Attributes\Reactive;
+use Modules\Clinical\Filament\Clusters\Clinical\Resources\VitalSigns\Tables\VitalSignsTable;
 use Modules\Clinical\Models\VitalSign;
 
 class PatientVitalsHistoryWidget extends BaseTableWidget
@@ -28,35 +25,27 @@ class PatientVitalsHistoryWidget extends BaseTableWidget
     protected function getTableQuery(): Builder
     {
         return VitalSign::query()
-            ->where('patient_id', $this->patientId)
-            ->when($this->encounterId, fn ($q) => $q->where('encounter_id', $this->encounterId))
-            ->orderBy('recorded_at', 'desc');
+            ->when(
+                filled($this->patientId),
+                fn (Builder $query): Builder => $query->where('patient_id', $this->patientId),
+                fn (Builder $query): Builder => $query->whereRaw('1 = 0'),
+            )
+            ->when(
+                filled($this->encounterId),
+                fn (Builder $query): Builder => $query->where('encounter_id', $this->encounterId),
+            )
+            ->with(['recordedBy'])
+            ->orderByDesc('recorded_at');
     }
 
     protected function getTableColumns(): array
     {
-        return [
-            TextColumn::make('#')->rowIndex(),
-            TextColumn::make('recorded_at')->label('Date/Time')->dateTime()->sortable(),
-            TextColumn::make('blood_pressure')
-                ->label('BP')
-                ->suffix('mmHg')
-                ->color(fn ($record) => $record->isAbnormalBloodPressure() ? 'warning' : 'gray'),
-            TextColumn::make('heart_rate')->label('HR')->suffix('bpm'),
-            TextColumn::make('temperature')->label('Temp'),
-            TextColumn::make('spo2')->label('SpO₂'),
-            TextColumn::make('respiratory_rate')->label('RR'),
-            TextColumn::make('recordedBy.name')->label('By'),
-        ];
+        return VitalSignsTable::columns();
     }
 
-    protected function getTableRecordActions(): array
+    protected function getTableActions(): array
     {
-        return [
-            ViewAction::make(),
-            EditAction::make(),
-            DeleteAction::make(),
-        ];
+        return VitalSignsTable::recordActions(includeActivities: false);
     }
 
     protected function getTableEmptyStateHeading(): ?string

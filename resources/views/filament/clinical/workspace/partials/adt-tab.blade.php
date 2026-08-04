@@ -31,7 +31,7 @@
                     </x-filament::badge>
                 @endif
                 @if ($chip['los'])
-                    <x-filament::badge color="info">LOS {{ $chip['los'] }}</x-filament::badge>
+                    <x-filament::badge color="info">Admitted for {{ $chip['los'] }}</x-filament::badge>
                 @endif
             </div>
         @endif

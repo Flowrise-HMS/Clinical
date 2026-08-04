@@ -1,10 +1,12 @@
 <div class="space-y-4">
-    <h3 class="text-lg font-semibold text-gray-900 dark:text-white">Patient History</h3>
+    <h3 class="text-lg font-semibold text-gray-900 dark:text-white ms-3">Patient History</h3>
 
-    @php $pastEncounters = $this->pastEncounters; @endphp
+    @php
+    $pastEncounters = $this->pastEncounters;
+    @endphp
 
     @forelse($pastEncounters as $encounter)
-        <div class="rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 overflow-hidden">
+        <div class="rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 overflow-hidden mb-3">
             {{-- Encounter Header --}}
             <div class="flex items-center justify-between px-4 py-3 bg-gray-50 dark:bg-gray-800/80 border-b border-gray-200 dark:border-gray-700">
                 <div class="flex items-center gap-2 min-w-0">
@@ -104,6 +106,20 @@
                 @endif
             </div>
         </div>
+        @livewire(\Modules\Clinical\Filament\Widgets\PatientOrdersWidget::class,[
+                'patientId' => $this->currentPatient?->id ?? $encounter['patient_id'],
+                'encounterId' => $this->currentEncounter?->id ?? $encounter['id'],
+            ])
+            <br>
+        @livewire(\Modules\Clinical\Filament\Widgets\PatientDiagnosesWidget::class,[
+                'patientId' => $encounter['patient_id'],
+                'encounterId' => $encounter['id'],
+            ])
+            <br>
+        @livewire(\Modules\Clinical\Filament\Widgets\PatientNotesWidget::class,[
+                'patientId' => $encounter['patient_id'],
+                'encounterId' => $encounter['id'],
+            ])
     @empty
         <div class="flex flex-col items-center justify-center py-12 text-center">
             <x-filament::icon name="heroicon-o-clock" class="w-12 h-12 text-gray-300 dark:text-gray-600 mb-3" />

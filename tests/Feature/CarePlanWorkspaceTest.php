@@ -5,6 +5,7 @@ use Livewire\Livewire;
 use Modules\Clinical\Classes\Services\CarePlanService;
 use Modules\Clinical\Enums\CarePlanStatus;
 use Modules\Clinical\Enums\RoutineCareItem;
+use Modules\Clinical\Filament\Clusters\Clinical\Resources\CarePlans\Tables\CarePlansTable;
 use Modules\Clinical\Filament\Clusters\Workspace\Pages\CarePlanWorkspace;
 use Modules\Clinical\Filament\Widgets\CarePlanInterventionsTableWidget;
 use Modules\Clinical\Filament\Widgets\CarePlanObjectivesTableWidget;
@@ -133,6 +134,12 @@ it('lists draft care plans and resumes authoring from recent care plans', functi
         ->assertOk()
         ->assertCanSeeTableRecords([$carePlan])
         ->assertSee('Resume');
+
+    $columnNames = collect(CarePlansTable::recentWorkspaceColumns())
+        ->map->getName()
+        ->all();
+
+    expect($columnNames)->toContain('status', 'category', 'encounter.encounter_number', 'custodian.name', 'updated_at');
 
     Livewire::actingAs($this->user)
         ->test(CarePlanWorkspace::class, ['patientId' => $this->patient->id])

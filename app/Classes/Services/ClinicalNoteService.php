@@ -34,6 +34,15 @@ class ClinicalNoteService
             }
         }
 
+        if (isset($data['content'])) {
+            if (is_string($data['content'])) {
+                $data['content'] = ['text' => $data['content']];
+            } elseif (is_array($data['content']) && ! array_key_exists('text', $data['content']) && isset($data['content']['type'])) {
+                // TipTap / unexpected nested shapes: keep as structured payload under text if empty body risk
+                $data['content'] = ['text' => $data['content']['text'] ?? ''];
+            }
+        }
+
         return ClinicalNote::create($data);
     }
 

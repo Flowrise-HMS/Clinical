@@ -2,11 +2,10 @@
 
 namespace Modules\Clinical\Filament\Widgets;
 
-use Filament\Tables\Columns\BadgeColumn;
-use Filament\Tables\Columns\TextColumn;
 use Filament\Widgets\TableWidget as BaseTableWidget;
 use Illuminate\Database\Eloquent\Builder;
 use Livewire\Attributes\Reactive;
+use Modules\Clinical\Filament\Clusters\Clinical\Resources\ServiceRequests\Tables\RequestItemsTable;
 use Modules\Clinical\Models\RequestItem;
 
 class PatientOrdersWidget extends BaseTableWidget
@@ -39,28 +38,7 @@ class PatientOrdersWidget extends BaseTableWidget
 
     protected function getTableColumns(): array
     {
-        return [
-            TextColumn::make('#')->rowIndex(),
-            TextColumn::make('serviceRequest.request_number')
-                ->label('Request #')
-                ->searchable(),
-            TextColumn::make('service.name')
-                ->label('Service')
-                ->searchable()
-                ->description(fn ($record) => $record->serviceVariant?->name),
-            TextColumn::make('quantity')->label('Qty'),
-            BadgeColumn::make('status')
-                ->label('Status')
-                ->formatStateUsing(fn ($state) => $state?->getLabel() ?? 'Pending')
-                ->color(fn ($state) => match ($state?->value) {
-                    'completed' => 'success',
-                    'cancelled' => 'gray',
-                    'in_progress' => 'primary',
-                    default => 'warning',
-                }),
-            TextColumn::make('fulfilledBy.name')->label('Fulfilled By'),
-            TextColumn::make('created_at')->label('Date')->dateTime()->sortable(),
-        ];
+        return RequestItemsTable::columns();
     }
 
     protected function getTableEmptyStateHeading(): ?string

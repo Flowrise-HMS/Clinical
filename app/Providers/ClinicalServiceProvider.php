@@ -4,8 +4,10 @@ namespace Modules\Clinical\Providers;
 
 use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Modules\Clinical\Classes\Services\DiagnosisSearch\CompositeDiagnosisCodeSearch;
 use Modules\Clinical\Classes\Services\MedicationFulfillmentPolicy;
 use Modules\Clinical\Console\SendMarDoseRemindersCommand;
+use Modules\Clinical\Contracts\DiagnosisCodeSearchContract;
 use Modules\Clinical\Models\ClinicalNote;
 use Modules\Clinical\Models\Encounter;
 use Modules\Clinical\Models\MedicationAdministration;
@@ -57,6 +59,7 @@ class ClinicalServiceProvider extends ModuleServiceProvider
         parent::register();
 
         $this->app->singleton(MedicationFulfillmentPolicy::class);
+        $this->app->bind(DiagnosisCodeSearchContract::class, CompositeDiagnosisCodeSearch::class);
 
         // Register Filament views namespace
         $this->loadViewsFrom(

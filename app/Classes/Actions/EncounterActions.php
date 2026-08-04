@@ -4,6 +4,7 @@ namespace Modules\Clinical\Classes\Actions;
 
 use Closure;
 use Filament\Actions\Action;
+use Filament\Forms\Components\RichEditor;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
@@ -115,9 +116,14 @@ class EncounterActions
                     ->searchable()
                     ->required()
                     ->disabled(fn (callable $get) => blank($get('ward_id'))),
-                Textarea::make('notes')
+                RichEditor::make('notes')
                     ->label('Notes')
-                    ->rows(2),
+                    ->toolbarButtons([
+                        'bold',
+                        'bulletList',
+                        'italic',
+                        'orderedList',
+                    ]),
             ])
             ->action(fn (array $data) => app(AdtService::class)->transferInternal(
                 $encounter,
@@ -153,9 +159,14 @@ class EncounterActions
                     ->label('Destination')
                     ->visible(fn (callable $get) => $get('destination_type') !== AdtDestinationType::Branch->value)
                     ->required(fn (callable $get) => $get('destination_type') === AdtDestinationType::ExternalFacility->value),
-                Textarea::make('notes')
+                RichEditor::make('notes')
                     ->label('Notes')
-                    ->rows(2),
+                    ->toolbarButtons([
+                        'bold',
+                        'bulletList',
+                        'italic',
+                        'orderedList',
+                    ]),
             ])
             ->action(fn (array $data) => app(AdtService::class)->transferOut(
                 $encounter,

@@ -1,6 +1,8 @@
 <?php
 
 use Modules\Clinical\Classes\Fhir\FhirConditionTransformer;
+use Modules\Clinical\Enums\DiagnosisCertainty;
+use Modules\Clinical\Enums\DiagnosisType;
 use Modules\Clinical\Models\EncounterDiagnosis;
 use Modules\FHIR\Contracts\FhirResourceContract;
 use Tests\TestCase;
@@ -16,18 +18,18 @@ function createEncounterDiagnosis(array $attrs = []): EncounterDiagnosis
         protected $table = 'encounter_diagnoses';
     };
 
-    $model->setAttribute('id', '00000000-0000-0000-0000-000000000001');
-    $model->setAttribute('patient_id', '00000000-0000-0000-0000-000000000010');
-    $model->setAttribute('encounter_id', '00000000-0000-0000-0000-000000000020');
-    $model->setAttribute('icd_code', 'J45.0');
-    $model->setAttribute('description', 'Mild intermittent asthma');
-    $model->setAttribute('is_active', true);
-    $model->setAttribute('type', 'encounter-diagnosis');
-    $model->setAttribute('notes', 'Patient reports wheezing');
-
-    foreach ($attrs as $key => $value) {
-        $model->setAttribute($key, $value);
-    }
+    $model->forceFill([
+        'id' => '00000000-0000-0000-0000-000000000001',
+        'patient_id' => '00000000-0000-0000-0000-000000000010',
+        'encounter_id' => '00000000-0000-0000-0000-000000000020',
+        'icd_code' => 'J45.0',
+        'description' => 'Mild intermittent asthma',
+        'is_active' => true,
+        'type' => DiagnosisType::Primary,
+        'certainty' => DiagnosisCertainty::Provisional,
+        'notes' => 'Patient reports wheezing',
+        ...$attrs,
+    ]);
 
     return $model;
 }
@@ -80,8 +82,8 @@ test('toFhir maps category as encounter-diagnosis', function () {
     expect($result['category'][0]['coding'][0]['code'])->toBe('encounter-diagnosis');
 });
 
-test('toFhir maps verificationStatus as confirmed', function () {
-    $model = createEncounterDiagnosis();
+test('toFhir maps verificationStatus from certainty', function () {
+    $model = createEncounterDiagnosis(['certainty' => DiagnosisCertainty::Confirmed]);
     $transformer = new FhirConditionTransformer;
 
     $result = $transformer->toFhir($model);

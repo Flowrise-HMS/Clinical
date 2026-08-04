@@ -147,7 +147,7 @@
                                     @endif
                                     @if ($chip['los'])
                                         <x-filament::badge color="info" class="text-xs">
-                                            LOS {{ $chip['los'] }}
+                                            Admitted for {{ $chip['los'] }}
                                         </x-filament::badge>
                                     @endif
                                     @if ($currentEncounter->coverage_type ?? null)
@@ -404,24 +404,6 @@
                         </div>
                     </div>
 
-                    {{-- Diagnosis Section --}}
-                    <div
-                        class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4 sm:p-6">
-                        <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-4">Diagnosis</h3>
-                        <div class="space-y-3">
-                            {{ $this->diagnosisForm }}
-
-                            @if ($currentEncounter)
-                                <div class="flex justify-end pt-2">
-                                    <x-filament::button wire:click="saveDiagnoses" color="primary"
-                                        icon="heroicon-m-document-check">
-                                        Save Diagnoses
-                                    </x-filament::button>
-                                </div>
-                            @endif
-                        </div>
-                    </div>
-
                     {{-- Action Tabs --}}
                     <div class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700">
                         {{-- Tab Bar --}}
@@ -452,9 +434,10 @@
                                 @include('clinical::clinical.workspace.partials.adt-tab')
                             @elseif ($activeTab === 'notes')
                                 @include('clinical::clinical.workspace.partials.notes-tab')
+                            @elseif ($activeTab === 'diagnosis')
+                                @include('clinical::clinical.workspace.partials.diagnosis-tab')
                             @elseif ($activeTab === 'vitals')
                                 <div class="space-y-4">
-                                    <h4 class="text-base font-semibold text-gray-900 dark:text-white">Record Vitals</h4>
                                     {{ $this->vitalsForm }}
                                     <div class="flex justify-end pt-2">
                                         <x-filament::button wire:click="saveVitals" color="primary"

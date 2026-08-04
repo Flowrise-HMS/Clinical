@@ -2,10 +2,10 @@
 
 namespace Modules\Clinical\Filament\Widgets;
 
-use Filament\Tables\Columns\TextColumn;
 use Filament\Widgets\TableWidget as BaseTableWidget;
 use Illuminate\Database\Eloquent\Builder;
 use Livewire\Attributes\Reactive;
+use Modules\Clinical\Filament\Clusters\Clinical\Resources\CarePlans\Tables\CarePlanProblemsTable;
 use Modules\Clinical\Models\CarePlanProblem;
 
 class CarePlanProblemsTableWidget extends BaseTableWidget
@@ -33,14 +33,7 @@ class CarePlanProblemsTableWidget extends BaseTableWidget
 
     protected function getTableColumns(): array
     {
-        return [
-            TextColumn::make('label')->label('Problem')->wrap()->searchable(),
-            TextColumn::make('priority')->label('Priority')->badge(),
-            TextColumn::make('strengths_count')
-                ->label('Strengths')
-                ->state(fn (CarePlanProblem $record): int => $record->strengths->count()),
-            TextColumn::make('description')->label('Notes')->limit(40)->toggleable(),
-        ];
+        return CarePlanProblemsTable::columns();
     }
 
     protected function getTableEmptyStateHeading(): ?string

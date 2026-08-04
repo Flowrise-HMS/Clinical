@@ -4,15 +4,17 @@ namespace Modules\Clinical\Filament\Widgets;
 
 use Filament\Widgets\TableWidget as BaseTableWidget;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Facades\Auth;
 use Livewire\Attributes\Reactive;
-use Modules\Clinical\Filament\Clusters\Clinical\Resources\ClinicalNotes\Tables\ClinicalNotesTable;
-use Modules\Clinical\Models\ClinicalNote;
+use Modules\Clinical\Filament\Clusters\Clinical\Resources\EncounterDiagnoses\Tables\EncounterDiagnosesTable;
+use Modules\Clinical\Models\EncounterDiagnosis;
+use Modules\Clinical\Policies\EncounterDiagnosisPolicy;
 
-class PatientNotesWidget extends BaseTableWidget
+class PatientDiagnosesWidget extends BaseTableWidget
 {
     protected static bool $isDiscovered = false;
 
-    protected static ?string $heading = 'Clinical Notes';
+    protected static ?string $heading = 'Diagnoses';
 
     protected int|string|array $columnSpan = 'full';
 
@@ -24,9 +26,16 @@ class PatientNotesWidget extends BaseTableWidget
     #[Reactive]
     public ?string $encounterId = null;
 
+    public static function canView(): bool
+    {
+        $user = Auth::user();
+
+        return $user !== null && app(EncounterDiagnosisPolicy::class)->viewAny($user);
+    }
+
     protected function getTableQuery(): Builder
     {
-        return ClinicalNote::query()
+        return EncounterDiagnosis::query()
             ->when(
                 filled($this->patientId),
                 fn (Builder $query): Builder => $query->where('patient_id', $this->patientId),
@@ -36,23 +45,19 @@ class PatientNotesWidget extends BaseTableWidget
                 filled($this->encounterId),
                 fn (Builder $query): Builder => $query->where('encounter_id', $this->encounterId),
             )
-            ->with(['author'])
+            ->where('is_active', true)
+            ->with(['orderedBy', 'diagnosisCode'])
             ->latest('created_at');
     }
 
     protected function getTableColumns(): array
     {
-        return ClinicalNotesTable::columns();
-    }
-
-    protected function getTableActions(): array
-    {
-        return ClinicalNotesTable::recordActions(includeMutations: false);
+        return EncounterDiagnosesTable::columns();
     }
 
     protected function getTableEmptyStateHeading(): ?string
     {
-        return 'No clinical notes';
+        return 'No diagnoses recorded';
     }
 
     protected function getTablePollingInterval(): ?string

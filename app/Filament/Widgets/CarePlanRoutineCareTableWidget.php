@@ -2,11 +2,10 @@
 
 namespace Modules\Clinical\Filament\Widgets;
 
-use Filament\Tables\Columns\IconColumn;
-use Filament\Tables\Columns\TextColumn;
 use Filament\Widgets\TableWidget as BaseTableWidget;
 use Illuminate\Database\Eloquent\Builder;
 use Livewire\Attributes\Reactive;
+use Modules\Clinical\Filament\Clusters\Clinical\Resources\CarePlans\Tables\CarePlanRoutineCareTable;
 use Modules\Clinical\Models\CarePlanRoutineCare;
 
 class CarePlanRoutineCareTableWidget extends BaseTableWidget
@@ -33,17 +32,7 @@ class CarePlanRoutineCareTableWidget extends BaseTableWidget
 
     protected function getTableColumns(): array
     {
-        return [
-            TextColumn::make('item')
-                ->label('Item')
-                ->formatStateUsing(fn ($state): string => $state?->getLabel() ?? (string) $state),
-            IconColumn::make('not_applicable')
-                ->label('N/A')
-                ->boolean(),
-            TextColumn::make('specification')->label('Instruction')->wrap()->limit(60),
-            TextColumn::make('notes')->label('Notes')->limit(40)->toggleable(),
-            TextColumn::make('specified_at')->label('Updated')->dateTime()->sortable(),
-        ];
+        return CarePlanRoutineCareTable::columns();
     }
 
     protected function getTableEmptyStateHeading(): ?string

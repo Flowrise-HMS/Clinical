@@ -31,4 +31,27 @@ return [
         'grace_minutes' => 30,
         'channels' => ['database', 'mail'],
     ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | WHO ICD API (https://icd.who.int/docs/icd-api/)
+    |--------------------------------------------------------------------------
+    |
+    | OAuth2 client-credentials against icdaccessmanagement.who.int.
+    | Token request uses HTTP Basic Auth with client id/secret per WHO docs.
+    | Coding search uses the MMS linearization (entities with ICD codes).
+    |
+    */
+    'icd' => [
+        'client_id' => env('ICD_ClientId'),
+        'client_secret' => env('ICD_ClientSecret'),
+        'token_url' => env('ICD_TOKEN_URL', 'https://icdaccessmanagement.who.int/connect/token'),
+        'base_url' => env('ICD_BASE_URL', 'https://id.who.int'),
+        'scope' => env('ICD_SCOPE', 'icdapi_access'),
+        'api_version' => env('ICD_apiVersion', 'v2'),
+        'language' => env('ICD_acceptedLanguage', 'en'),
+        'release_id' => env('ICD_releaseId', '2026-01'),
+        'linearization' => env('ICD_LINEARIZATION', 'mms'),
+        'timeout' => (int) env('ICD_TIMEOUT', 5),
+    ],
 ];

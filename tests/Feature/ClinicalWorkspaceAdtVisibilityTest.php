@@ -180,9 +180,11 @@ it('shows discharge on adt only when permission and finished transition are both
         ->and($page->canShowDischargeOnAdt())->toBeTrue();
 });
 
-it('shows notes tab when the user can create clinical notes', function (): void {
+it('places the notes tab immediately after the encounter tab', function (): void {
     $doctor = makeWorkspaceUser($this->branch, [
         'View Encounter',
+        'Create Encounter',
+        'Update Encounter',
         'Create ClinicalNote',
     ], 'doctor');
 
@@ -191,9 +193,13 @@ it('shows notes tab when the user can create clinical notes', function (): void 
     $page = makeWorkspacePage();
     $page->selectPatient($this->patient->id);
 
-    expect($page->canAccessNotesTab())->toBeTrue()
-        ->and($page->getClinicianTabs())->toHaveKey('notes')
-        ->and($page->getNurseTabs())->toHaveKey('notes');
+    $clinicianKeys = array_keys($page->getClinicianTabs());
+    $nurseKeys = array_keys($page->getNurseTabs());
+
+    expect(array_search('notes', $clinicianKeys, true))
+        ->toBe(array_search('encounter', $clinicianKeys, true) + 1)
+        ->and(array_search('notes', $nurseKeys, true))
+        ->toBe(array_search('encounter', $nurseKeys, true) + 1);
 });
 
 it('hides notes tab without create clinical note permission', function (): void {

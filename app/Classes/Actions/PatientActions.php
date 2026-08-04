@@ -8,14 +8,11 @@ use Filament\Forms\Components\DateTimePicker;
 use Filament\Forms\Components\FileUpload;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
-use Filament\Forms\Components\TextInput;
 use Filament\Notifications\Notification;
 use Filament\Schemas\Components\Fieldset;
-use Filament\Schemas\Components\Utilities\Set;
 use Illuminate\Support\Facades\Auth;
 use Modules\Clinical\Classes\Services\AllergyService;
 use Modules\Clinical\Classes\Services\ClinicalNoteService;
-use Modules\Clinical\Classes\Services\DiagnosisCodeService;
 use Modules\Clinical\Classes\Services\DiagnosisService;
 use Modules\Clinical\Classes\Services\EncounterService;
 use Modules\Clinical\Classes\Services\FulfillmentService;
@@ -25,6 +22,7 @@ use Modules\Clinical\Classes\Services\ServiceRequestService;
 use Modules\Clinical\Classes\Services\VitalSignService;
 use Modules\Clinical\Filament\Clusters\Clinical\Resources\Allergies\Schemas\AllergyForm;
 use Modules\Clinical\Filament\Clusters\Clinical\Resources\ClinicalNotes\Schemas\ClinicalNoteForm;
+use Modules\Clinical\Filament\Clusters\Clinical\Resources\EncounterDiagnoses\Schemas\EncounterDiagnosisForm;
 use Modules\Clinical\Filament\Clusters\Clinical\Resources\Encounters\Schemas\EncounterForm;
 use Modules\Clinical\Filament\Clusters\Clinical\Resources\ServiceRequests\Schemas\ServiceRequestForm;
 use Modules\Clinical\Filament\Clusters\Clinical\Resources\VitalSigns\Schemas\VitalSignForm;
@@ -35,7 +33,6 @@ use Modules\Clinical\Filament\Clusters\Workspace\Pages\Timeline;
 use Modules\Clinical\Filament\Support\MarRecordDoseFormSchema;
 use Modules\Clinical\Models\Allergy;
 use Modules\Clinical\Models\ClinicalNote;
-use Modules\Clinical\Models\DiagnosisCode;
 use Modules\Clinical\Models\Encounter;
 use Modules\Clinical\Models\EncounterDiagnosis;
 use Modules\Clinical\Models\RequestItem;
@@ -44,6 +41,7 @@ use Modules\Clinical\Models\VitalSign;
 use Modules\Clinical\Policies\AllergyPolicy;
 use Modules\Clinical\Policies\CarePlanPolicy;
 use Modules\Clinical\Policies\ClinicalNotePolicy;
+use Modules\Clinical\Policies\EncounterDiagnosisPolicy;
 use Modules\Clinical\Policies\EncounterPolicy;
 use Modules\Clinical\Policies\ServiceRequestPolicy;
 use Modules\Clinical\Policies\VitalSignPolicy;
@@ -203,46 +201,10 @@ class PatientActions
             ->model(EncounterDiagnosis::class)
             ->slideOver()
             ->closeModalByClickingAway(false)
-            ->schema([
-                Select::make('diagnosis_code_id')
-                    ->label('ICD Code')
-                    ->searchable()
-                    ->getSearchResultsUsing(function (string $search) {
-                        return app(DiagnosisCodeService::class)->search($search, limit: 10)
-                            ->mapWithKeys(fn ($code) => [
-                                $code->id => $code->code.' - '.$code->description,
-                            ]);
-                    })
-                    ->getOptionLabelUsing(function ($value): ?string {
-                        $code = DiagnosisCode::find($value);
-
-                        return $code ? $code->code.' - '.$code->description : null;
-                    })
-                    ->nullable()
-                    ->live()
-                    ->afterStateUpdated(function ($state, Set $set) {
-                        if (! $state) {
-                            return;
-                        }
-                        $code = DiagnosisCode::find($state);
-                        if ($code) {
-                            $set('description', $code->description);
-                        }
-                    }),
-                TextInput::make('description')
-                    ->label('Diagnosis Name')
-                    ->placeholder('Or type a custom diagnosis name...')
-                    ->requiredWithout('diagnosis_code_id'),
-                Select::make('type')
-                    ->options([
-                        'primary' => 'Primary',
-                        'secondary' => 'Secondary',
-                        'complication' => 'Complication',
-                    ])
-                    ->default('primary')
-                    ->required(),
-            ])
-            ->visible(fn () => $this->patient !== null && $this->encounterId !== null)
+            ->schema(EncounterDiagnosisForm::itemElements())
+            ->visible(fn () => $this->patient !== null
+                && $this->encounterId !== null
+                && app(EncounterDiagnosisPolicy::class)->create(Auth::user()))
             ->action(function (array $data) {
                 if (! $this->patient) {
                     return;
@@ -258,29 +220,13 @@ class PatientActions
                     return;
                 }
 
-                $description = $data['description'];
-                $diagnosisCodeId = null;
-
-                if ($data['diagnosis_code_id']) {
-                    $code = DiagnosisCode::find($data['diagnosis_code_id']);
-                    if ($code) {
-                        $diagnosisCodeId = $code->id;
-                        $description = $description ?: $code->description;
-                    }
-                }
-
-                if (! $description) {
+                if (! filled($data['description'] ?? null) && ! filled($data['diagnosis_code_id'] ?? null) && ! filled($data['code_search'] ?? null)) {
                     return;
                 }
 
                 $this->diagnosisService->record(
                     $this->patient,
-                    [
-                        [
-                            'id' => $diagnosisCodeId,
-                            'label' => $description,
-                        ],
-                    ],
+                    [$data],
                     $this->encounterId,
                     Auth::id(),
                 );

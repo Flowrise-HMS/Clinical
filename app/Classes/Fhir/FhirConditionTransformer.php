@@ -41,7 +41,7 @@ class FhirConditionTransformer implements FhirResourceContract
                 'coding' => [
                     [
                         'system' => self::VERIFICATION_STATUS_SYSTEM,
-                        'code' => 'confirmed',
+                        'code' => $model->certainty?->value ?? 'provisional',
                     ],
                 ],
             ],

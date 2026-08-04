@@ -8,6 +8,7 @@ use Filament\Widgets\TableWidget as BaseTableWidget;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\Auth;
 use Modules\Clinical\Enums\CarePlanStatus;
+use Modules\Clinical\Filament\Clusters\Clinical\Resources\CarePlans\Tables\CarePlansTable;
 use Modules\Clinical\Models\CarePlan;
 
 class CarePlanWardTableWidget extends BaseTableWidget
@@ -48,22 +49,7 @@ class CarePlanWardTableWidget extends BaseTableWidget
                     Action::make('openPatient')
                         ->action(fn (CarePlan $record) => $this->dispatch('select-patient', patientId: $record->patient_id))
                 ),
-            TextColumn::make('status')
-                ->badge()
-                ->sortable(),
-            TextColumn::make('category')
-                ->badge()
-                ->sortable(),
-            TextColumn::make('encounter.encounter_number')
-                ->label('Encounter')
-                ->placeholder('—'),
-            TextColumn::make('custodian.name')
-                ->label('Custodian')
-                ->placeholder('—'),
-            TextColumn::make('period_start')
-                ->label('Period')
-                ->date()
-                ->placeholder('—'),
+            ...CarePlansTable::wardWorkspaceColumns(),
         ];
     }
 

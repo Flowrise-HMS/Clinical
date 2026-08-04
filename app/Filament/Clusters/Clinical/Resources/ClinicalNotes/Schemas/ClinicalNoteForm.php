@@ -43,7 +43,7 @@ class ClinicalNoteForm
     {
         return [
             Section::make('Clinical Note')
-                ->description('Create a new clinical note')
+                ->description('Document progress notes, consultations, and other clinical documentation for this patient.')
                 ->schema([
                     Grid::make(2)
                         ->schema([

@@ -3,11 +3,11 @@
 namespace Modules\Clinical\Filament\Widgets;
 
 use Filament\Actions\Action;
-use Filament\Tables\Columns\TextColumn;
 use Filament\Widgets\TableWidget as BaseTableWidget;
 use Illuminate\Database\Eloquent\Builder;
 use Livewire\Attributes\Reactive;
 use Modules\Clinical\Enums\CarePlanStatus;
+use Modules\Clinical\Filament\Clusters\Clinical\Resources\CarePlans\Tables\CarePlansTable;
 use Modules\Clinical\Models\CarePlan;
 
 class CarePlanRecentTableWidget extends BaseTableWidget
@@ -40,25 +40,7 @@ class CarePlanRecentTableWidget extends BaseTableWidget
 
     protected function getTableColumns(): array
     {
-        return [
-            TextColumn::make('status')
-                ->badge()
-                ->sortable(),
-            TextColumn::make('category')
-                ->badge()
-                ->sortable(),
-            TextColumn::make('encounter.encounter_number')
-                ->label('Encounter')
-                ->placeholder('—'),
-            TextColumn::make('custodian.name')
-                ->label('Custodian')
-                ->placeholder('—'),
-            TextColumn::make('updated_at')
-                ->label('Updated')
-                ->date()
-                ->placeholder('—')
-                ->sortable(),
-        ];
+        return CarePlansTable::recentWorkspaceColumns();
     }
 
     protected function getTableActions(): array

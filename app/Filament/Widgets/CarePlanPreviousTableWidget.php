@@ -3,11 +3,11 @@
 namespace Modules\Clinical\Filament\Widgets;
 
 use Filament\Actions\Action;
-use Filament\Tables\Columns\TextColumn;
 use Filament\Widgets\TableWidget as BaseTableWidget;
 use Illuminate\Database\Eloquent\Builder;
 use Livewire\Attributes\Reactive;
 use Modules\Clinical\Enums\CarePlanStatus;
+use Modules\Clinical\Filament\Clusters\Clinical\Resources\CarePlans\Tables\CarePlansTable;
 use Modules\Clinical\Models\CarePlan;
 
 class CarePlanPreviousTableWidget extends BaseTableWidget
@@ -41,22 +41,7 @@ class CarePlanPreviousTableWidget extends BaseTableWidget
 
     protected function getTableColumns(): array
     {
-        return [
-            TextColumn::make('category')
-                ->badge()
-                ->sortable(),
-            TextColumn::make('status')
-                ->badge()
-                ->sortable(),
-            TextColumn::make('encounter.encounter_number')
-                ->label('Encounter')
-                ->placeholder('—'),
-            TextColumn::make('closed_at')
-                ->label('Closed')
-                ->state(fn (CarePlan $record) => $record->completed_at ?? $record->revoked_at)
-                ->date()
-                ->placeholder('—'),
-        ];
+        return CarePlansTable::previousWorkspaceColumns();
     }
 
     protected function getTableActions(): array

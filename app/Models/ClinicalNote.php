@@ -138,13 +138,31 @@ class ClinicalNote extends Model
 
     public function getContentHtmlAttribute(): string
     {
-        $content = $this->content ?? [];
+        /** @var mixed $content */
+        $content = $this->getAttribute('content');
 
-        if ($this->noteType->requiresStructuredContent()) {
+        if ($content === null || $content === '' || $content === []) {
+            return '';
+        }
+
+        if (is_string($content)) {
+            return $content;
+        }
+
+        if (! is_array($content)) {
+            return '';
+        }
+
+        /** @var NoteType|null $noteType */
+        $noteType = $this->getAttribute('note_type');
+
+        if ($noteType?->requiresStructuredContent()) {
             return $this->renderStructuredContent($content);
         }
 
-        return $content['text'] ?? '';
+        $text = $content['text'] ?? null;
+
+        return is_string($text) ? $text : '';
     }
 
     protected function renderStructuredContent(array $content): string
