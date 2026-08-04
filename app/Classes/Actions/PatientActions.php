@@ -623,8 +623,7 @@ class PatientActions
             ->name('discharge_patient')
             ->label('Discharge patient')
             ->record($encounter)
-            ->authorize(fn (): bool => (Auth::user()?->can('discharge_patient') ?? false)
-                || (Auth::user()?->can('can_discharge') ?? false))
+            ->authorize(fn (): bool => Auth::user()?->can('discharge_patient') ?? false)
             ->successNotificationTitle('Patient discharged successfully');
     }
 

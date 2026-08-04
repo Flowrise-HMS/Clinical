@@ -482,7 +482,7 @@ class ClinicalWorkspaceService
 
     public function canDischargePatient(): bool
     {
-        return Auth::user()->can('can_discharge');
+        return Auth::user()->can('discharge_patient');
     }
 
     public function canPrescribe(): bool

@@ -22,6 +22,7 @@ use Illuminate\Support\Facades\Auth;
 use Livewire\Attributes\Computed;
 use Livewire\Attributes\On;
 use Livewire\Attributes\Url;
+use Modules\Clinical\Classes\Actions\EncounterActions;
 use Modules\Clinical\Classes\Actions\PatientActions;
 use Modules\Clinical\Classes\Services\AdtService;
 use Modules\Clinical\Classes\Services\AllergyService;
@@ -40,6 +41,7 @@ use Modules\Clinical\Enums\EncounterType;
 use Modules\Clinical\Enums\NoteStatus;
 use Modules\Clinical\Enums\NoteType;
 use Modules\Clinical\Filament\Clusters\Clinical\Resources\Allergies\Schemas\AllergyForm;
+use Modules\Clinical\Filament\Clusters\Clinical\Resources\ClinicalNotes\Schemas\ClinicalNoteForm;
 use Modules\Clinical\Filament\Clusters\Clinical\Resources\ServiceRequests\Schemas\ServiceRequestForm;
 use Modules\Clinical\Filament\Clusters\Clinical\Resources\VitalSigns\Schemas\VitalSignForm;
 use Modules\Clinical\Filament\Clusters\Workspace\Concerns\ManagesWorkspacePatient;
@@ -55,6 +57,7 @@ use Modules\Clinical\Models\DiagnosisCode;
 use Modules\Clinical\Models\Encounter;
 use Modules\Clinical\Models\EncounterDiagnosis;
 use Modules\Clinical\Models\RequestItem;
+use Modules\Clinical\Policies\ClinicalNotePolicy;
 use Modules\Clinical\Policies\EncounterPolicy;
 use Modules\Core\Classes\Support\PageHeaderActionsRegistry;
 use Modules\Core\Enums\CoverageType;
@@ -135,6 +138,8 @@ class ClinicalWorkspace extends Page implements HasSchemas
     public array $adtFormData = [];
 
     public array $referralData = [];
+
+    public array $noteFormData = [];
 
     protected ?ClinicalWorkspaceService $workspaceService = null;
 
@@ -237,6 +242,7 @@ class ClinicalWorkspace extends Page implements HasSchemas
         $this->dischargeData = [];
         $this->adtFormData = [];
         $this->referralData = [];
+        $this->noteFormData = [];
     }
 
     protected function loadPatientContext(): void
@@ -623,9 +629,32 @@ class ClinicalWorkspace extends Page implements HasSchemas
         }
 
         $open = $this->getOpenEncounter();
+
         if ($open) {
-            $this->authorizeEncounterUpdate($open);
-        } elseif (! $this->canCreateEncounter()) {
+            if (! $this->canShowAdmitOnAdt($open)) {
+                Notification::make()->title('Not authorized')->danger()->send();
+
+                return;
+            }
+
+            try {
+                $encounter = $this->adtService->assignBed(
+                    $open,
+                    $bedId,
+                    notes: $this->adtFormData['notes'] ?? null,
+                );
+
+                $this->refreshAdtContext($encounter);
+                $this->adtFormData = [];
+                Notification::make()->title('Patient admitted')->success()->send();
+            } catch (\Throwable $e) {
+                Notification::make()->title('Admit failed')->body($e->getMessage())->danger()->send();
+            }
+
+            return;
+        }
+
+        if (! $this->canCreateEncounter()) {
             Notification::make()->title('Not authorized')->danger()->send();
 
             return;
@@ -810,8 +839,32 @@ class ClinicalWorkspace extends Page implements HasSchemas
             return false;
         }
 
-        return $user->can('discharge_patient')
-            || $user->can('can_discharge');
+        return $user->can('discharge_patient');
+    }
+
+    public function canShowAdmitOnAdt(?Encounter $encounter = null): bool
+    {
+        $encounter ??= $this->getOpenEncounter();
+
+        return $encounter !== null
+            && $this->canUpdateEncounter($encounter)
+            && EncounterActions::isAdmitVisible($encounter);
+    }
+
+    public function canShowDischargeOnAdt(?Encounter $encounter = null): bool
+    {
+        $encounter ??= $this->getOpenEncounter();
+
+        return $encounter !== null
+            && $this->canDischargeEncounter($encounter)
+            && EncounterActions::isDischargeVisible($encounter);
+    }
+
+    public function canAccessNotesTab(): bool
+    {
+        $user = Auth::user();
+
+        return $user !== null && app(ClinicalNotePolicy::class)->create($user);
     }
 
     public function canAccessAdtTab(): bool
@@ -1009,7 +1062,11 @@ class ClinicalWorkspace extends Page implements HasSchemas
             return;
         }
 
-        $this->authorizeEncounterDischarge($encounter);
+        if (! $this->canShowDischargeOnAdt($encounter)) {
+            Notification::make()->title('Not authorized')->danger()->send();
+
+            return;
+        }
 
         try {
             $this->adtService->discharge(
@@ -1027,6 +1084,38 @@ class ClinicalWorkspace extends Page implements HasSchemas
         } catch (\Exception $e) {
             Notification::make()
                 ->title('Discharge failed')
+                ->body($e->getMessage())
+                ->danger()
+                ->send();
+        }
+    }
+
+    public function saveClinicalNote(): void
+    {
+        if (! $this->currentPatient) {
+            Notification::make()->title('No patient selected')->danger()->send();
+
+            return;
+        }
+
+        if (! $this->canAccessNotesTab()) {
+            Notification::make()->title('Not authorized')->danger()->send();
+
+            return;
+        }
+
+        try {
+            $this->clinicalNoteService->record(
+                $this->currentPatient,
+                $this->noteFormData,
+                $this->currentEncounter?->id ?? $this->getOpenEncounter()?->id,
+            );
+
+            $this->noteFormData = [];
+            Notification::make()->title('Clinical note created')->success()->send();
+        } catch (\Throwable $e) {
+            Notification::make()
+                ->title('Note failed')
                 ->body($e->getMessage())
                 ->danger()
                 ->send();
@@ -1382,6 +1471,9 @@ class ClinicalWorkspace extends Page implements HasSchemas
                         ->label('Discharge Notes'),
                 ])
                 ->statePath('dischargeData'),
+            'noteForm' => $this->makeSchema()
+                ->schema(ClinicalNoteForm::quickElements())
+                ->statePath('noteFormData'),
             'referralForm' => $this->makeSchema()
                 ->schema([
                     TextInput::make('destination')
@@ -1414,6 +1506,10 @@ class ClinicalWorkspace extends Page implements HasSchemas
                 'label' => 'Allergies',
                 'icon' => 'heroicon-m-exclamation-triangle',
             ],
+            'notes' => [
+                'label' => 'Notes',
+                'icon' => 'heroicon-m-document-text',
+            ],
             'adt' => [
                 'label' => 'ADT',
                 'icon' => 'heroicon-m-arrows-right-left',
@@ -1429,6 +1525,7 @@ class ClinicalWorkspace extends Page implements HasSchemas
         ];
 
         $tabs = $this->filterAdtTab($tabs);
+        $tabs = $this->filterNotesTab($tabs);
         $tabs = $this->prependEncounterTab($tabs);
 
         return $this->prependPatientDetailsTab($tabs);
@@ -1453,6 +1550,10 @@ class ClinicalWorkspace extends Page implements HasSchemas
                 'label' => 'Allergies',
                 'icon' => 'heroicon-m-exclamation-triangle',
             ],
+            'notes' => [
+                'label' => 'Notes',
+                'icon' => 'heroicon-m-document-text',
+            ],
             'triage' => [
                 'label' => 'Triage',
                 'icon' => 'heroicon-m-clipboard-document',
@@ -1463,7 +1564,7 @@ class ClinicalWorkspace extends Page implements HasSchemas
             ],
         ];
 
-        return $this->prependPatientDetailsTab($this->filterAdtTab($tabs));
+        return $this->prependPatientDetailsTab($this->filterNotesTab($this->filterAdtTab($tabs)));
     }
 
     /**
@@ -1474,6 +1575,19 @@ class ClinicalWorkspace extends Page implements HasSchemas
     {
         if (! $this->canAccessAdtTab()) {
             unset($tabs['adt']);
+        }
+
+        return $tabs;
+    }
+
+    /**
+     * @param  array<string, array{label: string, icon?: string}>  $tabs
+     * @return array<string, array{label: string, icon?: string}>
+     */
+    protected function filterNotesTab(array $tabs): array
+    {
+        if (! $this->canAccessNotesTab()) {
+            unset($tabs['notes']);
         }
 
         return $tabs;

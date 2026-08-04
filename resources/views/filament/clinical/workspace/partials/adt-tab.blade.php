@@ -3,6 +3,8 @@
     $chip = $this->getEncounterStatusChip();
     $canCreate = $this->canCreateEncounter();
     $canUpdate = $openEncounter ? $this->canUpdateEncounter($openEncounter) : false;
+    $canShowAdmit = $openEncounter ? $this->canShowAdmitOnAdt($openEncounter) : false;
+    $canShowDischarge = $openEncounter ? $this->canShowDischargeOnAdt($openEncounter) : false;
     $canDischarge = $openEncounter ? $this->canDischargeEncounter($openEncounter) : false;
     $hasBed = $openEncounter && filled($openEncounter->bed_id);
     $renderedSection = false;
@@ -52,12 +54,12 @@
             </div>
         @endif
     @else
-        @if ($canUpdate && $openEncounter->type?->isInpatient() && blank($openEncounter->bed_id))
+        @if ($canShowAdmit)
             @php $renderedSection = true; @endphp
             <div class="space-y-3 rounded-xl border border-gray-200 dark:border-gray-700 p-4">
                 <h4 class="text-sm font-semibold text-gray-900 dark:text-white">Admit / Assign bed</h4>
                 <p class="text-sm text-gray-500 dark:text-gray-400">
-                    Assign a ward and bed. Planned inpatient encounters are marked Arrived on assignment.
+                    Assign a ward and bed. Planned encounters are marked Arrived on assignment.
                 </p>
                 {{ $this->adtAdmitForm }}
                 <div class="flex justify-end">
@@ -66,10 +68,10 @@
                     </x-filament::button>
                 </div>
             </div>
-        @elseif ($canUpdate && ! $openEncounter->type?->isInpatient() && ! $hasBed)
+        @elseif ($canUpdate && ! $hasBed)
             @php $renderedSection = true; @endphp
             <x-filament::badge color="info">
-                Bed assignment and internal transfer are available on inpatient encounters. Create an inpatient visit or use Admit from transfer when no encounter is open.
+                Admission is not available for this encounter in its current status.
             </x-filament::badge>
         @endif
 
@@ -105,7 +107,7 @@
             </div>
         @endif
 
-        @if ($canDischarge)
+        @if ($canShowDischarge)
             @php $renderedSection = true; @endphp
             <div class="space-y-3 rounded-xl border border-danger-200 dark:border-danger-900/40 p-4">
                 <h4 class="text-sm font-semibold text-gray-900 dark:text-white">Discharge</h4>

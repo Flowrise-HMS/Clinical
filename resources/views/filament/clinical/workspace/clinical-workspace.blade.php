@@ -224,6 +224,8 @@
                             @include('clinical::clinical.workspace.partials.encounter-tab')
                         @elseif ($activeTab === 'adt')
                             @include('clinical::clinical.workspace.partials.adt-tab')
+                        @elseif ($activeTab === 'notes')
+                            @include('clinical::clinical.workspace.partials.notes-tab')
                         @elseif ($activeTab === 'vitals')
                             <div class="space-y-4">
                                 <h3 class="text-lg font-semibold text-gray-900 dark:text-white">Record Vitals</h3>
@@ -448,6 +450,8 @@
                                 @include('clinical::clinical.workspace.partials.encounter-tab')
                             @elseif ($activeTab === 'adt')
                                 @include('clinical::clinical.workspace.partials.adt-tab')
+                            @elseif ($activeTab === 'notes')
+                                @include('clinical::clinical.workspace.partials.notes-tab')
                             @elseif ($activeTab === 'vitals')
                                 <div class="space-y-4">
                                     <h4 class="text-base font-semibold text-gray-900 dark:text-white">Record Vitals</h4>

@@ -20,14 +20,26 @@ use Modules\Core\Models\Branch;
 
 class EncounterActions
 {
+    public static function isAdmitVisible(Model $encounter): bool
+    {
+        return $encounter->canTransitionTo(EncounterStatus::ARRIVED)
+            || ($encounter->type === EncounterType::INPATIENT
+                && $encounter->status?->isActive()
+                && blank($encounter->bed_id));
+    }
+
+    public static function isDischargeVisible(Model $encounter): bool
+    {
+        return $encounter->canTransitionTo(EncounterStatus::FINISHED);
+    }
+
     public static function admit(Model $encounter): Action
     {
         return Action::make('admit')
             ->label('Admit Patient')
             ->icon('heroicon-m-arrow-right-start-on-rectangle')
             ->color('success')
-            ->visible(fn () => $encounter->canTransitionTo(EncounterStatus::ARRIVED)
-                || ($encounter->type === EncounterType::INPATIENT && $encounter->status?->isActive() && blank($encounter->bed_id)))
+            ->visible(fn () => self::isAdmitVisible($encounter))
             ->modalHeading(__('Admit Patient'))
             ->modalDescription(__('Admit the patient to a ward and bed. This will mark the encounter as Arrived and assign the selected bed. Only beds not currently occupied by another active patient are shown.'))
             ->slideOver()
@@ -160,7 +172,7 @@ class EncounterActions
             ->label('Discharge')
             ->icon('heroicon-m-arrow-left-end-on-rectangle')
             ->color('danger')
-            ->visible(fn () => $encounter->canTransitionTo(EncounterStatus::FINISHED))
+            ->visible(fn () => self::isDischargeVisible($encounter))
             ->modalHeading(__('Discharge Patient'))
             ->modalDescription(__('Discharge the patient from this encounter. This will finalize their stay, free up the assigned bed, and generate any pending invoices for settlement.'))
             ->slideOver()
