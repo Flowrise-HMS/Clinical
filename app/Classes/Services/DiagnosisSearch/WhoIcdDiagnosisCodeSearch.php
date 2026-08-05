@@ -3,8 +3,6 @@
 namespace Modules\Clinical\Classes\Services\DiagnosisSearch;
 
 use Illuminate\Support\Collection;
-use Illuminate\Support\Facades\Cache;
-use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Modules\Clinical\Contracts\DiagnosisCodeSearchContract;
 use Modules\Clinical\Data\DiagnosisCodeSearchResult;
@@ -12,41 +10,32 @@ use Throwable;
 
 class WhoIcdDiagnosisCodeSearch implements DiagnosisCodeSearchContract
 {
+    public function __construct(
+        protected WhoIcdApiClient $client,
+    ) {}
+
     public function search(string $term, int $limit = 15): Collection
     {
         if (blank($term) || strlen($term) < 2) {
             return collect();
         }
 
-        if (! $this->isConfigured()) {
+        if (! $this->client->isConfigured()) {
             return collect();
         }
 
         try {
-            $token = $this->accessToken();
+            $response = $this->client->get($this->client->linearizationEndpoint('search'), [
+                'q' => $term,
+                'flatResults' => 'true',
+            ]);
 
-            if ($token === null) {
-                return collect();
-            }
-
-            $response = Http::timeout($this->timeout())
-                ->withToken($token)
-                ->acceptJson()
-                ->withHeaders([
-                    'Accept-Language' => (string) config('clinical.icd.language', 'en'),
-                    'API-Version' => (string) config('clinical.icd.api_version', 'v2'),
-                ])
-                ->get($this->searchUrl(), [
-                    'q' => $term,
-                    'flatResults' => 'true',
-                ]);
-
-            if (! $response->successful()) {
+            if ($response['status'] !== 200) {
                 return collect();
             }
 
             /** @var array<int, array<string, mixed>> $entities */
-            $entities = $response->json('destinationEntities') ?? [];
+            $entities = $response['body']['destinationEntities'] ?? [];
 
             return collect($entities)
                 ->take($limit)
@@ -61,68 +50,6 @@ class WhoIcdDiagnosisCodeSearch implements DiagnosisCodeSearchContract
 
             return collect();
         }
-    }
-
-    public function isConfigured(): bool
-    {
-        return filled(config('clinical.icd.client_id'))
-            && filled(config('clinical.icd.client_secret'));
-    }
-
-    /**
-     * OAuth2 client-credentials token using HTTP Basic Auth (WHO ICD API Authentication docs).
-     */
-    protected function accessToken(): ?string
-    {
-        $cacheKey = 'clinical_icd_access_token';
-
-        $cached = Cache::get($cacheKey);
-        if (is_string($cached) && $cached !== '') {
-            return $cached;
-        }
-
-        $clientId = (string) config('clinical.icd.client_id');
-        $clientSecret = (string) config('clinical.icd.client_secret');
-
-        $response = Http::asForm()
-            ->timeout($this->timeout())
-            ->withBasicAuth($clientId, $clientSecret)
-            ->post((string) config('clinical.icd.token_url'), [
-                'grant_type' => 'client_credentials',
-                'scope' => (string) config('clinical.icd.scope', 'icdapi_access'),
-            ]);
-
-        if (! $response->successful()) {
-            Log::warning('WHO ICD token request failed', [
-                'status' => $response->status(),
-            ]);
-
-            return null;
-        }
-
-        $token = $response->json('access_token');
-        $expiresIn = (int) ($response->json('expires_in') ?? 3600);
-
-        if (! is_string($token) || $token === '') {
-            return null;
-        }
-
-        // Tokens are valid ~1 hour; refresh slightly early.
-        Cache::put($cacheKey, $token, now()->addSeconds(max(60, $expiresIn - 60)));
-
-        return $token;
-    }
-
-    /**
-     * Prefer MMS linearization search so results include ICD codes (WHO API v2 guidance).
-     */
-    protected function searchUrl(): string
-    {
-        $base = rtrim((string) config('clinical.icd.base_url', 'https://id.who.int'), '/');
-        $releaseId = trim((string) config('clinical.icd.release_id', '2026-01'), '/');
-        $linearization = trim((string) config('clinical.icd.linearization', 'mms'), '/');
-
-        return "{$base}/icd/release/11/{$releaseId}/{$linearization}/search";
     }
 
     /**
@@ -149,7 +76,7 @@ class WhoIcdDiagnosisCodeSearch implements DiagnosisCodeSearchContract
             code: $code,
             label: strip_tags($title),
             externalId: $externalId,
-            uri: $uri !== null ? str_replace('http://', 'https://', $uri) : null,
+            uri: $this->client->rewriteUri($uri),
             source: 'who',
         );
     }
@@ -211,10 +138,5 @@ class WhoIcdDiagnosisCodeSearch implements DiagnosisCodeSearchContract
         }
 
         return null;
-    }
-
-    protected function timeout(): int
-    {
-        return (int) config('clinical.icd.timeout', 5);
     }
 }

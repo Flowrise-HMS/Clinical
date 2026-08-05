@@ -168,6 +168,11 @@ class Encounter extends BaseModel implements ProvidesClientIdentity
         return $this->hasMany(ClinicalNote::class, 'encounter_id');
     }
 
+    public function diagnoses(): HasMany
+    {
+        return $this->hasMany(EncounterDiagnosis::class, 'encounter_id');
+    }
+
     public function activeParticipants(): HasMany
     {
         return $this->hasMany(EncounterParticipant::class)->where('status', ParticipantStatus::ACTIVE);

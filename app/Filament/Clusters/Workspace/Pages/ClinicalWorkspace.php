@@ -34,6 +34,8 @@ use Modules\Clinical\Classes\Services\FulfillmentService;
 use Modules\Clinical\Classes\Services\ServiceRequestService;
 use Modules\Clinical\Classes\Services\VitalSignService;
 use Modules\Clinical\Enums\AdtDestinationType;
+use Modules\Clinical\Enums\DiagnosisCertainty;
+use Modules\Clinical\Enums\DiagnosisType;
 use Modules\Clinical\Enums\DischargeDisposition;
 use Modules\Clinical\Enums\EncounterPriority;
 use Modules\Clinical\Enums\EncounterType;
@@ -46,6 +48,7 @@ use Modules\Clinical\Filament\Clusters\Clinical\Resources\ServiceRequests\Schema
 use Modules\Clinical\Filament\Clusters\Clinical\Resources\VitalSigns\Schemas\VitalSignForm;
 use Modules\Clinical\Filament\Clusters\Workspace\Concerns\ManagesWorkspacePatient;
 use Modules\Clinical\Filament\Clusters\Workspace\WorkspaceCluster;
+use Modules\Clinical\Filament\Concerns\CanAutocodeIcd;
 use Modules\Clinical\Filament\Widgets\CriticalPatientsWidget;
 use Modules\Clinical\Filament\Widgets\MyTasksWidget;
 use Modules\Clinical\Filament\Widgets\PatientVitalsHistoryWidget;
@@ -75,7 +78,7 @@ use Modules\Pharmacy\Models\Medication;
 
 class ClinicalWorkspace extends Page implements HasSchemas
 {
-    use HasPageShield, InteractsWithSchemas, ManagesWorkspacePatient;
+    use CanAutocodeIcd, HasPageShield, InteractsWithSchemas, ManagesWorkspacePatient;
 
     protected static ?string $slug = '';
 
@@ -123,19 +126,48 @@ class ClinicalWorkspace extends Page implements HasSchemas
 
     public array $allergyData = [];
 
-    public array $consultationData = [];
+    /**
+     * Nested keys must exist up-front so Filament RichEditor can Livewire-entangle them.
+     *
+     * @var array{notes: string|null}
+     */
+    public array $consultationData = [
+        'notes' => null,
+    ];
 
     public array $medicationData = [];
 
     public array $encounterFormData = [];
 
-    public array $dischargeData = [];
+    /**
+     * @var array{discharge_notes: string|null}
+     */
+    public array $dischargeData = [
+        'discharge_notes' => null,
+    ];
 
-    public array $adtFormData = [];
+    /**
+     * @var array{transfer_notes: string|null, transfer_out_notes: string|null, transfer_in_notes: string|null}
+     */
+    public array $adtFormData = [
+        'transfer_notes' => null,
+        'transfer_out_notes' => null,
+        'transfer_in_notes' => null,
+    ];
 
-    public array $referralData = [];
+    /**
+     * @var array{notes: string|null}
+     */
+    public array $referralData = [
+        'notes' => null,
+    ];
 
-    public array $noteFormData = [];
+    /**
+     * @var array{content: string|null}
+     */
+    public array $noteFormData = [
+        'content' => null,
+    ];
 
     protected ?ClinicalWorkspaceService $workspaceService = null;
 
@@ -227,17 +259,61 @@ class ClinicalWorkspace extends Page implements HasSchemas
         $this->encounterFormData = [];
         $this->consultationChiefComplaint = '';
         $this->consultationNotes = '';
-        $this->consultationData = [];
+        $this->consultationData = $this->defaultConsultationData();
         $this->diagnosisFormData = [];
         $this->vitalsData = [];
         $this->serviceRequestData = [];
         $this->labResultData = [];
         $this->allergyData = [];
         $this->medicationData = [];
-        $this->dischargeData = [];
-        $this->adtFormData = [];
-        $this->referralData = [];
-        $this->noteFormData = [];
+        $this->dischargeData = $this->defaultDischargeData();
+        $this->adtFormData = $this->defaultAdtFormData();
+        $this->referralData = $this->defaultReferralData();
+        $this->noteFormData = $this->defaultNoteFormData();
+    }
+
+    /**
+     * @return array{notes: null}
+     */
+    protected function defaultConsultationData(): array
+    {
+        return ['notes' => null];
+    }
+
+    /**
+     * @return array{discharge_notes: null}
+     */
+    protected function defaultDischargeData(): array
+    {
+        return ['discharge_notes' => null];
+    }
+
+    /**
+     * @return array{transfer_notes: null, transfer_out_notes: null, transfer_in_notes: null}
+     */
+    protected function defaultAdtFormData(): array
+    {
+        return [
+            'transfer_notes' => null,
+            'transfer_out_notes' => null,
+            'transfer_in_notes' => null,
+        ];
+    }
+
+    /**
+     * @return array{notes: null}
+     */
+    protected function defaultReferralData(): array
+    {
+        return ['notes' => null];
+    }
+
+    /**
+     * @return array{content: null}
+     */
+    protected function defaultNoteFormData(): array
+    {
+        return ['content' => null];
     }
 
     protected function loadPatientContext(): void
@@ -637,7 +713,7 @@ class ClinicalWorkspace extends Page implements HasSchemas
                 );
 
                 $this->refreshAdtContext($encounter);
-                $this->adtFormData = [];
+                $this->adtFormData = $this->defaultAdtFormData();
                 Notification::make()->title('Patient admitted')->success()->send();
             } catch (\Throwable $e) {
                 Notification::make()->title('Admit failed')->body($e->getMessage())->danger()->send();
@@ -664,7 +740,7 @@ class ClinicalWorkspace extends Page implements HasSchemas
             );
 
             $this->refreshAdtContext($encounter);
-            $this->adtFormData = [];
+            $this->adtFormData = $this->defaultAdtFormData();
             Notification::make()->title('Patient admitted')->success()->send();
         } catch (\Throwable $e) {
             Notification::make()->title('Admit failed')->body($e->getMessage())->danger()->send();
@@ -698,7 +774,7 @@ class ClinicalWorkspace extends Page implements HasSchemas
             );
 
             $this->refreshAdtContext($encounter);
-            $this->adtFormData = [];
+            $this->adtFormData = $this->defaultAdtFormData();
             Notification::make()->title('Patient transferred')->success()->send();
         } catch (\Throwable $e) {
             Notification::make()->title('Transfer failed')->body($e->getMessage())->danger()->send();
@@ -729,7 +805,7 @@ class ClinicalWorkspace extends Page implements HasSchemas
                 notes: $this->adtFormData['transfer_out_notes'] ?? null,
             );
 
-            $this->adtFormData = [];
+            $this->adtFormData = $this->defaultAdtFormData();
             $this->currentEncounter = null;
             $this->currentPatient?->unsetRelation('activeEncounter');
             $this->loadPatientContext();
@@ -783,7 +859,7 @@ class ClinicalWorkspace extends Page implements HasSchemas
             );
 
             $this->refreshAdtContext($encounter);
-            $this->adtFormData = [];
+            $this->adtFormData = $this->defaultAdtFormData();
             $this->activeTab = 'vitals';
             Notification::make()->title($isLocal ? 'Patient admitted successfully' : 'Patient admitted from transfer')->success()->send();
         } catch (\Throwable $e) {
@@ -966,6 +1042,84 @@ class ClinicalWorkspace extends Page implements HasSchemas
         }
     }
 
+    /**
+     * Fill the first uncoded diagnosis row (or append a new row) from the current autocode suggestion.
+     */
+    public function applyAutocodeToDiagnosis(): void
+    {
+        $suggestion = $this->acceptIcdAutocode();
+
+        if ($suggestion === null) {
+            return;
+        }
+
+        $this->fillDiagnosisFromSuggestion($suggestion);
+    }
+
+    /**
+     * Fill the first uncoded diagnosis row (or append a new row) from the ICD browser selection.
+     *
+     * @param  array<string, mixed>  $suggestion
+     */
+    #[On('icd-diagnosis-selected')]
+    public function applyBrowserSelection(array $suggestion, ?string $localId = null): void
+    {
+        if ($localId) {
+            $suggestion['local_id'] = $localId;
+        }
+
+        $this->fillDiagnosisFromSuggestion($suggestion);
+    }
+
+    /**
+     * @param  array<string, mixed>  $suggestion
+     */
+    protected function fillDiagnosisFromSuggestion(array $suggestion): void
+    {
+        $diagnoses = $this->diagnosisFormData['diagnoses'] ?? [];
+
+        foreach ($diagnoses as $index => $row) {
+            if (filled($row['code_search'] ?? null)
+                || filled($row['diagnosis_code_id'] ?? null)
+                || filled($row['icd_entity_id'] ?? null)) {
+                continue;
+            }
+
+            if (! filled($row['description'] ?? null)) {
+                continue;
+            }
+
+            $this->diagnosisFormData['diagnoses'][$index] = $this->diagnosisFromAutocode($row, $suggestion);
+
+            return;
+        }
+
+        $this->diagnosisFormData['diagnoses'][] = $this->diagnosisFromAutocode([], $suggestion);
+    }
+
+    /**
+     * @param  array<string, mixed>  $row
+     * @param  array{local_id: ?string, code: ?string, label: string, external_id: ?string, uri: ?string, source: string}  $suggestion
+     * @return array<string, mixed>
+     */
+    protected function diagnosisFromAutocode(array $row, array $suggestion): array
+    {
+        return array_merge([
+            'type' => DiagnosisType::Primary->value,
+            'is_new_case' => '0',
+            'certainty' => DiagnosisCertainty::Provisional->value,
+            'notes' => null,
+        ], $row, [
+            'diagnosis_code_id' => $suggestion['local_id'] ?? null,
+            'icd_code' => $suggestion['code'],
+            'icd_entity_id' => $suggestion['external_id'],
+            'icd_uri' => $suggestion['uri'],
+            'description' => filled($row['description'] ?? null)
+                ? $row['description']
+                : $suggestion['label'],
+        ]);
+    }
+
     public function updatedServiceRequestDataRequestItemId(?string $requestItemId): void
     {
         $this->labResultData = [];
@@ -1093,7 +1247,7 @@ class ClinicalWorkspace extends Page implements HasSchemas
                 notes: $this->dischargeData['discharge_notes'] ?? null,
             );
 
-            $this->dischargeData = [];
+            $this->dischargeData = $this->defaultDischargeData();
             $this->currentEncounter = null;
             $this->currentPatient?->unsetRelation('activeEncounter');
             $this->loadPatientContext();
@@ -1128,7 +1282,7 @@ class ClinicalWorkspace extends Page implements HasSchemas
                 $this->currentEncounter?->id ?? $this->getOpenEncounter()?->id,
             );
 
-            $this->noteFormData = [];
+            $this->noteFormData = $this->defaultNoteFormData();
             Notification::make()->title('Clinical note created')->success()->send();
         } catch (\Throwable $e) {
             Notification::make()
@@ -1160,7 +1314,7 @@ class ClinicalWorkspace extends Page implements HasSchemas
                 $this->currentEncounter->id,
             );
 
-            $this->referralData = [];
+            $this->referralData = $this->defaultReferralData();
             Notification::make()->title('Referral submitted')->success()->send();
         } catch (\Exception $e) {
             Notification::make()

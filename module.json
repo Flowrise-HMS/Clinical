@@ -1,8 +1,8 @@
 {
     "name": "Clinical",
     "alias": "clinical",
-    "description": "Clinical module for patient encounters, service requests, tasks, vital signs, and clinical notes. Supports walk-in guests, shift work, and role-based fulfillment following FHIR terminology.",
-    "keywords": ["hms", "hospital", "clinical", "encounter", "fhir", "vitals", "healthcare"],
+    "description": "Clinical module for patient encounters, diagnoses (ICD), nursing care plans, service requests, tasks, vital signs, clinical notes, allergies, MAR, and ADT location events. Supports walk-in guests, shift work, and role-based fulfillment following FHIR terminology.",
+    "keywords": ["hms", "hospital", "clinical", "encounter", "care-plan", "diagnosis", "fhir", "vitals", "healthcare"],
     "priority": 20,
     "providers": [
         "Modules\\Clinical\\Providers\\ClinicalServiceProvider"

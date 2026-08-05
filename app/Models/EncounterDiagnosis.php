@@ -22,6 +22,7 @@ class EncounterDiagnosis extends BaseModel
         'icd_entity_id',
         'icd_uri',
         'icd_code',
+        'icd10_code',
         'description',
         'type',
         'is_new_case',

@@ -15,35 +15,35 @@ class CompositeDiagnosisCodeSearch implements DiagnosisCodeSearchContract
 
     public function search(string $term, int $limit = 15): Collection
     {
-        $whoResults = $this->whoSearch->search($term, $limit);
+        $localResults = $this->localSearch->search($term, $limit);
 
-        if ($whoResults->isNotEmpty()) {
-            $localResults = $this->localSearch->search($term, $limit);
+        if ($localResults->isNotEmpty()) {
+            $whoResults = $this->whoSearch->search($term, $limit);
 
-            return $this->mergePreferringWho($whoResults, $localResults, $limit);
+            return $this->mergePreferringLocal($localResults, $whoResults, $limit);
         }
 
-        return $this->localSearch->search($term, $limit);
+        return $this->whoSearch->search($term, $limit);
     }
 
     /**
-     * @param  Collection<int, DiagnosisCodeSearchResult>  $whoResults
      * @param  Collection<int, DiagnosisCodeSearchResult>  $localResults
+     * @param  Collection<int, DiagnosisCodeSearchResult>  $whoResults
      * @return Collection<int, DiagnosisCodeSearchResult>
      */
-    protected function mergePreferringWho(Collection $whoResults, Collection $localResults, int $limit): Collection
+    protected function mergePreferringLocal(Collection $localResults, Collection $whoResults, int $limit): Collection
     {
         $merged = collect();
         $seenCodes = [];
 
-        foreach ($whoResults as $result) {
-            $key = strtolower((string) ($result->code ?: $result->uri ?: $result->label));
+        foreach ($localResults as $result) {
+            $key = strtolower((string) ($result->code ?: $result->label));
             $seenCodes[$key] = true;
             $merged->push($result);
         }
 
-        foreach ($localResults as $result) {
-            $key = strtolower((string) ($result->code ?: $result->label));
+        foreach ($whoResults as $result) {
+            $key = strtolower((string) ($result->code ?: $result->uri ?: $result->label));
             if (isset($seenCodes[$key])) {
                 continue;
             }

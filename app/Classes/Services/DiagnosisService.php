@@ -4,6 +4,7 @@ namespace Modules\Clinical\Classes\Services;
 
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
+use Modules\Clinical\Data\DiagnosisCodeSearchResult;
 use Modules\Clinical\Enums\DiagnosisCertainty;
 use Modules\Clinical\Enums\DiagnosisType;
 use Modules\Clinical\Models\DiagnosisCode;
@@ -62,6 +63,7 @@ class DiagnosisService
     ): void {
         foreach ($diagnoses as $dx) {
             $icdCode = $dx['icd_code'] ?? null;
+            $icd10Code = $dx['icd10_code'] ?? null;
             $diagnosisCodeId = $dx['diagnosis_code_id'] ?? $dx['id'] ?? null;
             $description = $dx['description'] ?? $dx['label'] ?? null;
             $icdEntityId = $dx['icd_entity_id'] ?? null;
@@ -84,6 +86,19 @@ class DiagnosisService
                 continue;
             }
 
+            if (! filled($diagnosisCodeId) && filled($icdEntityId)) {
+                $diagnosisCodeId = app(IcdCatalogueService::class)->localId(
+                    new DiagnosisCodeSearchResult(
+                        localId: null,
+                        code: $icdCode,
+                        label: $description,
+                        externalId: $icdEntityId,
+                        uri: $icdUri,
+                        source: 'who',
+                    )
+                );
+            }
+
             $rowNotes = $dx['notes'] ?? $fallbackNotes;
 
             EncounterDiagnosis::create([
@@ -93,6 +108,7 @@ class DiagnosisService
                 'icd_entity_id' => $icdEntityId,
                 'icd_uri' => $icdUri,
                 'icd_code' => $icdCode,
+                'icd10_code' => $icd10Code,
                 'description' => $description,
                 'notes' => is_string($rowNotes) ? $rowNotes : null,
                 'type' => $this->resolveType($dx['type'] ?? null),
@@ -119,10 +135,11 @@ class DiagnosisService
         return [
             'diagnoses' => $records->map(fn (EncounterDiagnosis $dx): array => [
                 'diagnosis_code_id' => $dx->diagnosis_code_id,
-                'code_search' => $dx->diagnosis_code_id
-                    ? 'local:'.$dx->diagnosis_code_id
-                    : ($dx->icd_entity_id ? 'who:'.$dx->icd_entity_id : null),
+                'code_search' => $dx->icd_entity_id
+                    ? 'who:'.$dx->icd_entity_id
+                    : ($dx->diagnosis_code_id ? 'local:'.$dx->diagnosis_code_id : null),
                 'icd_code' => $dx->icd_code,
+                'icd10_code' => $dx->icd10_code,
                 'icd_entity_id' => $dx->icd_entity_id,
                 'icd_uri' => $dx->icd_uri,
                 'description' => $dx->description,

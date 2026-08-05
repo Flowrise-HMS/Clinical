@@ -14,6 +14,7 @@ use Modules\Clinical\Filament\Clusters\Clinical\Resources\Encounters\Pages\ListE
 use Modules\Clinical\Filament\Clusters\Clinical\Resources\Encounters\Pages\ListEncounters;
 use Modules\Clinical\Filament\Clusters\Clinical\Resources\Encounters\Pages\ViewEncounter;
 use Modules\Clinical\Filament\Clusters\Clinical\Resources\Encounters\RelationManagers\ClinicalNotesRelationManager;
+use Modules\Clinical\Filament\Clusters\Clinical\Resources\Encounters\RelationManagers\DiagnosesRelationManager;
 use Modules\Clinical\Filament\Clusters\Clinical\Resources\Encounters\RelationManagers\EncounterParticipantsRelationManager;
 use Modules\Clinical\Filament\Clusters\Clinical\Resources\Encounters\RelationManagers\ServiceRequestsRelationManager;
 use Modules\Clinical\Filament\Clusters\Clinical\Resources\Encounters\RelationManagers\VitalSignsRelationManager;
@@ -57,6 +58,7 @@ class EncounterResource extends Resource
             VitalSignsRelationManager::class,
             ClinicalNotesRelationManager::class,
             ServiceRequestsRelationManager::class,
+            DiagnosesRelationManager::class,
         ];
 
         if (class_exists(EncounterInvoicesRelationManager::class)) {

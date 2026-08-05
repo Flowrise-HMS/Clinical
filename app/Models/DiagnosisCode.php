@@ -17,6 +17,8 @@ class DiagnosisCode extends BaseModel
         'nhis_covered',
         'source',
         'is_active',
+        'icd_entity_id',
+        'icd_uri',
     ];
 
     protected $casts = [

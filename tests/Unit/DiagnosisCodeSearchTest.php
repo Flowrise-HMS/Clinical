@@ -11,6 +11,8 @@ uses(TestCase::class);
 beforeEach(function (): void {
     $this->migrateModules(['Core', 'Clinical']);
     Branch::factory()->default()->create();
+
+    DiagnosisCode::query()->delete();
 });
 
 it('falls back to local diagnosis search when who api is not configured', function (): void {
