@@ -71,6 +71,15 @@ class MedicationDoseReminderTest extends TestCase
     {
         Notification::fake();
 
+        config([
+            'clinical.mar_reminders.enabled' => true,
+            'clinical.mar_reminders.channels' => ['database'],
+            'clinical.mar_reminders.lead_minutes' => 15,
+            'clinical.mar_reminders.grace_minutes' => 30,
+        ]);
+
+        Branch::query()->update(['is_default' => false]);
+
         [$item, $nurse, $detail] = $this->seedInFacilityOrder(MedicationFrequency::STAT, 1);
         $pastDue = now()->subHour();
         $detail->update([
@@ -84,7 +93,9 @@ class MedicationDoseReminderTest extends TestCase
         $this->artisan('clinical:mar-dose-reminders')->assertSuccessful();
         Notification::assertSentToTimes($nurse, MedicationDueDoseNotification::class, 1);
 
-        $this->assertSame(1, MedicationDoseReminderLog::query()->count());
+        $this->assertSame(1, MedicationDoseReminderLog::query()
+            ->where('request_item_id', $item->id)
+            ->count());
     }
 
     protected function makePrescriptionDetail(MedicationFrequency $frequency, int $days): PrescriptionDetail
@@ -112,8 +123,10 @@ class MedicationDoseReminderTest extends TestCase
      */
     protected function seedInFacilityOrder(MedicationFrequency $frequency, int $days): array
     {
+        Branch::query()->update(['is_default' => false]);
+
         $branch = Branch::factory()->default()->create();
-        $patient = Patient::factory()->create();
+        $patient = Patient::factory()->create(['branch_id' => $branch->id]);
         $nurse = User::factory()->create(['branch_id' => $branch->id]);
         Permission::findOrCreate('administer_medication', 'web');
         $nurse->givePermissionTo('administer_medication');

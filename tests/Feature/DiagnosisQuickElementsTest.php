@@ -3,6 +3,7 @@
 use Filament\Schemas\Concerns\InteractsWithSchemas;
 use Filament\Schemas\Contracts\HasSchemas;
 use Filament\Schemas\Schema;
+use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Livewire\Component;
 use Livewire\Livewire;
 use Modules\Clinical\Contracts\DiagnosisCodeSearchContract;
@@ -10,7 +11,7 @@ use Modules\Clinical\Filament\Clusters\Clinical\Resources\EncounterDiagnoses\Sch
 use Modules\Clinical\Models\DiagnosisCode;
 use Tests\TestCase;
 
-uses(TestCase::class);
+uses(TestCase::class, DatabaseTransactions::class);
 
 beforeEach(function (): void {
     $this->migrateModules(['Core', 'Patient', 'Clinical', 'Staff']);
@@ -107,20 +108,22 @@ it('autofills the hidden code fields when a local diagnosis is selected', functi
 });
 
 it('resolves a persisted who selection to a friendly label on rehydration', function (): void {
+    $code = 'QA'.fake()->unique()->numerify('##');
+
     DiagnosisCode::factory()->create([
-        'code' => '1A00',
+        'code' => $code,
         'description' => 'Cholera',
         'source' => 'who',
-        'icd_entity_id' => '1a00-cholera-entity',
-        'icd_uri' => 'https://id.who.int/icd/entity/1a00-cholera-entity',
+        'icd_entity_id' => strtolower($code).'-cholera-entity',
+        'icd_uri' => 'https://id.who.int/icd/entity/'.strtolower($code).'-cholera-entity',
     ]);
 
     $livewire = Livewire::test(DiagnosisQuickElementHarness::class);
     $search = $livewire->instance()->getSchema('diagnosis')->getComponent('code_search');
 
-    $search->state('who:1a00-cholera-entity');
+    $search->state('who:'.strtolower($code).'-cholera-entity');
 
-    expect($search->getOptionLabel())->toBe('1A00 - Cholera');
+    expect($search->getOptionLabel())->toBe($code.' - Cholera');
 });
 
 it('resolves a persisted local selection to a friendly label on rehydration', function (): void {

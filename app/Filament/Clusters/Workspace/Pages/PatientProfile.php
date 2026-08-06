@@ -28,6 +28,8 @@ use Modules\Clinical\Filament\Widgets\PatientVitalsOverviewWidget;
 use Modules\Clinical\Filament\Widgets\PendingFulfillmentsWidget;
 use Modules\Clinical\Models\Allergy;
 use Modules\Core\Classes\Support\PageHeaderActionsRegistry;
+use Modules\Insurance\Models\PatientPolicy;
+use Modules\Insurance\Services\MemberVerificationService;
 use Modules\Patient\Models\Patient;
 use Ysfkaya\FilamentPhoneInput\Infolists\PhoneEntry;
 
@@ -139,6 +141,26 @@ class PatientProfile extends Page implements HasActions, HasForms, HasInfolists
                                 TextEntry::make('ward')->state(fn () => $this->currentEncounter->location?->name ?? 'N/A'),
                                 TextEntry::make('bed')->state(fn () => $this->currentEncounter->bed?->name ?? 'N/A'),
                             ]),
+                        Section::make('NHIS Insurance')
+                            ->collapsed()
+                            ->columns(3)
+                            ->visible(fn (): bool => config('insurance.enabled', true) && class_exists(MemberVerificationService::class))
+                            ->schema([
+                                TextEntry::make('nhis_verification')
+                                    ->label('Verification')
+                                    ->badge()
+                                    ->placeholder('-')
+                                    ->state(fn ($record) => $this->nhisVerificationLabel($record))
+                                    ->color(fn ($record) => $this->nhisVerificationColor($record)),
+                                TextEntry::make('nhis_member_number')
+                                    ->label('Member Number')
+                                    ->placeholder('-')
+                                    ->state(fn ($record) => static::nhisActivePolicy($record)?->member_number),
+                                TextEntry::make('nhis_master_status')
+                                    ->label('Master Data')
+                                    ->placeholder('-')
+                                    ->state(fn ($record) => app(MemberVerificationService::class)->masterDataStatus()['imported'] ? 'Imported' : 'Not imported'),
+                            ]),
                         Section::make('Contact Information')
                             ->collapsed()
                             ->columns(2)
@@ -202,6 +224,36 @@ class PatientProfile extends Page implements HasActions, HasForms, HasInfolists
     public function hasAllergies(): bool
     {
         return $this->allergies->isNotEmpty();
+    }
+
+    protected static function nhisActivePolicy(Patient $patient): ?PatientPolicy
+    {
+        return $patient->insurancePolicies
+            ->where('is_active', true)
+            ->sortByDesc('is_primary')
+            ->first();
+    }
+
+    protected function nhisVerificationLabel(Patient $patient): ?string
+    {
+        $policy = static::nhisActivePolicy($patient);
+
+        if (! $policy) {
+            return 'No policy';
+        }
+
+        return app(MemberVerificationService::class)->badge($policy)['label'];
+    }
+
+    protected function nhisVerificationColor(Patient $patient): string
+    {
+        $policy = static::nhisActivePolicy($patient);
+
+        if (! $policy) {
+            return 'gray';
+        }
+
+        return app(MemberVerificationService::class)->badge($policy)['color'];
     }
 
     public function hasActiveEncounter(): bool
