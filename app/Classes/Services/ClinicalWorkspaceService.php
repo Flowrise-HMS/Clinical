@@ -27,7 +27,7 @@ class ClinicalWorkspaceService
     {
         $this->currentPatient = $patient;
         if ($patient) {
-            $this->currentEncounter = $patient->activeEncounter;
+            $this->currentEncounter = $patient->loadMissing('activeEncounter')->activeEncounter;
         }
 
         return $this;
@@ -37,7 +37,7 @@ class ClinicalWorkspaceService
     {
         $this->currentEncounter = $encounter;
         if ($encounter) {
-            $this->currentPatient = $encounter->patient;
+            $this->currentPatient = $encounter->loadMissing('patient')->patient;
         }
 
         return $this;
@@ -66,6 +66,7 @@ class ClinicalWorkspaceService
 
         if (! $normalizedType || $normalizedType === 'encounter') {
             $query = Encounter::query()
+                ->with(['admittedBy', 'location'])
                 ->where('patient_id', $patientId)
                 ->when($encounterId, fn ($q) => $q->where('id', $encounterId))
                 ->orderBy('admitted_at', 'desc')
@@ -78,6 +79,7 @@ class ClinicalWorkspaceService
 
         if (! $normalizedType || $normalizedType === 'vitals') {
             $vitalsQuery = VitalSign::query()
+                ->with('recordedBy')
                 ->where('patient_id', $patientId)
                 ->when($encounterId, fn ($q) => $q->where('encounter_id', $encounterId))
                 ->orderBy('recorded_at', 'desc')
@@ -90,6 +92,7 @@ class ClinicalWorkspaceService
 
         if (! $normalizedType || $normalizedType === 'note') {
             $notesQuery = ClinicalNote::query()
+                ->with(['author', 'patient', 'encounter', 'serviceRequest'])
                 ->where('patient_id', $patientId)
                 ->when($encounterId, fn ($q) => $q->where('encounter_id', $encounterId))
                 ->orderBy('created_at', 'desc')
@@ -102,6 +105,8 @@ class ClinicalWorkspaceService
 
         if (! $normalizedType || $normalizedType === 'order') {
             $ordersQuery = ServiceRequest::query()
+                ->with('orderedBy')
+                ->withCount('items')
                 ->where('patient_id', $patientId)
                 ->when($encounterId, fn ($q) => $q->where('encounter_id', $encounterId))
                 ->orderBy('created_at', 'desc')
@@ -270,7 +275,7 @@ class ClinicalWorkspaceService
 
     protected function createNoteEvent(ClinicalNote $note): array
     {
-        $note = $note->load(['author', 'patient', 'encounter', 'serviceRequest']);
+        $note = $note->loadMissing(['author', 'patient', 'encounter', 'serviceRequest']);
 
         $noteType = $note->note_type?->getLabel() ?? 'Clinical';
         $content = is_array($note->content) ? ($note->content['text'] ?? '') : ($note->content ?? '');
@@ -294,7 +299,7 @@ class ClinicalWorkspaceService
 
     protected function createOrderEvent(ServiceRequest $order): array
     {
-        $itemCount = $order->items()->count();
+        $itemCount = $order->items_count ?? $order->items()->count();
 
         return [
             'id' => 'order_'.$order->id,
@@ -392,7 +397,7 @@ class ClinicalWorkspaceService
             return null;
         }
 
-        return $this->currentPatient->latestVitals;
+        return $this->currentPatient->loadMissing('latestVitals')->latestVitals;
     }
 
     public function canViewPatient(Patient $patient): bool

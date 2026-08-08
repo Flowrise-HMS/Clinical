@@ -56,7 +56,7 @@ class ServiceRequestsRelationManager extends RelationManager
 
                 TextColumn::make('items_count')
                     ->label('Items')
-                    ->getStateUsing(fn ($record) => $record->items->count()),
+                    ->counts('items'),
 
                 TextColumn::make('orderedBy.name')
                     ->label('Ordered By')

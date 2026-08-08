@@ -273,9 +273,11 @@ class RequestItem extends Model
 
     protected function checkRequestCompletion(): void
     {
-        $request = $this->serviceRequest;
+        $request = $this->relationLoaded('serviceRequest')
+            ? $this->serviceRequest
+            : $this->serviceRequest()->first();
 
-        if ($request->isFullyFulfilled()) {
+        if ($request?->isFullyFulfilled()) {
             $request->markAsCompleted();
         }
     }

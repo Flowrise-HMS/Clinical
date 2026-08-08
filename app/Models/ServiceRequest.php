@@ -171,50 +171,80 @@ class ServiceRequest extends BaseModel implements ProvidesClientIdentity
             return (float) $this->attributes['items_total_amount'];
         }
 
-        if (isset($this->items_total_amount)) {
-            return (float) $this->items_total_amount;
+        if ($this->relationLoaded('items')) {
+            return (float) $this->items->sum('total_price');
         }
 
-        return $this->items->sum('total_price');
+        return (float) $this->items()->sum('total_price');
     }
 
     public function getPendingItemsCountAttribute(): int
     {
-        return $this->items->where('status', RequestItemStatus::PENDING)->count();
+        return $this->countItemsWithStatus(RequestItemStatus::PENDING, 'pending_items_count');
     }
 
     public function getCompletedItemsCountAttribute(): int
     {
-        return $this->items->where('status', RequestItemStatus::COMPLETED)->count();
+        return $this->countItemsWithStatus(RequestItemStatus::COMPLETED, 'completed_items_count');
     }
 
     public function getProgressPercentageAttribute(): float
     {
-        $total = (int) ($this->items_count ?? $this->items()->count());
+        $total = (int) ($this->attributes['items_count']
+            ?? ($this->relationLoaded('items') ? $this->items->count() : $this->items()->count()));
 
         if ($total === 0) {
             return 0;
         }
 
-        $completed = (int) ($this->completed_items_count ?? $this->items()
-            ->where('status', RequestItemStatus::COMPLETED)
-            ->count());
-
-        return round(($completed / $total) * 100, 1);
+        return round(($this->completed_items_count / $total) * 100, 1);
     }
 
     public function isFullyFulfilled(): bool
     {
-        return $this->items->every(fn ($item) => $item->status->isTerminal());
+        if ($this->relationLoaded('items')) {
+            return $this->items->every(fn ($item) => $item->status->isTerminal());
+        }
+
+        return ! $this->items()
+            ->whereNotIn('status', RequestItemStatus::terminalValues())
+            ->exists();
     }
 
     public function getAllFulfilledRoles(): Collection
     {
-        return $this->items
+        return $this->loadedOrFetchedItems()
             ->where('status', RequestItemStatus::COMPLETED)
             ->map(fn ($item) => $item->service?->roles)
             ->flatten()
             ->unique('id');
+    }
+
+    /**
+     * @return Collection<int, RequestItem>
+     */
+    protected function loadedOrFetchedItems(): Collection
+    {
+        return $this->relationLoaded('items')
+            ? $this->items
+            : $this->items()->get();
+    }
+
+    /**
+     * Prefers a `withCount` aggregate, then the eager loaded collection, and only then a count
+     * query, so the accessors never trigger a lazy load.
+     */
+    protected function countItemsWithStatus(RequestItemStatus $status, string $countAttribute): int
+    {
+        if (array_key_exists($countAttribute, $this->attributes)) {
+            return (int) $this->attributes[$countAttribute];
+        }
+
+        if ($this->relationLoaded('items')) {
+            return $this->items->where('status', $status)->count();
+        }
+
+        return $this->items()->where('status', $status)->count();
     }
 
     public function addItem(array $data): RequestItem
@@ -232,7 +262,7 @@ class ServiceRequest extends BaseModel implements ProvidesClientIdentity
 
     public function calculateTotals(): void
     {
-        foreach ($this->items as $item) {
+        foreach ($this->loadedOrFetchedItems() as $item) {
             $item->update([
                 'total_price' => ($item->unit_price * $item->quantity) - $item->discount_amount,
             ]);

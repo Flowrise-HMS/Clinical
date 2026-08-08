@@ -66,6 +66,22 @@ enum RequestItemStatus: string implements HasColor, HasDescription, HasLabel
 
     public function isTerminal(): bool
     {
-        return in_array($this, [self::COMPLETED, self::CANCELLED]);
+        return in_array($this, self::terminalCases(), true);
+    }
+
+    /**
+     * @return array<int, self>
+     */
+    public static function terminalCases(): array
+    {
+        return [self::COMPLETED, self::CANCELLED];
+    }
+
+    /**
+     * @return array<int, string>
+     */
+    public static function terminalValues(): array
+    {
+        return array_column(self::terminalCases(), 'value');
     }
 }
