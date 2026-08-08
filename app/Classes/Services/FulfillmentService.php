@@ -34,6 +34,8 @@ class FulfillmentService
 
     public function getType(RequestItem $item): string
     {
+        $item->loadMissing(['prescriptionDetail', 'service.category']);
+
         if ($item->prescriptionDetail !== null) {
             return 'medication';
         }
@@ -51,6 +53,8 @@ class FulfillmentService
 
     public function getContextInfo(RequestItem $item): array
     {
+        $item->loadMissing(['serviceRequest.orderedBy', 'service.category']);
+
         $serviceRequest = $item->serviceRequest;
         $service = $item->service;
         $orderedBy = $serviceRequest?->orderedBy;

@@ -232,7 +232,7 @@ class RequestItem extends Model
             return false;
         }
 
-        $encounter = $this->serviceRequest?->encounter;
+        $encounter = $this->loadMissing('serviceRequest.encounter')->serviceRequest?->encounter;
 
         return app(PatientFinancialHoldChecker::class)
             ->requiresFinancialHold(
