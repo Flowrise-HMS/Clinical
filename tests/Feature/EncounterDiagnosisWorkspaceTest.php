@@ -174,6 +174,56 @@ it('lists diagnoses in the patient diagnoses widget when permitted', function ()
         ->assertSee('Pneumonia');
 });
 
+it('shows the diagnosis view action to users with the view permission', function (): void {
+    $user = diagnosisWorkspaceUser($this->branch, ['ViewAny EncounterDiagnosis', 'View EncounterDiagnosis']);
+
+    $diagnosis = EncounterDiagnosis::factory()->create([
+        'patient_id' => $this->patient->id,
+        'description' => 'Pneumonia',
+        'ordered_by' => $user->id,
+    ]);
+
+    Livewire::actingAs($user)
+        ->test(PatientDiagnosesWidget::class, ['patientId' => $this->patient->id])
+        ->loadTable()
+        ->assertCanSeeTableRecords([$diagnosis])
+        ->assertTableActionVisible('view', $diagnosis);
+});
+
+it('hides the diagnosis view action from users without the view permission', function (): void {
+    $user = diagnosisWorkspaceUser($this->branch, ['ViewAny EncounterDiagnosis']);
+
+    $diagnosis = EncounterDiagnosis::factory()->create([
+        'patient_id' => $this->patient->id,
+        'description' => 'Pneumonia',
+        'ordered_by' => $user->id,
+    ]);
+
+    Livewire::actingAs($user)
+        ->test(PatientDiagnosesWidget::class, ['patientId' => $this->patient->id])
+        ->loadTable()
+        ->assertCanSeeTableRecords([$diagnosis])
+        ->assertTableActionHidden('view', $diagnosis);
+});
+
+it('mounts the diagnosis view action with its infolist for permitted users', function (): void {
+    $user = diagnosisWorkspaceUser($this->branch, ['ViewAny EncounterDiagnosis', 'View EncounterDiagnosis']);
+
+    $diagnosis = EncounterDiagnosis::factory()->create([
+        'patient_id' => $this->patient->id,
+        'description' => 'Pneumonia',
+        'notes' => 'Right lower lobe consolidation',
+        'ordered_by' => $user->id,
+    ]);
+
+    Livewire::actingAs($user)
+        ->test(PatientDiagnosesWidget::class, ['patientId' => $this->patient->id])
+        ->loadTable()
+        ->mountTableAction('view', $diagnosis)
+        ->assertHasNoTableActionErrors()
+        ->assertOk();
+});
+
 it('authorizes encounter diagnosis via policy permissions', function (): void {
     $user = diagnosisWorkspaceUser($this->branch, ['Create EncounterDiagnosis', 'ViewAny EncounterDiagnosis']);
     $this->actingAs($user);

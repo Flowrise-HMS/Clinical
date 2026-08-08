@@ -55,6 +55,11 @@ class PatientDiagnosesWidget extends BaseTableWidget
         return EncounterDiagnosesTable::columns();
     }
 
+    protected function getTableActions(): array
+    {
+        return EncounterDiagnosesTable::recordActions(includeMutations: false);
+    }
+
     protected function getTableEmptyStateHeading(): ?string
     {
         return 'No diagnoses recorded';

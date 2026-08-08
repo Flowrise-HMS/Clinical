@@ -5,12 +5,15 @@ namespace Modules\Clinical\Filament\Clusters\Clinical\Resources\EncounterDiagnos
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
+use Filament\Actions\ViewAction;
+use Filament\Schemas\Schema;
 use Filament\Tables\Columns\IconColumn;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
 use Modules\Clinical\Enums\DiagnosisCertainty;
 use Modules\Clinical\Enums\DiagnosisType;
+use Modules\Clinical\Filament\Clusters\Clinical\Resources\EncounterDiagnoses\Schemas\EncounterDiagnosisInfolist;
 
 class EncounterDiagnosesTable
 {
@@ -24,14 +27,34 @@ class EncounterDiagnosesTable
                 SelectFilter::make('certainty')
                     ->options(DiagnosisCertainty::class),
             ])
-            ->recordActions([
-                EditAction::make(),
-            ])
+            ->recordActions(self::recordActions())
             ->toolbarActions([
                 BulkActionGroup::make([
                     DeleteBulkAction::make(),
                 ]),
             ]);
+    }
+
+    /**
+     * Actions are authorized explicitly because widgets, unlike resource pages and relation
+     * managers, do not resolve a default policy response for their table actions.
+     *
+     * @return array<int, ViewAction|EditAction>
+     */
+    public static function recordActions(bool $includeMutations = true): array
+    {
+        $actions = [
+            ViewAction::make()
+                ->authorize('view')
+                ->schema(fn (Schema $schema): Schema => EncounterDiagnosisInfolist::configure($schema))
+                ->slideOver(),
+        ];
+
+        if ($includeMutations) {
+            $actions[] = EditAction::make()->authorize('update');
+        }
+
+        return $actions;
     }
 
     /**
