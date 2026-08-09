@@ -33,7 +33,7 @@ class MedicationFulfillmentPolicy
 
     public function defaultAdministrationContext(
         ?Encounter $encounter,
-        ?string $route = null,
+        MedicationRoute|string|null $route = null,
         bool $administerInFacilityFlag = false,
     ): AdministrationContext {
         if (! $encounter || ! $encounter->isActive()) {
@@ -245,14 +245,23 @@ class MedicationFulfillmentPolicy
         return $this->medicationByServiceId[$serviceId];
     }
 
-    protected function isParenteralRoute(?string $route): bool
+    protected function isParenteralRoute(MedicationRoute|string|null $route): bool
     {
-        if ($route === null) {
-            return false;
-        }
-
-        $enum = MedicationRoute::tryFrom($route);
+        $enum = $this->normalizeRoute($route);
 
         return in_array($enum, [MedicationRoute::IV, MedicationRoute::IM, MedicationRoute::SC], true);
+    }
+
+    protected function normalizeRoute(MedicationRoute|string|null $route): ?MedicationRoute
+    {
+        if ($route instanceof MedicationRoute) {
+            return $route;
+        }
+
+        if (! is_string($route) || $route === '') {
+            return null;
+        }
+
+        return MedicationRoute::tryFrom($route);
     }
 }
