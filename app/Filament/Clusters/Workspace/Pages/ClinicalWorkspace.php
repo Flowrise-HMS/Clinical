@@ -140,19 +140,22 @@ class ClinicalWorkspace extends Page implements HasSchemas
     public array $encounterFormData = [];
 
     /**
-     * @var array{discharge_notes: string|null}
+     * @var array{discharge_notes: string|null, discharge_disposition?: string}
      */
     public array $dischargeData = [
         'discharge_notes' => null,
+        'discharge_disposition' => DischargeDisposition::COMPLETED->value,
     ];
 
     /**
-     * @var array{transfer_notes: string|null, transfer_out_notes: string|null, transfer_in_notes: string|null}
+     * @var array{transfer_notes: string|null, transfer_out_notes: string|null, transfer_in_notes: string|null, destination_type?: string, admission_source?: string}
      */
     public array $adtFormData = [
         'transfer_notes' => null,
         'transfer_out_notes' => null,
         'transfer_in_notes' => null,
+        'destination_type' => AdtDestinationType::ExternalFacility->value,
+        'admission_source' => 'local',
     ];
 
     /**
@@ -163,10 +166,11 @@ class ClinicalWorkspace extends Page implements HasSchemas
     ];
 
     /**
-     * @var array{content: string|null}
+     * @var array{content: string|null, status?: string}
      */
     public array $noteFormData = [
         'content' => null,
+        'status' => NoteStatus::DRAFT->value,
     ];
 
     protected ?ClinicalWorkspaceService $workspaceService = null;
@@ -281,15 +285,18 @@ class ClinicalWorkspace extends Page implements HasSchemas
     }
 
     /**
-     * @return array{discharge_notes: null}
+     * @return array{discharge_notes: null, discharge_disposition: string}
      */
     protected function defaultDischargeData(): array
     {
-        return ['discharge_notes' => null];
+        return [
+            'discharge_notes' => null,
+            'discharge_disposition' => DischargeDisposition::COMPLETED->value,
+        ];
     }
 
     /**
-     * @return array{transfer_notes: null, transfer_out_notes: null, transfer_in_notes: null}
+     * @return array{transfer_notes: null, transfer_out_notes: null, transfer_in_notes: null, destination_type: string, admission_source: string}
      */
     protected function defaultAdtFormData(): array
     {
@@ -297,6 +304,8 @@ class ClinicalWorkspace extends Page implements HasSchemas
             'transfer_notes' => null,
             'transfer_out_notes' => null,
             'transfer_in_notes' => null,
+            'destination_type' => AdtDestinationType::ExternalFacility->value,
+            'admission_source' => 'local',
         ];
     }
 
@@ -309,11 +318,17 @@ class ClinicalWorkspace extends Page implements HasSchemas
     }
 
     /**
-     * @return array{content: null}
+     * The note form declares a draft status default, but the schema is never filled here,
+     * so the default is seeded into the state to keep the required status field satisfied.
+     *
+     * @return array{content: null, status: string}
      */
     protected function defaultNoteFormData(): array
     {
-        return ['content' => null];
+        return [
+            'content' => null,
+            'status' => NoteStatus::DRAFT->value,
+        ];
     }
 
     protected function loadPatientContext(): void
@@ -369,7 +384,7 @@ class ClinicalWorkspace extends Page implements HasSchemas
         $openEncounter = $this->getOpenEncounter();
 
         if (! $openEncounter) {
-            $this->encounterFormData = [];
+            $this->encounterFormData = ['type' => EncounterType::OUTPATIENT->value];
 
             return;
         }
@@ -562,15 +577,25 @@ class ClinicalWorkspace extends Page implements HasSchemas
         Notification::make()->title('Consultation saved')->success()->send();
     }
 
+    /**
+     * State is read back through the schema so the vitals form's own validation runs,
+     * which keeps a blank reading from being saved as an empty vital signs record.
+     */
     public function saveVitals(): void
     {
         if (! $this->currentPatient) {
             return;
         }
 
+        $vitalsForm = $this->getSchema('vitalsForm');
+
+        if ($vitalsForm === null) {
+            return;
+        }
+
         $this->vitalSignService->record(
             $this->currentPatient,
-            $this->vitalsData,
+            $vitalsForm->getState(),
             $this->currentEncounter?->id,
         );
 
@@ -597,9 +622,15 @@ class ClinicalWorkspace extends Page implements HasSchemas
             return;
         }
 
+        $serviceRequestForm = $this->getSchema('serviceRequestForm');
+
+        if ($serviceRequestForm === null) {
+            return;
+        }
+
         $this->serviceRequestService->record(
             $this->currentPatient,
-            $this->serviceRequestData,
+            $serviceRequestForm->getState(),
             $this->currentEncounter?->id,
         );
 
@@ -613,7 +644,13 @@ class ClinicalWorkspace extends Page implements HasSchemas
             return;
         }
 
-        $this->allergyService->record($this->currentPatient, $this->allergyData);
+        $allergyForm = $this->getSchema('allergyForm');
+
+        if ($allergyForm === null) {
+            return;
+        }
+
+        $this->allergyService->record($this->currentPatient, $allergyForm->getState());
 
         $this->allergyData = [];
         $this->loadPatientContext();
@@ -636,7 +673,15 @@ class ClinicalWorkspace extends Page implements HasSchemas
             return;
         }
 
-        $type = EncounterType::tryFrom($this->encounterFormData['type'] ?? '')
+        $encounterForm = $this->getSchema('encounterForm');
+
+        if ($encounterForm === null) {
+            return;
+        }
+
+        $encounterData = $encounterForm->getState();
+
+        $type = EncounterType::tryFrom($encounterData['type'] ?? '')
             ?? EncounterType::OUTPATIENT;
 
         $priority = $type === EncounterType::EMERGENCY
@@ -646,14 +691,14 @@ class ClinicalWorkspace extends Page implements HasSchemas
         $encounter = $this->encounterService->createForPatient(
             patient: $this->currentPatient,
             type: $type,
-            chiefComplaint: $this->encounterFormData['chief_complaint'] ?? null,
+            chiefComplaint: $encounterData['chief_complaint'] ?? null,
             priority: $priority,
         );
 
-        if ($coverage = $this->encounterFormData['coverage_type'] ?? null) {
+        if ($coverage = $encounterData['coverage_type'] ?? null) {
             $encounter->update([
                 'coverage_type' => $coverage,
-                'claim_check_code' => $this->encounterFormData['claim_check_code'] ?? null,
+                'claim_check_code' => $encounterData['claim_check_code'] ?? null,
             ]);
         }
 
@@ -689,12 +734,18 @@ class ClinicalWorkspace extends Page implements HasSchemas
             return;
         }
 
-        $bedId = $this->adtFormData['bed_id'] ?? null;
-        if (blank($bedId)) {
-            Notification::make()->title('Select a bed')->danger()->send();
+        $adtAdmitForm = $this->getSchema('adtAdmitForm');
 
+        if ($adtAdmitForm === null) {
             return;
         }
+
+        /*
+         * The ADT forms share one state path, so each action validates its own schema and
+         * merges the result over the raw state to keep keys the schema does not own.
+         */
+        $adtData = array_merge($this->adtFormData, $adtAdmitForm->getState());
+        $bedId = $adtData['bed_id'] ?? null;
 
         $open = $this->getOpenEncounter();
 
@@ -709,7 +760,7 @@ class ClinicalWorkspace extends Page implements HasSchemas
                 $encounter = $this->adtService->assignBed(
                     $open,
                     $bedId,
-                    notes: $this->adtFormData['notes'] ?? null,
+                    notes: $adtData['notes'] ?? null,
                 );
 
                 $this->refreshAdtContext($encounter);
@@ -732,11 +783,11 @@ class ClinicalWorkspace extends Page implements HasSchemas
             $encounter = $this->adtService->admit(
                 $this->currentPatient,
                 $bedId,
-                departmentId: $this->adtFormData['department_id'] ?? null,
-                chiefComplaint: $this->adtFormData['chief_complaint']
+                departmentId: $adtData['department_id'] ?? null,
+                chiefComplaint: $adtData['chief_complaint']
                     ?? $this->encounterFormData['chief_complaint']
                     ?? null,
-                notes: $this->adtFormData['notes'] ?? null,
+                notes: $adtData['notes'] ?? null,
             );
 
             $this->refreshAdtContext($encounter);
@@ -758,19 +809,20 @@ class ClinicalWorkspace extends Page implements HasSchemas
 
         $this->authorizeEncounterUpdate($encounter);
 
-        $bedId = $this->adtFormData['transfer_bed_id'] ?? null;
-        if (blank($bedId)) {
-            Notification::make()->title('Select a destination bed')->danger()->send();
+        $transferForm = $this->getSchema('adtTransferInternalForm');
 
+        if ($transferForm === null) {
             return;
         }
+
+        $adtData = array_merge($this->adtFormData, $transferForm->getState());
 
         try {
             $encounter = $this->adtService->transferInternal(
                 $encounter,
-                $bedId,
-                toDepartmentId: $this->adtFormData['transfer_department_id'] ?? null,
-                notes: $this->adtFormData['transfer_notes'] ?? null,
+                $adtData['transfer_bed_id'] ?? null,
+                toDepartmentId: $adtData['transfer_department_id'] ?? null,
+                notes: $adtData['transfer_notes'] ?? null,
             );
 
             $this->refreshAdtContext($encounter);
@@ -792,17 +844,25 @@ class ClinicalWorkspace extends Page implements HasSchemas
 
         $this->authorizeEncounterDischarge($encounter);
 
+        $transferOutForm = $this->getSchema('adtTransferOutForm');
+
+        if ($transferOutForm === null) {
+            return;
+        }
+
+        $adtData = array_merge($this->adtFormData, $transferOutForm->getState());
+
         try {
             $destinationType = AdtDestinationType::from(
-                $this->adtFormData['destination_type'] ?? AdtDestinationType::ExternalFacility->value
+                $adtData['destination_type'] ?? AdtDestinationType::ExternalFacility->value
             );
 
             $this->adtService->transferOut(
                 $encounter,
                 $destinationType,
-                destinationLabel: $this->adtFormData['destination_label'] ?? null,
-                destinationBranchId: $this->adtFormData['destination_branch_id'] ?? null,
-                notes: $this->adtFormData['transfer_out_notes'] ?? null,
+                destinationLabel: $adtData['destination_label'] ?? null,
+                destinationBranchId: $adtData['destination_branch_id'] ?? null,
+                notes: $adtData['transfer_out_notes'] ?? null,
             );
 
             $this->adtFormData = $this->defaultAdtFormData();
@@ -839,23 +899,23 @@ class ClinicalWorkspace extends Page implements HasSchemas
             return;
         }
 
-        $bedId = $this->adtFormData['transfer_in_bed_id'] ?? null;
-        if (blank($bedId)) {
-            Notification::make()->title('Select a bed')->danger()->send();
+        $transferInForm = $this->getSchema('adtTransferInForm');
 
+        if ($transferInForm === null) {
             return;
         }
 
-        $isLocal = ($this->adtFormData['admission_source'] ?? 'local') === 'local';
+        $adtData = array_merge($this->adtFormData, $transferInForm->getState());
+        $isLocal = ($adtData['admission_source'] ?? 'local') === 'local';
 
         try {
             $encounter = $this->adtService->transferIn(
                 $this->currentPatient,
-                $bedId,
-                sourceLabel: $this->adtFormData['source_label'] ?? null,
-                fromBranchId: $this->adtFormData['from_branch_id'] ?? null,
-                chiefComplaint: $this->adtFormData['transfer_in_chief_complaint'] ?? null,
-                notes: $this->adtFormData['transfer_in_notes'] ?? null,
+                $adtData['transfer_in_bed_id'] ?? null,
+                sourceLabel: $adtData['source_label'] ?? null,
+                fromBranchId: $adtData['from_branch_id'] ?? null,
+                chiefComplaint: $adtData['transfer_in_chief_complaint'] ?? null,
+                notes: $adtData['transfer_in_notes'] ?? null,
             );
 
             $this->refreshAdtContext($encounter);
@@ -1172,8 +1232,16 @@ class ClinicalWorkspace extends Page implements HasSchemas
             return;
         }
 
+        $labResultForm = $this->getSchema('labResultForm');
+
+        if ($labResultForm === null) {
+            return;
+        }
+
+        $labResultData = $labResultForm->getState();
+
         try {
-            app(FulfillmentService::class)->fulfill($item, $this->labResultData);
+            app(FulfillmentService::class)->fulfill($item, $labResultData);
             $this->serviceRequestData = [];
             $this->labResultData = [];
             $this->buildLabResultFormSchema();
@@ -1201,11 +1269,19 @@ class ClinicalWorkspace extends Page implements HasSchemas
             return;
         }
 
+        $medicationForm = $this->getSchema('medicationForm');
+
+        if ($medicationForm === null) {
+            return;
+        }
+
+        $medicationItems = $medicationForm->getState()['items'] ?? [];
+
         try {
             $service = app(MedicationOrderService::class);
             $request = $service->order(
                 $this->currentPatient,
-                $this->medicationData['items'],
+                $medicationItems,
                 Auth::user(),
                 $this->currentEncounter->id,
             );
@@ -1239,12 +1315,20 @@ class ClinicalWorkspace extends Page implements HasSchemas
             return;
         }
 
+        $dischargeForm = $this->getSchema('dischargeForm');
+
+        if ($dischargeForm === null) {
+            return;
+        }
+
+        $dischargeData = $dischargeForm->getState();
+
         try {
             $this->adtService->discharge(
                 $encounter,
-                DischargeDisposition::from($this->dischargeData['discharge_disposition'] ?? 'completed'),
-                $this->dischargeData['transfer_destination'] ?? null,
-                notes: $this->dischargeData['discharge_notes'] ?? null,
+                DischargeDisposition::from($dischargeData['discharge_disposition'] ?? 'completed'),
+                $dischargeData['transfer_destination'] ?? null,
+                notes: $dischargeData['discharge_notes'] ?? null,
             );
 
             $this->dischargeData = $this->defaultDischargeData();
@@ -1275,10 +1359,22 @@ class ClinicalWorkspace extends Page implements HasSchemas
             return;
         }
 
+        $noteForm = $this->getSchema('noteForm');
+
+        if ($noteForm === null) {
+            return;
+        }
+
+        /*
+         * Validation runs outside the try so its errors surface on the fields themselves
+         * rather than being swallowed into the generic failure notification below.
+         */
+        $noteData = $noteForm->getState();
+
         try {
             $this->clinicalNoteService->record(
                 $this->currentPatient,
-                $this->noteFormData,
+                $noteData,
                 $this->currentEncounter?->id ?? $this->getOpenEncounter()?->id,
             );
 
@@ -1301,15 +1397,23 @@ class ClinicalWorkspace extends Page implements HasSchemas
             return;
         }
 
+        $referralForm = $this->getSchema('referralForm');
+
+        if ($referralForm === null) {
+            return;
+        }
+
+        $referralData = $referralForm->getState();
+
         try {
             $this->clinicalNoteService->record(
                 $this->currentPatient,
                 [
                     'note_type' => NoteType::CONSULTATION,
                     'status' => NoteStatus::SIGNED,
-                    'subject' => 'Referral - '.($this->referralData['destination'] ?? 'Unspecified'),
-                    'content' => ($this->referralData['notes'] ?? '')
-                        ."\n\nDestination: ".($this->referralData['destination'] ?? ''),
+                    'subject' => 'Referral - '.($referralData['destination'] ?? 'Unspecified'),
+                    'content' => ($referralData['notes'] ?? '')
+                        ."\n\nDestination: ".($referralData['destination'] ?? ''),
                 ],
                 $this->currentEncounter->id,
             );
@@ -1355,7 +1459,7 @@ class ClinicalWorkspace extends Page implements HasSchemas
                                 ->columnSpanFull(),
                             TextInput::make('claim_check_code')
                                 ->label('NHIS Claim Check Code')
-                                ->rule('nullable|regex:/^([A-Za-z0-9]{5}|[A-Za-z0-9]{13})$/')
+                                ->rules(['nullable', 'regex:/^([A-Za-z0-9]{5}|[A-Za-z0-9]{13})$/'])
                                 ->helperText('Dial *842# from an authorized facility phone number and select option 1 ("Generate Claim Code"). Enter the 5-character (non-biometric) or 13-character (biometric) code returned.')
                                 ->visible(function (Get $get): bool {
                                     $coverage = $get('coverage_type');
@@ -1819,6 +1923,24 @@ class ClinicalWorkspace extends Page implements HasSchemas
             ->with(['service', 'serviceRequest.orderedBy', 'service.category'])
             ->get()
             ->toArray();
+    }
+
+    /**
+     * The Diagnostics module owns the completed-result table, so Clinical only renders it when that
+     * module is installed and the user may see fulfillments; otherwise the simple list is used.
+     *
+     * @return class-string|null
+     */
+    public function completedResultsWidget(): ?string
+    {
+        /** @var class-string $widget */
+        $widget = 'Modules\\Diagnostics\\Filament\\Widgets\\CompletedDiagnosticResultsWidget';
+
+        if (! class_exists($widget) || ! method_exists($widget, 'canView')) {
+            return null;
+        }
+
+        return $widget::canView() ? $widget : null;
     }
 
     #[Computed]

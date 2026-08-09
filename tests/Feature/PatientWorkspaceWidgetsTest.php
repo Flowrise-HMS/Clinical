@@ -12,6 +12,7 @@ use Modules\Clinical\Models\ClinicalNote;
 use Modules\Clinical\Models\VitalSign;
 use Modules\Core\Models\Branch;
 use Modules\Patient\Models\Patient;
+use Spatie\Permission\Models\Permission;
 use Tests\TestCase;
 
 uses(TestCase::class);
@@ -75,4 +76,45 @@ it('reuses vital signs table columns in the vitals history widget', function ():
     $columnNames = collect(VitalSignsTable::columns())->map->getName()->all();
 
     expect($columnNames)->toContain('recorded_at', 'heart_rate', 'spo2', 'recordedBy.name');
+});
+
+it('hides vitals history record actions from users without permission', function (): void {
+    $vital = VitalSign::factory()->forPatient($this->patient)->create([
+        'recorded_by' => $this->user->id,
+        'heart_rate' => 88,
+        'branch_id' => $this->branch->id,
+    ]);
+
+    Livewire::actingAs($this->user)
+        ->test(PatientVitalsHistoryWidget::class, [
+            'patientId' => $this->patient->id,
+        ])
+        ->assertOk()
+        ->assertCanSeeTableRecords([$vital])
+        ->assertTableActionHidden('view', $vital)
+        ->assertTableActionHidden('edit', $vital)
+        ->assertTableActionHidden('delete', $vital);
+});
+
+it('shows vitals history record actions for users with permission', function (): void {
+    Permission::findOrCreate('View VitalSign', 'web');
+    Permission::findOrCreate('Update VitalSign', 'web');
+    Permission::findOrCreate('Delete VitalSign', 'web');
+    $this->user->givePermissionTo(['View VitalSign', 'Update VitalSign', 'Delete VitalSign']);
+
+    $vital = VitalSign::factory()->forPatient($this->patient)->create([
+        'recorded_by' => $this->user->id,
+        'heart_rate' => 88,
+        'branch_id' => $this->branch->id,
+    ]);
+
+    Livewire::actingAs($this->user)
+        ->test(PatientVitalsHistoryWidget::class, [
+            'patientId' => $this->patient->id,
+        ])
+        ->assertOk()
+        ->assertCanSeeTableRecords([$vital])
+        ->assertTableActionVisible('view', $vital)
+        ->assertTableActionVisible('edit', $vital)
+        ->assertTableActionVisible('delete', $vital);
 });

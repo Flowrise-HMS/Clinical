@@ -50,6 +50,7 @@ class VitalSignForm
                                 ->label('Systolic BP')
                                 ->suffix('mmHg')
                                 ->numeric()
+                                ->required()
                                 ->live()
                                 ->afterStateUpdated(function (Set $set, ?string $state) {
                                     if ($state && $state > 140) {
@@ -62,7 +63,8 @@ class VitalSignForm
                             TextInput::make('diastolic_bp')
                                 ->label('Diastolic BP')
                                 ->suffix('mmHg')
-                                ->numeric(),
+                                ->numeric()
+                                ->required(),
 
                             TextInput::make('heart_rate')
                                 ->label('Heart Rate')

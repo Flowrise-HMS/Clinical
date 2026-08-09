@@ -1,5 +1,8 @@
 <?php
 
+use Modules\Clinical\Enums\AdtDestinationType;
+use Modules\Clinical\Enums\DischargeDisposition;
+use Modules\Clinical\Enums\NoteStatus;
 use Modules\Clinical\Filament\Clusters\Workspace\Pages\ClinicalWorkspace;
 use Tests\TestCase;
 
@@ -10,12 +13,17 @@ it('defines nested RichEditor state keys for Livewire entangle', function (): vo
 
     expect($defaults['consultationData'])->toBe(['notes' => null])
         ->and($defaults['referralData'])->toBe(['notes' => null])
-        ->and($defaults['noteFormData'])->toBe(['content' => null])
-        ->and($defaults['dischargeData'])->toBe(['discharge_notes' => null])
+        ->and($defaults['noteFormData'])->toBe(['content' => null, 'status' => NoteStatus::DRAFT->value])
+        ->and($defaults['dischargeData'])->toBe([
+            'discharge_notes' => null,
+            'discharge_disposition' => DischargeDisposition::COMPLETED->value,
+        ])
         ->and($defaults['adtFormData'])->toBe([
             'transfer_notes' => null,
             'transfer_out_notes' => null,
             'transfer_in_notes' => null,
+            'destination_type' => AdtDestinationType::ExternalFacility->value,
+            'admission_source' => 'local',
         ]);
 });
 
@@ -41,12 +49,17 @@ it('restores nested RichEditor state keys when form states are reset', function 
 
     expect($page->consultationData)->toBe(['notes' => null])
         ->and($page->referralData)->toBe(['notes' => null])
-        ->and($page->noteFormData)->toBe(['content' => null])
-        ->and($page->dischargeData)->toBe(['discharge_notes' => null])
+        ->and($page->noteFormData)->toBe(['content' => null, 'status' => NoteStatus::DRAFT->value])
+        ->and($page->dischargeData)->toBe([
+            'discharge_notes' => null,
+            'discharge_disposition' => DischargeDisposition::COMPLETED->value,
+        ])
         ->and($page->adtFormData)->toBe([
             'transfer_notes' => null,
             'transfer_out_notes' => null,
             'transfer_in_notes' => null,
+            'destination_type' => AdtDestinationType::ExternalFacility->value,
+            'admission_source' => 'local',
         ])
         ->and($page->consultationChiefComplaint)->toBe('')
         ->and($page->encounterFormData)->toBe([]);

@@ -14,6 +14,7 @@ use Filament\Schemas\Schema;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
+use Illuminate\Database\Eloquent\Builder;
 use Modules\Clinical\Enums\RequestPriority;
 use Modules\Clinical\Enums\RequestStatus;
 use Modules\Clinical\Filament\Clusters\Clinical\Resources\ServiceRequests\Schemas\ServiceRequestInfolist;
@@ -32,6 +33,12 @@ class ServiceRequestsRelationManager extends RelationManager
         return $table
             ->recordTitleAttribute('request_number')
             ->defaultSort('created_at', 'desc')
+            ->modifyQueryUsing(fn (Builder $query) => $query->with([
+                'patient',
+                'orderedBy',
+                'encounter',
+                'items.service',
+            ]))
             ->columns([
                 TextColumn::make('request_number')
                     ->label('Request #')

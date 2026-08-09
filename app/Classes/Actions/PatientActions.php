@@ -495,7 +495,10 @@ class PatientActions
                 $schema[] = FileUpload::make('result_files')
                     ->label('Result Files (PDF, Images)')
                     ->multiple()
-                    ->directory('diagnostics/results')
+                    ->disk(config('diagnostics.result_files.disk', config('filament.default_filesystem_disk')))
+                    ->directory(config('diagnostics.result_files.directory', 'diagnostics/results'))
+                    ->visibility('private')
+                    ->storeFileNamesIn('result_files_names')
                     ->acceptedFileTypes(['application/pdf', 'image/*'])
                     ->maxSize(10240);
                 $schema[] = Textarea::make('notes')->label('Notes')->rows(2);

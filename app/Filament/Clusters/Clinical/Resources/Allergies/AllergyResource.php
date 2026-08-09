@@ -7,6 +7,7 @@ use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Table;
+use Illuminate\Database\Eloquent\Builder;
 use Modules\Clinical\Filament\Clusters\Clinical\ClinicalCluster;
 use Modules\Clinical\Filament\Clusters\Clinical\Resources\Allergies\Pages\CreateAllergy;
 use Modules\Clinical\Filament\Clusters\Clinical\Resources\Allergies\Pages\EditAllergy;
@@ -33,6 +34,11 @@ class AllergyResource extends Resource
     public static function shouldRegisterNavigation(): bool
     {
         return false;
+    }
+
+    public static function getEloquentQuery(): Builder
+    {
+        return parent::getEloquentQuery()->with(['patient']);
     }
 
     public static function form(Schema $schema): Schema

@@ -355,23 +355,33 @@
                                 </div>
                             </div>
                         @elseif($activeTab === 'completed')
-                            <div class="space-y-3">
-                                <h3 class="text-lg font-semibold text-gray-900 dark:text-white">Completed Results</h3>
-                                @php $completedItems = $this->completedLabItems; @endphp
-                                @forelse($completedItems as $item)
-                                    <div
-                                        class="flex items-center justify-between p-3 rounded-lg bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800">
-                                        <div>
-                                            <p class="font-medium text-sm">{{ $item['service']['name'] ?? 'Unknown' }}</p>
-                                            <p class="text-xs text-gray-500">Completed</p>
+                            @php $completedResultsWidget = $this->completedResultsWidget(); @endphp
+                            @if ($completedResultsWidget)
+                                @livewire(
+                                    $completedResultsWidget,
+                                    ['patientId' => $currentPatient?->id],
+                                    key('completed-results-' . ($currentPatient?->id ?? 'none'))
+                                )
+                            @else
+                                <div class="space-y-3">
+                                    <h3 class="text-lg font-semibold text-gray-900 dark:text-white">Completed Results</h3>
+                                    @php $completedItems = $this->completedLabItems; @endphp
+                                    @forelse($completedItems as $item)
+                                        <div
+                                            class="flex items-center justify-between p-3 rounded-lg bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800">
+                                            <div>
+                                                <p class="font-medium text-sm">
+                                                    {{ $item['service']['name'] ?? 'Unknown' }}</p>
+                                                <p class="text-xs text-gray-500">Completed</p>
+                                            </div>
+                                            <x-filament::badge color="success">Completed</x-filament::badge>
                                         </div>
-                                        <x-filament::badge color="success">Completed</x-filament::badge>
-                                    </div>
-                                @empty
-                                    <p class="text-sm text-gray-500 dark:text-gray-400 py-8 text-center">No completed
-                                        results.</p>
-                                @endforelse
-                            </div>
+                                    @empty
+                                        <p class="text-sm text-gray-500 dark:text-gray-400 py-8 text-center">No completed
+                                            results.</p>
+                                    @endforelse
+                                </div>
+                            @endif
                         @endif
                     </div>
                 </div>

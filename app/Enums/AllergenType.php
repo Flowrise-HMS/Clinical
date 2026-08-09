@@ -33,7 +33,7 @@ enum AllergenType: string implements HasColor, HasDescription, HasIcon, HasLabel
             self::MEDICATION => 'heroicon-o-beaker',
             self::FOOD => 'heroicon-o-cake',
             self::ENVIRONMENTAL => 'heroicon-o-sun',
-            self::BIOLOGICAL => 'heroicon-o-virus',
+            self::BIOLOGICAL => 'heroicon-o-swatch',
             self::OTHER => 'heroicon-o-question-mark-circle',
         };
     }

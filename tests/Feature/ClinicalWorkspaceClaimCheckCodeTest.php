@@ -48,13 +48,25 @@ class ClinicalWorkspaceClaimCheckCodeTest extends TestCase
         Livewire::actingAs($this->user)
             ->test(ClinicalWorkspace::class, ['patientId' => $this->patient->id])
             ->set('encounterFormData.coverage_type', CoverageType::NHIS->value)
-            ->set('encounterFormData.claim_check_code', 'VALID1234567')
+            ->set('encounterFormData.claim_check_code', 'VALID12345678')
             ->call('createEncounter');
 
         $encounter = Encounter::where('patient_id', $this->patient->id)->first();
 
         $this->assertNotNull($encounter);
         $this->assertSame(CoverageType::NHIS->value, $encounter->coverage_type?->value);
-        $this->assertSame('VALID1234567', $encounter->claim_check_code);
+        $this->assertSame('VALID12345678', $encounter->claim_check_code);
+    }
+
+    public function test_a_claim_check_code_of_the_wrong_length_is_rejected(): void
+    {
+        Livewire::actingAs($this->user)
+            ->test(ClinicalWorkspace::class, ['patientId' => $this->patient->id])
+            ->set('encounterFormData.coverage_type', CoverageType::NHIS->value)
+            ->set('encounterFormData.claim_check_code', 'TOOSHORT12')
+            ->call('createEncounter')
+            ->assertHasErrors('encounterFormData.claim_check_code');
+
+        $this->assertNull(Encounter::where('patient_id', $this->patient->id)->first());
     }
 }

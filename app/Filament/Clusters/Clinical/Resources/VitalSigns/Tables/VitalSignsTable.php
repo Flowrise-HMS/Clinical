@@ -10,7 +10,9 @@ use Filament\Actions\EditAction;
 use Filament\Actions\ViewAction;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
+use Illuminate\Support\Facades\Auth;
 use Modules\Clinical\Filament\Clusters\Clinical\Resources\VitalSigns\VitalSignResource;
+use Modules\Clinical\Policies\VitalSignPolicy;
 use Modules\Core\Support\SuperAdmin;
 
 class VitalSignsTable
@@ -40,9 +42,12 @@ class VitalSignsTable
     public static function recordActions(bool $includeActivities = true): array
     {
         $actions = [
-            ViewAction::make(),
-            EditAction::make(),
-            DeleteAction::make(),
+            ViewAction::make()
+                ->visible(fn ($record): bool => app(VitalSignPolicy::class)->view(Auth::user(), $record)),
+            EditAction::make()
+                ->visible(fn ($record): bool => app(VitalSignPolicy::class)->update(Auth::user(), $record)),
+            DeleteAction::make()
+                ->visible(fn ($record): bool => app(VitalSignPolicy::class)->delete(Auth::user(), $record)),
         ];
 
         if ($includeActivities) {

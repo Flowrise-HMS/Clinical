@@ -6,7 +6,7 @@
     @endphp
 
     @forelse($pastEncounters as $encounter)
-        <div class="rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 overflow-hidden mb-3">
+        <div class="rounded-lg border border-gray-200 dark:border-gray-700 dark:bg-white dark:bg-gray-800 overflow-hidden mb-3">
             {{-- Encounter Header --}}
             <div class="flex items-center justify-between px-4 py-3 bg-gray-50 dark:bg-gray-800/80 border-b border-gray-200 dark:border-gray-700">
                 <div class="flex items-center gap-2 min-w-0">
@@ -66,9 +66,9 @@
                     <div>
                         <div class="flex flex-wrap gap-1.5">
                             @foreach ($encounter['diagnoses'] as $dx)
-                                <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-primary-50 dark:bg-primary-900/20 text-primary-700 dark:text-primary-300 border border-primary-200 dark:border-primary-700">
+                                <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium dark:bg-primary-900/20 dark:text-primary-300 border border-primary-200 dark:border-primary-700">
                                     @if ($dx['code'])
-                                        <x-filament::badge>{{ $dx['code'] }}</x-filament::badge>
+                                        <span>{{ $dx['code'] }}</span>
                                     @endif
                                     {{ $dx['label'] }}
                                 </span>

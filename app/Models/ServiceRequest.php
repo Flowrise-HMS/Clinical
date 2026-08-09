@@ -156,6 +156,10 @@ class ServiceRequest extends BaseModel implements ProvidesClientIdentity
 
     public function clientIdentity(): ClientIdentity
     {
+        if ($this->patient_id !== null) {
+            $this->loadMissing('patient');
+        }
+
         return ClientIdentityResolver::resolve(
             patientFullName: $this->patient?->full_name,
             patientMrn: $this->patient?->mrn,

@@ -94,7 +94,7 @@ class EncounterForm
 
                     TextInput::make('claim_check_code')
                         ->label('NHIS Claim Check Code')
-                        ->rule('nullable|regex:/^([A-Za-z0-9]{5}|[A-Za-z0-9]{13})$/')
+                        ->rules(['nullable', 'regex:/^([A-Za-z0-9]{5}|[A-Za-z0-9]{13})$/'])
                         ->helperText('Dial *842# from an authorized facility phone number and select option 1 ("Generate Claim Code"). Enter the 5-character (non-biometric) or 13-character (biometric) code returned.')
                         ->visible(function (Get $get): bool {
                             $coverage = $get('coverage_type');

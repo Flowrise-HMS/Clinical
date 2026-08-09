@@ -5,6 +5,7 @@ namespace Modules\Clinical\Filament\Clusters\Clinical\Resources\CarePlans;
 use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
 use Filament\Tables\Table;
+use Illuminate\Database\Eloquent\Builder;
 use Modules\Clinical\Filament\Clusters\Clinical\ClinicalCluster;
 use Modules\Clinical\Filament\Clusters\Clinical\Resources\CarePlans\Pages\ListCarePlans;
 use Modules\Clinical\Filament\Clusters\Clinical\Resources\CarePlans\Pages\ViewCarePlan;
@@ -28,6 +29,11 @@ class CarePlanResource extends Resource
     public static function shouldRegisterNavigation(): bool
     {
         return false;
+    }
+
+    public static function getEloquentQuery(): Builder
+    {
+        return parent::getEloquentQuery()->with(['patient', 'author']);
     }
 
     public static function infolist(Schema $schema): Schema

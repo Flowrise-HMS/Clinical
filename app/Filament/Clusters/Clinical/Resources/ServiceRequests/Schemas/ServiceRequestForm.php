@@ -51,6 +51,14 @@ class ServiceRequestForm
                                     ->nullable(),
                             ]),
                     ]),
+                Fieldset::make('Ordering Provider')
+                    ->schema([
+                        TextEntry::make('ordered_by_name')
+                            ->label('Ordered By')
+                            ->state(fn () => auth()->user()?->name)
+                            ->state(fn ($record) => $record?->orderedBy?->name ?? 'Not assigned'),
+                    ]),
+
                 Hidden::make('ordered_by')->default(auth()->id()),
             ], self::quickElements(useRelationship: true, hidenEncounter: true)));
     }
@@ -84,14 +92,6 @@ class ServiceRequestForm
                                 ->default(RequestStatus::ACTIVE)
                                 ->required()
                                 ->label('Status'),
-                        ]),
-
-                    Fieldset::make('Ordering Provider')
-                        ->schema([
-                            TextEntry::make('ordered_by_name')
-                                ->label('Ordered By')
-                                ->state(fn () => auth()->user()?->name)
-                                ->state(fn ($record) => $record?->orderedBy?->name ?? 'Not assigned'),
                         ]),
 
                     RichEditor::make('notes')
