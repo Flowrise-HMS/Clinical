@@ -207,6 +207,21 @@ class MedicationAdministrationFlowTest extends TestCase
         $this->assertTrue($item->fresh()->isCompleted());
     }
 
+    public function test_administer_accepts_enum_status_instance(): void
+    {
+        [$item, $nurse] = $this->seedInFacilityMarOrder(MedicationFrequency::STAT, 1);
+
+        app(MedicationAdministrationService::class)->administer($item->fresh(), [
+            'status' => MedicationAdministrationStatus::GIVEN,
+            'quantity_given' => 1,
+        ], null, $nurse);
+
+        $this->assertDatabaseHas('medication_administrations', [
+            'request_item_id' => $item->id,
+            'status' => MedicationAdministrationStatus::GIVEN->value,
+        ]);
+    }
+
     /**
      * @return array{RequestItem, User, PrescriptionDetail, Medication}
      */

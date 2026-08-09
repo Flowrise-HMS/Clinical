@@ -56,7 +56,7 @@ class MarRecordDoseFormSchema
         $fields[] = Select::make('status')
             ->label('Status')
             ->options(MedicationAdministrationStatus::class)
-            ->default(MedicationAdministrationStatus::GIVEN)
+            ->default(MedicationAdministrationStatus::GIVEN->value)
             ->required()
             ->live();
 

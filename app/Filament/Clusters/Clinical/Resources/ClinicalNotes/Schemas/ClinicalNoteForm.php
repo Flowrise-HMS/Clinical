@@ -50,6 +50,7 @@ class ClinicalNoteForm
                             Select::make('note_type')
                                 ->label('Note Type')
                                 ->options(NoteType::class)
+                                ->searchable()
                                 ->required()
                                 ->preload(),
 

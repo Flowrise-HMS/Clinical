@@ -53,7 +53,7 @@ class MedicationFulfillmentPolicy
 
     public function canRecordMar(RequestItem $item, ?User $user = null): bool
     {
-        $detail = $item->prescriptionDetail;
+        $detail = $this->prescriptionDetailFor($item);
         if (! $detail || ! $this->requiresMar($detail)) {
             return false;
         }
@@ -62,7 +62,7 @@ class MedicationFulfillmentPolicy
             return false;
         }
 
-        $encounter = $item->serviceRequest?->encounter;
+        $encounter = $item->loadMissing('serviceRequest.encounter')->serviceRequest?->encounter;
         if (! $encounter || ! $encounter->isActive()) {
             return false;
         }
@@ -95,7 +95,7 @@ class MedicationFulfillmentPolicy
             return false;
         }
 
-        $detail = $item->prescriptionDetail;
+        $detail = $this->prescriptionDetailFor($item);
         if (! $detail) {
             return true;
         }
@@ -135,6 +135,8 @@ class MedicationFulfillmentPolicy
             $emergencyExempt = config('clinical.mar_payment.emergency_exempt', true);
         }
 
+        $item->loadMissing(['serviceRequest.encounter', 'service']);
+
         $encounter = $item->serviceRequest?->encounter;
         if ($encounter?->type === EncounterType::EMERGENCY && $emergencyExempt) {
             return false;
@@ -158,6 +160,8 @@ class MedicationFulfillmentPolicy
 
     public function isPaidFor(RequestItem $item): bool
     {
+        $item->loadMissing('service');
+
         if (! class_exists(InvoiceLine::class) || ! Schema::hasTable('invoice_lines')) {
             return ! ($item->service?->requires_payment_before ?? false);
         }
@@ -176,7 +180,7 @@ class MedicationFulfillmentPolicy
 
     public function shouldCompleteOnDispense(RequestItem $item): bool
     {
-        $detail = $item->prescriptionDetail;
+        $detail = $this->prescriptionDetailFor($item);
 
         if ($detail === null) {
             return true;
@@ -187,7 +191,7 @@ class MedicationFulfillmentPolicy
 
     public function shouldCompleteOnMar(RequestItem $item): bool
     {
-        $detail = $item->prescriptionDetail;
+        $detail = $this->prescriptionDetailFor($item);
         if (! $detail || ! $this->requiresMar($detail)) {
             return false;
         }
@@ -232,6 +236,11 @@ class MedicationFulfillmentPolicy
         $medication = $this->medicationForService((string) $item->service_id);
 
         return $medication?->controlled_schedule !== null;
+    }
+
+    protected function prescriptionDetailFor(RequestItem $item): ?PrescriptionDetail
+    {
+        return $item->loadMissing('prescriptionDetail')->prescriptionDetail;
     }
 
     protected function medicationForService(string $serviceId): ?Medication

@@ -57,27 +57,41 @@
                                                 @if($event['metadata'])
                                                     <div class="bg-gray-50 rounded-lg p-3 text-sm font-mono border border-gray-100">
                                                         @foreach($event['metadata'] as $key => $value)
+                                                            @php
+                                                                $displayValue = match (true) {
+                                                                    is_array($value) => implode(', ', $value),
+                                                                    is_scalar($value) || $value === null => (string) ($value ?? ''),
+                                                                    default => '',
+                                                                };
+                                                            @endphp
+                                                            @continue($displayValue === '')
                                                             <div class="flex justify-between gap-6 py-0.5">
                                                                 <span class="text-gray-500">{{ $key }}:</span>
-                                                                <span class="text-gray-900 font-semibold">{{ is_array($value) ? implode(', ', $value) : $value }}</span>
+                                                                <span class="text-gray-900 font-semibold">{{ $displayValue }}</span>
                                                             </div>
                                                         @endforeach
                                                     </div>
                                                 @endif
 
-                                                @if($event['creator'])
+                                                @if(! empty($event['creator']))
                                                     <p class="text-xs text-gray-400 mt-2">
                                                         by {{ $event['creator'] }}
                                                     </p>
                                                 @endif
                                             </div>
 
+                                            @php
+                                                $occurredAt = $event['occurred_at'] instanceof \Carbon\CarbonInterface
+                                                    ? $event['occurred_at']
+                                                    : \Illuminate\Support\Carbon::parse($event['occurred_at']);
+                                            @endphp
+
                                             <div class="text-right flex-shrink-0">
                                                 <div class="text-sm font-medium text-gray-900">
-                                                    {{ optional(\Carbon\Carbon::parse($event['occurred_at'])->format('h:i A')) }}
+                                                    {{ $occurredAt->format('h:i A') }}
                                                 </div>
                                                 <div class="text-xs text-gray-500">
-                                                    {{ optional(\Carbon\Carbon::parse($event['occurred_at'])->format('M d, Y')) }}
+                                                    {{ $occurredAt->format('M d, Y') }}
                                                 </div>
                                             </div>
                                         </div>

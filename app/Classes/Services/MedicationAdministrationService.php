@@ -76,7 +76,7 @@ class MedicationAdministrationService
             throw new \InvalidArgumentException('You do not have permission to record medication administration.');
         }
 
-        $status = MedicationAdministrationStatus::tryFrom($data['status'] ?? 'given')
+        $status = $this->normalizeStatus($data['status'] ?? null)
             ?? MedicationAdministrationStatus::GIVEN;
 
         if ($detail->prn && $status === MedicationAdministrationStatus::GIVEN && empty($data['prn_reason'])) {
@@ -162,6 +162,19 @@ class MedicationAdministrationService
 
             return $administration;
         });
+    }
+
+    protected function normalizeStatus(MedicationAdministrationStatus|string|null $status): ?MedicationAdministrationStatus
+    {
+        if ($status instanceof MedicationAdministrationStatus) {
+            return $status;
+        }
+
+        if (! is_string($status) || $status === '') {
+            return null;
+        }
+
+        return MedicationAdministrationStatus::tryFrom($status);
     }
 
     protected function recordWardConsumptionIfApplicable(
