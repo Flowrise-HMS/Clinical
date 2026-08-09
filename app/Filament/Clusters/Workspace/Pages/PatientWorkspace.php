@@ -27,10 +27,11 @@ use Modules\Clinical\Filament\Clusters\Workspace\WorkspaceCluster;
 use Modules\Clinical\Filament\Widgets\CriticalPatientsWidget;
 use Modules\Clinical\Filament\Widgets\MyTasksWidget;
 use Modules\Clinical\Filament\Widgets\PatientTimelineWidget;
-use Modules\Clinical\Filament\Widgets\PendingFulfillmentsWidget;
 use Modules\Clinical\Filament\Widgets\RecentPatientsWidget;
 use Modules\Clinical\Filament\Widgets\WorkspaceTodayAppointmentsWidget;
 use Modules\Core\Classes\Support\PageHeaderActionsRegistry;
+use Modules\Core\Classes\Support\PageWidgetsRegistry;
+use Modules\Core\Support\ModuleAvailability;
 use Modules\Patient\Classes\Services\PatientSearchService;
 use Modules\Patient\Models\Patient;
 
@@ -266,7 +267,7 @@ class PatientWorkspace extends Page implements HasActions, HasSchemas, HasTable
 
     protected function hasAppointmentModule(): bool
     {
-        return class_exists('Modules\\Appointment\\Models\\Appointment');
+        return ModuleAvailability::appointmentEnabled();
     }
 
     protected function getHeaderActions(): array
@@ -288,13 +289,16 @@ class PatientWorkspace extends Page implements HasActions, HasSchemas, HasTable
         $widgets[] = PatientTimelineWidget::class;
         $widgets[] = RecentPatientsWidget::class;
 
-        return $widgets;
+        return [
+            ...$widgets,
+            ...app(PageWidgetsRegistry::class)->for(static::class, 'header', $this),
+        ];
     }
 
     protected function getFooterWidgets(): array
     {
         return [
-            // PendingFulfillmentsWidget::class,
+            ...app(PageWidgetsRegistry::class)->for(static::class, 'footer', $this),
         ];
     }
 }

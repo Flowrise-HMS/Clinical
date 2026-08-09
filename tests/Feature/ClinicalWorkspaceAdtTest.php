@@ -129,10 +129,10 @@ class ClinicalWorkspaceAdtTest extends TestCase
 
         $page = $this->makeWorkspacePage();
         $page->selectPatient($this->patient->id);
-        $page->adtFormData = [
+        $page->adtFormData = array_merge($page->adtFormData, [
             'transfer_ward_id' => $this->ward->id,
             'transfer_bed_id' => $this->bedB->id,
-        ];
+        ]);
         $page->transferInternal();
 
         $this->assertSame($this->bedB->id, $encounter->fresh()->bed_id);
@@ -141,6 +141,57 @@ class ClinicalWorkspaceAdtTest extends TestCase
             'event_type' => AdtEventType::TransferredInternal->value,
             'to_bed_id' => $this->bedB->id,
         ]);
+    }
+
+    public function test_adt_form_defaults_include_transfer_in_ward_and_bed_keys(): void
+    {
+        $page = $this->makeWorkspacePage();
+
+        foreach ([
+            'ward_id',
+            'bed_id',
+            'notes',
+            'transfer_ward_id',
+            'transfer_bed_id',
+            'transfer_in_ward_id',
+            'transfer_in_bed_id',
+            'transfer_in_chief_complaint',
+            'source_label',
+            'from_branch_id',
+            'destination_branch_id',
+            'destination_label',
+        ] as $key) {
+            $this->assertArrayHasKey($key, $page->adtFormData);
+            $this->assertNull($page->adtFormData[$key]);
+        }
+    }
+
+    public function test_transfer_in_admits_patient_when_ward_and_bed_are_set(): void
+    {
+        $this->actingAs($this->nurse);
+
+        $page = $this->makeWorkspacePage();
+        $page->selectPatient($this->patient->id);
+        $page->adtFormData = array_merge($page->adtFormData, [
+            'admission_source' => 'local',
+            'transfer_in_ward_id' => $this->ward->id,
+            'transfer_in_bed_id' => $this->bedA->id,
+            'transfer_in_chief_complaint' => 'Fever',
+            'transfer_in_notes' => 'Walk-in admission',
+        ]);
+        $page->transferIn();
+
+        $this->assertDatabaseHas('encounters', [
+            'patient_id' => $this->patient->id,
+            'bed_id' => $this->bedA->id,
+            'chief_complaint' => 'Fever',
+        ]);
+        $this->assertDatabaseHas('encounter_location_events', [
+            'event_type' => AdtEventType::TransferredIn->value,
+            'to_bed_id' => $this->bedA->id,
+        ]);
+        $this->assertNull($page->adtFormData['transfer_in_ward_id']);
+        $this->assertNull($page->adtFormData['transfer_in_bed_id']);
     }
 
     public function test_get_available_beds_excludes_occupied(): void

@@ -118,35 +118,3 @@ it('does not duplicate the cached who row on repeated saves', function (): void 
 
     expect(DiagnosisCode::where('source', 'who')->where('icd_entity_id', '123')->count())->toBe(1);
 });
-
-it('fills an uncoded diagnosis row from an icd browser selection', function (): void {
-    $this->actingAs(storeBothDoctor($this->branch));
-    [$page, $encounter] = storeBothWorkspace($this->patient, $this->branch);
-
-    $page->diagnosisFormData['diagnoses'] = [[
-        'description' => 'Uncoded row',
-        'type' => 'primary',
-        'is_new_case' => '0',
-        'certainty' => 'provisional',
-        'notes' => null,
-    ]];
-
-    $page->applyBrowserSelection(
-        suggestion: [
-            'local_id' => null,
-            'code' => '1A00',
-            'label' => 'Cholera',
-            'external_id' => '123',
-            'uri' => 'https://id.who.int/icd/entity/123',
-            'source' => 'who',
-        ],
-        localId: '42',
-    );
-
-    $row = $page->diagnosisFormData['diagnoses'][0];
-
-    expect($row['icd_code'])->toBe('1A00')
-        ->and($row['icd_entity_id'])->toBe('123')
-        ->and($row['diagnosis_code_id'])->toBe('42')
-        ->and($row['description'])->toBe('Uncoded row');
-});

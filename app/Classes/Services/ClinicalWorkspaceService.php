@@ -2,7 +2,9 @@
 
 namespace Modules\Clinical\Classes\Services;
 
+use Carbon\CarbonInterface;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Str;
 use Modules\Appointment\Filament\Clusters\Appointment\Resources\Appointments\AppointmentResource;
@@ -26,9 +28,7 @@ class ClinicalWorkspaceService
     public function setPatient(?Patient $patient): self
     {
         $this->currentPatient = $patient;
-        if ($patient) {
-            $this->currentEncounter = $patient->loadMissing('activeEncounter')->activeEncounter;
-        }
+        $this->currentEncounter = null;
 
         return $this;
     }
@@ -39,6 +39,13 @@ class ClinicalWorkspaceService
         if ($encounter) {
             $this->currentPatient = $encounter->loadMissing('patient')->patient;
         }
+
+        return $this;
+    }
+
+    public function clearEncounter(): self
+    {
+        $this->currentEncounter = null;
 
         return $this;
     }
@@ -63,14 +70,19 @@ class ClinicalWorkspaceService
         $patientId = $this->currentPatient->id;
         $encounterId = $this->currentEncounter?->id;
         $normalizedType = in_array($type, ['encounter', 'vitals', 'note', 'order', 'appointment'], true) ? $type : null;
+        $safeLimit = max(1, $limit);
+        $safeOffset = max(0, $offset);
+        // Fetch enough from each source so merge+skip+take covers the requested page.
+        $fetchLimit = $safeOffset + $safeLimit;
 
         if (! $normalizedType || $normalizedType === 'encounter') {
             $query = Encounter::query()
                 ->with(['admittedBy', 'location'])
                 ->where('patient_id', $patientId)
                 ->when($encounterId, fn ($q) => $q->where('id', $encounterId))
-                ->orderBy('admitted_at', 'desc')
-                ->limit($limit);
+                ->orderByDesc('admitted_at')
+                ->orderByDesc('id')
+                ->limit($fetchLimit);
 
             foreach ($query->get() as $encounter) {
                 $events->push($this->createEncounterEvent($encounter));
@@ -82,8 +94,9 @@ class ClinicalWorkspaceService
                 ->with('recordedBy')
                 ->where('patient_id', $patientId)
                 ->when($encounterId, fn ($q) => $q->where('encounter_id', $encounterId))
-                ->orderBy('recorded_at', 'desc')
-                ->limit($limit);
+                ->orderByDesc('recorded_at')
+                ->orderByDesc('id')
+                ->limit($fetchLimit);
 
             foreach ($vitalsQuery->get() as $vital) {
                 $events->push($this->createVitalSignEvent($vital));
@@ -95,8 +108,9 @@ class ClinicalWorkspaceService
                 ->with(['author', 'patient', 'encounter', 'serviceRequest'])
                 ->where('patient_id', $patientId)
                 ->when($encounterId, fn ($q) => $q->where('encounter_id', $encounterId))
-                ->orderBy('created_at', 'desc')
-                ->limit($limit);
+                ->orderByDesc('created_at')
+                ->orderByDesc('id')
+                ->limit($fetchLimit);
 
             foreach ($notesQuery->get() as $note) {
                 $events->push($this->createNoteEvent($note));
@@ -109,8 +123,9 @@ class ClinicalWorkspaceService
                 ->withCount('items')
                 ->where('patient_id', $patientId)
                 ->when($encounterId, fn ($q) => $q->where('encounter_id', $encounterId))
-                ->orderBy('created_at', 'desc')
-                ->limit($limit);
+                ->orderByDesc('created_at')
+                ->orderByDesc('id')
+                ->limit($fetchLimit);
 
             foreach ($ordersQuery->get() as $order) {
                 $events->push($this->createOrderEvent($order));
@@ -123,8 +138,9 @@ class ClinicalWorkspaceService
             if ($appointmentsQuery) {
                 foreach ($appointmentsQuery
                     ->where('patient_id', $patientId)
-                    ->orderBy('start_at', 'desc')
-                    ->limit($limit)
+                    ->orderByDesc('start_at')
+                    ->orderByDesc('id')
+                    ->limit($fetchLimit)
                     ->get() as $appointment) {
                     $events->push($this->createAppointmentEvent($appointment));
                 }
@@ -132,12 +148,9 @@ class ClinicalWorkspaceService
         }
 
         return $events
-            ->sortBy([
-                ['occurred_at', 'desc'],
-                ['id', 'desc'],
-            ])
-            ->skip(max(0, $offset))
-            ->take(max(1, $limit))
+            ->sortByDesc(fn (array $event): string => $this->timelineEventSortKey($event))
+            ->values()
+            ->slice($safeOffset, $safeLimit)
             ->values();
     }
 
@@ -178,6 +191,19 @@ class ClinicalWorkspaceService
                 ->count(),
             'appointment' => $this->countAppointmentsForPatient($patientId),
         ];
+    }
+
+    /**
+     * Stable newest-first sort key for merged timeline events.
+     */
+    protected function timelineEventSortKey(array $event): string
+    {
+        $occurredAt = $event['occurred_at'] ?? now();
+        $timestamp = $occurredAt instanceof CarbonInterface
+            ? $occurredAt->getTimestamp()
+            : Carbon::parse($occurredAt)->getTimestamp();
+
+        return sprintf('%020d|%s', $timestamp, (string) ($event['id'] ?? ''));
     }
 
     protected function createAppointmentEvent(object $appointment): array

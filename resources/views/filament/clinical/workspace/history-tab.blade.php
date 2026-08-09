@@ -3,6 +3,7 @@
 
     @php
     $pastEncounters = $this->pastEncounters;
+    $completedResultsWidget = $this->completedResultsWidget();
     @endphp
 
     @forelse($pastEncounters as $encounter)
@@ -106,20 +107,27 @@
                 @endif
             </div>
         </div>
-        @livewire(\Modules\Clinical\Filament\Widgets\PatientOrdersWidget::class,[
-                'patientId' => $this->currentPatient?->id ?? $encounter['patient_id'],
-                'encounterId' => $this->currentEncounter?->id ?? $encounter['id'],
-            ])
-            <br>
-        @livewire(\Modules\Clinical\Filament\Widgets\PatientDiagnosesWidget::class,[
+        @livewire(\Modules\Clinical\Filament\Widgets\PatientOrdersWidget::class, [
                 'patientId' => $encounter['patient_id'],
                 'encounterId' => $encounter['id'],
-            ])
+            ], key('orders-'.$encounter['id']))
             <br>
-        @livewire(\Modules\Clinical\Filament\Widgets\PatientNotesWidget::class,[
+        @if ($completedResultsWidget)
+            @livewire($completedResultsWidget, [
+                    'patientId' => $encounter['patient_id'],
+                    'encounterId' => $encounter['id'],
+                ], key('results-'.$encounter['id']))
+                <br>
+        @endif
+        @livewire(\Modules\Clinical\Filament\Widgets\PatientDiagnosesWidget::class, [
                 'patientId' => $encounter['patient_id'],
                 'encounterId' => $encounter['id'],
-            ])
+            ], key('diagnoses-'.$encounter['id']))
+            <br>
+        @livewire(\Modules\Clinical\Filament\Widgets\PatientNotesWidget::class, [
+                'patientId' => $encounter['patient_id'],
+                'encounterId' => $encounter['id'],
+            ], key('notes-'.$encounter['id']))
     @empty
         <div class="flex flex-col items-center justify-center py-12 text-center">
             <x-filament::icon name="heroicon-o-clock" class="w-12 h-12 text-gray-300 dark:text-gray-600 mb-3" />

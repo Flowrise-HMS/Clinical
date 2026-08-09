@@ -22,6 +22,7 @@ use Modules\Core\Models\Service;
 use Modules\Core\Models\ServiceVariant;
 use Modules\Core\Models\Unit;
 use Modules\Core\Support\AppSettings;
+use Modules\Core\Support\ModuleAvailability;
 use Modules\Pharmacy\Models\PrescriptionDetail;
 
 class RequestItem extends Model
@@ -228,7 +229,7 @@ class RequestItem extends Model
 
         $settings = app(AppSettings::class);
 
-        if (! $settings->billing()->financial_hold_enabled) {
+        if (! ModuleAvailability::billingEnabled() || ! $settings->billing()->financial_hold_enabled) {
             return false;
         }
 

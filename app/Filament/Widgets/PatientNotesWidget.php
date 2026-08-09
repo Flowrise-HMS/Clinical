@@ -45,6 +45,11 @@ class PatientNotesWidget extends BaseTableWidget
         return ClinicalNotesTable::columns();
     }
 
+    protected function getTableFilters(): array
+    {
+        return ClinicalNotesTable::filters();
+    }
+
     protected function getTableActions(): array
     {
         return ClinicalNotesTable::recordActions(includeMutations: false);

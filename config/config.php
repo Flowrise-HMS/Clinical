@@ -3,6 +3,10 @@
 return [
     'name' => 'Clinical',
 
+    'permissions' => [
+        'manage_clinical_settings' => 'ManageClinicalSettings',
+    ],
+
     'mar_payment' => [
         'require_before_mar' => true,
         'emergency_exempt' => true,

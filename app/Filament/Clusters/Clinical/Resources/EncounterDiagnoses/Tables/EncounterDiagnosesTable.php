@@ -9,11 +9,13 @@ use Filament\Actions\ViewAction;
 use Filament\Schemas\Schema;
 use Filament\Tables\Columns\IconColumn;
 use Filament\Tables\Columns\TextColumn;
+use Filament\Tables\Filters\Filter;
 use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
 use Modules\Clinical\Enums\DiagnosisCertainty;
 use Modules\Clinical\Enums\DiagnosisType;
 use Modules\Clinical\Filament\Clusters\Clinical\Resources\EncounterDiagnoses\Schemas\EncounterDiagnosisInfolist;
+use Modules\Core\Filament\Support\DateRangeFilter;
 
 class EncounterDiagnosesTable
 {
@@ -21,18 +23,27 @@ class EncounterDiagnosesTable
     {
         return $table
             ->columns(self::columns())
-            ->filters([
-                SelectFilter::make('type')
-                    ->options(DiagnosisType::class),
-                SelectFilter::make('certainty')
-                    ->options(DiagnosisCertainty::class),
-            ])
+            ->filters(self::filters())
             ->recordActions(self::recordActions())
             ->toolbarActions([
                 BulkActionGroup::make([
                     DeleteBulkAction::make(),
                 ]),
             ]);
+    }
+
+    /**
+     * @return array<int, SelectFilter|Filter>
+     */
+    public static function filters(): array
+    {
+        return [
+            SelectFilter::make('type')
+                ->options(DiagnosisType::class),
+            SelectFilter::make('certainty')
+                ->options(DiagnosisCertainty::class),
+            DateRangeFilter::make('created_at', 'Recorded'),
+        ];
     }
 
     /**

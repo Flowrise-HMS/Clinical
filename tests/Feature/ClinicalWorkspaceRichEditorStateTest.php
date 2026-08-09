@@ -8,6 +8,32 @@ use Tests\TestCase;
 
 uses(TestCase::class);
 
+/**
+ * @return array<string, mixed>
+ */
+function expectedAdtFormDefaults(): array
+{
+    return [
+        'ward_id' => null,
+        'bed_id' => null,
+        'notes' => null,
+        'transfer_ward_id' => null,
+        'transfer_bed_id' => null,
+        'transfer_notes' => null,
+        'destination_type' => AdtDestinationType::ExternalFacility->value,
+        'destination_branch_id' => null,
+        'destination_label' => null,
+        'transfer_out_notes' => null,
+        'admission_source' => 'local',
+        'source_label' => null,
+        'from_branch_id' => null,
+        'transfer_in_chief_complaint' => null,
+        'transfer_in_ward_id' => null,
+        'transfer_in_bed_id' => null,
+        'transfer_in_notes' => null,
+    ];
+}
+
 it('defines nested RichEditor state keys for Livewire entangle', function (): void {
     $defaults = (new ReflectionClass(ClinicalWorkspace::class))->getDefaultProperties();
 
@@ -18,13 +44,7 @@ it('defines nested RichEditor state keys for Livewire entangle', function (): vo
             'discharge_notes' => null,
             'discharge_disposition' => DischargeDisposition::COMPLETED->value,
         ])
-        ->and($defaults['adtFormData'])->toBe([
-            'transfer_notes' => null,
-            'transfer_out_notes' => null,
-            'transfer_in_notes' => null,
-            'destination_type' => AdtDestinationType::ExternalFacility->value,
-            'admission_source' => 'local',
-        ]);
+        ->and($defaults['adtFormData'])->toBe(expectedAdtFormDefaults());
 });
 
 it('restores nested RichEditor state keys when form states are reset', function (): void {
@@ -54,13 +74,7 @@ it('restores nested RichEditor state keys when form states are reset', function 
             'discharge_notes' => null,
             'discharge_disposition' => DischargeDisposition::COMPLETED->value,
         ])
-        ->and($page->adtFormData)->toBe([
-            'transfer_notes' => null,
-            'transfer_out_notes' => null,
-            'transfer_in_notes' => null,
-            'destination_type' => AdtDestinationType::ExternalFacility->value,
-            'admission_source' => 'local',
-        ])
+        ->and($page->adtFormData)->toBe(expectedAdtFormDefaults())
         ->and($page->consultationChiefComplaint)->toBe('')
         ->and($page->encounterFormData)->toBe([]);
 });

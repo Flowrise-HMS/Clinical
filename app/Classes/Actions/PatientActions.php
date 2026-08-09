@@ -45,6 +45,7 @@ use Modules\Clinical\Policies\EncounterDiagnosisPolicy;
 use Modules\Clinical\Policies\EncounterPolicy;
 use Modules\Clinical\Policies\ServiceRequestPolicy;
 use Modules\Clinical\Policies\VitalSignPolicy;
+use Modules\Core\Support\OptionalClass;
 use Modules\Patient\Models\Patient;
 use Modules\Patient\Policies\PatientPolicy;
 
@@ -345,22 +346,26 @@ class PatientActions
             ->icon('heroicon-m-clipboard-document-list')
             ->slideOver()
             ->model(ServiceRequest::class)
-            ->schema(fn ($schema) => ServiceRequestForm::quickElements(hidenEncounter: true))
+            ->schema(fn ($schema) => ServiceRequestForm::quickElements(hidenEncounter: true, lockStatuses: true))
             ->mutateDataUsing(fn (array $data): array => $this->injectServiceRequestData($data))
             ->visible(fn ($record) => app(ServiceRequestPolicy::class)->create(Auth::user()))
             ->action(fn (array $data) => $this->serviceRequestService->record(
                 $this->patient,
                 $data,
-                $this->encounterId
+                $this->encounterId,
+                lockStatuses: true,
             ))
             ->successNotificationTitle('Service request created');
     }
 
     public function medicationOrder(): Action
     {
-        $medicationOrderAction = 'Modules\\Pharmacy\\Classes\\Actions\\MedicationOrderAction';
+        $medicationOrderAction = OptionalClass::resolve(
+            'Modules\\Pharmacy\\Classes\\Actions\\MedicationOrderAction',
+            'Pharmacy',
+        );
 
-        if (! class_exists($medicationOrderAction)) {
+        if ($medicationOrderAction === null) {
             return Action::make('medication_order')
                 ->label('Medication Order')
                 ->icon('heroicon-m-beaker')

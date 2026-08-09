@@ -19,7 +19,8 @@ use Modules\Clinical\Filament\Clusters\Clinical\Resources\ServiceRequests\Tables
 use Modules\Clinical\Filament\Support\MarRecordDoseFormSchema;
 use Modules\Clinical\Models\RequestItem;
 use Modules\Core\Classes\Services\BranchService;
-use Modules\Pharmacy\Classes\Services\DispenseService;
+use Modules\Core\Support\ModuleAvailability;
+use Modules\Core\Support\OptionalClass;
 
 class PendingFulfillmentsWidget extends BaseTableWidget
 {
@@ -106,6 +107,10 @@ class PendingFulfillmentsWidget extends BaseTableWidget
             ->color('info')
             ->button()
             ->visible(function (RequestItem $record) use ($policy): bool {
+                if (! ModuleAvailability::pharmacyEnabled()) {
+                    return false;
+                }
+
                 $user = Auth::user();
 
                 if ($user === null || ! $policy->isPharmacyStaff($user)) {
@@ -123,7 +128,16 @@ class PendingFulfillmentsWidget extends BaseTableWidget
             ->schema(fn (RequestItem $record): array => MarRecordDoseFormSchema::dispenseFields($record))
             ->action(function (array $data, RequestItem $record): void {
                 try {
-                    app(DispenseService::class)->dispense($record, $data, Auth::user());
+                    $dispenseService = OptionalClass::resolve(
+                        'Modules\\Pharmacy\\Classes\\Services\\DispenseService',
+                        'Pharmacy',
+                    );
+
+                    if ($dispenseService === null) {
+                        throw new \RuntimeException('Pharmacy dispense is not available.');
+                    }
+
+                    app($dispenseService)->dispense($record, $data, Auth::user());
                     Notification::make()->title('Dispensed successfully')->success()->send();
                 } catch (\Throwable $e) {
                     Notification::make()->title('Dispense failed')->body($e->getMessage())->danger()->persistent()->send();

@@ -63,13 +63,13 @@ class ServiceRequestForm
             ], self::quickElements(useRelationship: true, hidenEncounter: true)));
     }
 
-    public static function quickElements(bool $useRelationship = false, bool $hidenEncounter = false): array
+    public static function quickElements(bool $useRelationship = false, bool $hidenEncounter = false, bool $lockStatuses = false): array
     {
         return [
             Section::make('Request Details')
                 ->description('Service request information')
                 ->schema([
-                    Grid::make(3)
+                    Grid::make($lockStatuses ? 2 : 3)
                         ->schema([
                             Select::make('encounter_id')
                                 ->relationship('encounter', 'encounter_number', fn ($query) => $query?->latest())
@@ -87,11 +87,13 @@ class ServiceRequestForm
                                 ->required()
                                 ->label('Priority'),
 
-                            Select::make('status')
-                                ->options(RequestStatus::class)
-                                ->default(RequestStatus::ACTIVE)
-                                ->required()
-                                ->label('Status'),
+                            ...($lockStatuses ? [] : [
+                                Select::make('status')
+                                    ->options(RequestStatus::class)
+                                    ->default(RequestStatus::ACTIVE)
+                                    ->required()
+                                    ->label('Status'),
+                            ]),
                         ]),
 
                     RichEditor::make('notes')
@@ -117,7 +119,7 @@ class ServiceRequestForm
                     tap(
                         Repeater::make('items')
                             ->columnSpanFull()
-                            ->schema(RequestItemForm::getFormSchema())
+                            ->schema(RequestItemForm::getFormSchema(lockStatuses: $lockStatuses))
                             ->addActionLabel('Add Service Item')
                             ->defaultItems(0)
                             ->minItems(0)

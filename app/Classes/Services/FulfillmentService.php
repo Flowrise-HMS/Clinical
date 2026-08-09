@@ -16,7 +16,7 @@ use Modules\Clinical\Enums\TaskStatus;
 use Modules\Clinical\Filament\Support\MarRecordDoseFormSchema;
 use Modules\Clinical\Models\RequestItem;
 use Modules\Core\Enums\ServiceCategoryCode;
-use Modules\Pharmacy\Classes\Services\DispenseService;
+use Modules\Core\Support\OptionalClass;
 
 class FulfillmentService
 {
@@ -26,8 +26,12 @@ class FulfillmentService
         protected TaskService $taskService,
         protected ?object $diagnosticService = null
     ) {
-        $diagnosticClass = 'Modules\\Diagnostics\\Classes\\Services\\DiagnosticResultService';
-        if (class_exists($diagnosticClass)) {
+        $diagnosticClass = OptionalClass::resolve(
+            'Modules\\Diagnostics\\Classes\\Services\\DiagnosticResultService',
+            'Diagnostics',
+        );
+
+        if ($diagnosticClass !== null) {
             $this->diagnosticService = app($diagnosticClass);
         }
     }
@@ -157,8 +161,16 @@ class FulfillmentService
         }
 
         if (isset($data['medication_id'])) {
-            app(DispenseService::class)
-                ->dispense($item, $data, $user);
+            $dispenseService = OptionalClass::resolve(
+                'Modules\\Pharmacy\\Classes\\Services\\DispenseService',
+                'Pharmacy',
+            );
+
+            if ($dispenseService === null) {
+                throw new \RuntimeException('Pharmacy dispense is not available.');
+            }
+
+            app($dispenseService)->dispense($item, $data, $user);
 
             return;
         }

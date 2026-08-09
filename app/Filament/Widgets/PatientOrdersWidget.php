@@ -27,18 +27,31 @@ class PatientOrdersWidget extends BaseTableWidget
     protected function getTableQuery(): Builder
     {
         return RequestItem::query()
-            ->whereHas('serviceRequest', fn ($q) => $q
-                ->where('patient_id', $this->patientId)
-                ->when($this->encounterId, fn ($q) => $q->where('encounter_id', $this->encounterId))
+            ->when(
+                filled($this->patientId),
+                fn (Builder $query): Builder => $query->whereHas(
+                    'serviceRequest',
+                    fn (Builder $serviceRequest): Builder => $serviceRequest
+                        ->where('patient_id', $this->patientId)
+                        ->when(
+                            filled($this->encounterId),
+                            fn (Builder $scoped): Builder => $scoped->where('encounter_id', $this->encounterId),
+                        ),
+                ),
+                fn (Builder $query): Builder => $query->whereRaw('1 = 0'),
             )
             ->with(['serviceRequest', 'service', 'serviceVariant', 'fulfilledBy'])
-            ->latest()
-            ->limit(20);
+            ->latest();
     }
 
     protected function getTableColumns(): array
     {
         return RequestItemsTable::columns();
+    }
+
+    protected function getTableFilters(): array
+    {
+        return RequestItemsTable::filters();
     }
 
     protected function getTableEmptyStateHeading(): ?string

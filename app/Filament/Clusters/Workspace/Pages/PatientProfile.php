@@ -20,16 +20,21 @@ use Filament\Schemas\Schema;
 use Illuminate\Database\Eloquent\Collection;
 use Modules\Clinical\Classes\Actions\PatientActions;
 use Modules\Clinical\Filament\Clusters\Workspace\WorkspaceCluster;
+use Modules\Clinical\Filament\Widgets\CarePlanPreviousTableWidget;
+use Modules\Clinical\Filament\Widgets\CarePlanRecentTableWidget;
+use Modules\Clinical\Filament\Widgets\PatientDiagnosesWidget;
 use Modules\Clinical\Filament\Widgets\PatientNotesWidget;
 use Modules\Clinical\Filament\Widgets\PatientOrdersWidget;
+use Modules\Clinical\Filament\Widgets\PatientTimelineWidget;
 use Modules\Clinical\Filament\Widgets\PatientVitalsChartWidget;
 use Modules\Clinical\Filament\Widgets\PatientVitalsHistoryWidget;
 use Modules\Clinical\Filament\Widgets\PatientVitalsOverviewWidget;
 use Modules\Clinical\Filament\Widgets\PendingFulfillmentsWidget;
 use Modules\Clinical\Models\Allergy;
 use Modules\Core\Classes\Support\PageHeaderActionsRegistry;
-use Modules\Insurance\Models\PatientPolicy;
-use Modules\Insurance\Services\MemberVerificationService;
+use Modules\Core\Classes\Support\PageWidgetsRegistry;
+use Modules\Core\Support\ModuleAvailability;
+use Modules\Core\Support\OptionalClass;
 use Modules\Patient\Models\Patient;
 use Ysfkaya\FilamentPhoneInput\Infolists\PhoneEntry;
 
@@ -66,25 +71,45 @@ class PatientProfile extends Page implements HasActions, HasForms, HasInfolists
 
     protected function getFooterWidgets(): array
     {
+        if (! $this->currentPatient) {
+            return [];
+        }
+
+        $patientId = $this->currentPatient->id;
+
         return [
+            // Full patient history on the profile (not encounter-scoped).
             PatientVitalsOverviewWidget::make([
-                'patientId' => $this->currentPatient->id,
+                'patientId' => $patientId,
             ]),
             PatientVitalsChartWidget::make([
-                'patientId' => $this->currentPatient->id,
+                'patientId' => $patientId,
             ]),
             PatientVitalsHistoryWidget::make([
-                'patientId' => $this->currentPatient->id,
+                'patientId' => $patientId,
+            ]),
+            PatientDiagnosesWidget::make([
+                'patientId' => $patientId,
             ]),
             PatientNotesWidget::make([
-                'patientId' => $this->currentPatient->id,
-                'encounterId' => $this->currentEncounter?->id,
+                'patientId' => $patientId,
             ]),
             PatientOrdersWidget::make([
-                'patientId' => $this->currentPatient->id,
-                'encounterId' => $this->currentEncounter?->id,
+                'patientId' => $patientId,
             ]),
-            PendingFulfillmentsWidget::make(['patientId' => $this->currentPatient->id]),
+            PendingFulfillmentsWidget::make([
+                'patientId' => $patientId,
+            ]),
+            CarePlanRecentTableWidget::make([
+                'patientId' => $patientId,
+            ]),
+            CarePlanPreviousTableWidget::make([
+                'patientId' => $patientId,
+            ]),
+            PatientTimelineWidget::make([
+                'patientId' => $patientId,
+            ]),
+            ...app(PageWidgetsRegistry::class)->for(static::class, 'footer', $this),
         ];
     }
 
@@ -144,7 +169,7 @@ class PatientProfile extends Page implements HasActions, HasForms, HasInfolists
                         Section::make('NHIS Insurance')
                             ->collapsed()
                             ->columns(3)
-                            ->visible(fn (): bool => config('insurance.enabled', true) && class_exists(MemberVerificationService::class))
+                            ->visible(fn (): bool => $this->insuranceVerificationAvailable())
                             ->schema([
                                 TextEntry::make('nhis_verification')
                                     ->label('Verification')
@@ -155,11 +180,19 @@ class PatientProfile extends Page implements HasActions, HasForms, HasInfolists
                                 TextEntry::make('nhis_member_number')
                                     ->label('Member Number')
                                     ->placeholder('-')
-                                    ->state(fn ($record) => static::nhisActivePolicy($record)?->member_number),
+                                    ->state(fn ($record) => $this->nhisActivePolicy($record)?->member_number),
                                 TextEntry::make('nhis_master_status')
                                     ->label('Master Data')
                                     ->placeholder('-')
-                                    ->state(fn ($record) => app(MemberVerificationService::class)->masterDataStatus()['imported'] ? 'Imported' : 'Not imported'),
+                                    ->state(function ($record): string {
+                                        $service = $this->memberVerificationService();
+
+                                        if ($service === null) {
+                                            return 'Not imported';
+                                        }
+
+                                        return $service->masterDataStatus()['imported'] ? 'Imported' : 'Not imported';
+                                    }),
                             ]),
                         Section::make('Contact Information')
                             ->collapsed()
@@ -226,9 +259,41 @@ class PatientProfile extends Page implements HasActions, HasForms, HasInfolists
         return $this->allergies->isNotEmpty();
     }
 
-    protected static function nhisActivePolicy(Patient $patient): ?PatientPolicy
+    protected function insuranceVerificationAvailable(): bool
     {
-        return $patient->insurancePolicies
+        return config('insurance.enabled', true)
+            && ModuleAvailability::insuranceEnabled()
+            && $this->memberVerificationService() !== null;
+    }
+
+    protected function memberVerificationService(): ?object
+    {
+        /** @var class-string|null $class */
+        $class = OptionalClass::resolve(
+            'Modules\\Insurance\\Services\\MemberVerificationService',
+            'Insurance',
+        );
+
+        if ($class === null) {
+            return null;
+        }
+
+        return app($class);
+    }
+
+    protected function nhisActivePolicy(Patient $patient): ?object
+    {
+        if (! ModuleAvailability::insuranceEnabled() || ! method_exists($patient, 'insurancePolicies')) {
+            return null;
+        }
+
+        $policies = $patient->insurancePolicies;
+
+        if ($policies === null) {
+            return null;
+        }
+
+        return $policies
             ->where('is_active', true)
             ->sortByDesc('is_primary')
             ->first();
@@ -236,24 +301,36 @@ class PatientProfile extends Page implements HasActions, HasForms, HasInfolists
 
     protected function nhisVerificationLabel(Patient $patient): ?string
     {
-        $policy = static::nhisActivePolicy($patient);
+        $policy = $this->nhisActivePolicy($patient);
 
         if (! $policy) {
             return 'No policy';
         }
 
-        return app(MemberVerificationService::class)->badge($policy)['label'];
+        $service = $this->memberVerificationService();
+
+        if ($service === null) {
+            return 'No policy';
+        }
+
+        return $service->badge($policy)['label'];
     }
 
     protected function nhisVerificationColor(Patient $patient): string
     {
-        $policy = static::nhisActivePolicy($patient);
+        $policy = $this->nhisActivePolicy($patient);
 
         if (! $policy) {
             return 'gray';
         }
 
-        return app(MemberVerificationService::class)->badge($policy)['color'];
+        $service = $this->memberVerificationService();
+
+        if ($service === null) {
+            return 'gray';
+        }
+
+        return $service->badge($policy)['color'];
     }
 
     public function hasActiveEncounter(): bool

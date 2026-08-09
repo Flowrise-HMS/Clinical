@@ -34,8 +34,6 @@ use Modules\Clinical\Classes\Services\FulfillmentService;
 use Modules\Clinical\Classes\Services\ServiceRequestService;
 use Modules\Clinical\Classes\Services\VitalSignService;
 use Modules\Clinical\Enums\AdtDestinationType;
-use Modules\Clinical\Enums\DiagnosisCertainty;
-use Modules\Clinical\Enums\DiagnosisType;
 use Modules\Clinical\Enums\DischargeDisposition;
 use Modules\Clinical\Enums\EncounterPriority;
 use Modules\Clinical\Enums\EncounterType;
@@ -48,7 +46,6 @@ use Modules\Clinical\Filament\Clusters\Clinical\Resources\ServiceRequests\Schema
 use Modules\Clinical\Filament\Clusters\Clinical\Resources\VitalSigns\Schemas\VitalSignForm;
 use Modules\Clinical\Filament\Clusters\Workspace\Concerns\ManagesWorkspacePatient;
 use Modules\Clinical\Filament\Clusters\Workspace\WorkspaceCluster;
-use Modules\Clinical\Filament\Concerns\CanAutocodeIcd;
 use Modules\Clinical\Filament\Widgets\CriticalPatientsWidget;
 use Modules\Clinical\Filament\Widgets\MyTasksWidget;
 use Modules\Clinical\Filament\Widgets\PatientVitalsHistoryWidget;
@@ -61,15 +58,15 @@ use Modules\Clinical\Policies\ClinicalNotePolicy;
 use Modules\Clinical\Policies\EncounterDiagnosisPolicy;
 use Modules\Clinical\Policies\EncounterPolicy;
 use Modules\Core\Classes\Support\PageHeaderActionsRegistry;
+use Modules\Core\Classes\Support\PageWidgetsRegistry;
 use Modules\Core\Enums\CoverageType;
 use Modules\Core\Models\Branch;
 use Modules\Core\Models\Service;
 use Modules\Core\Settings\FeatureSettings;
+use Modules\Core\Support\ModuleAvailability;
+use Modules\Core\Support\OptionalClass;
 use Modules\Patient\Classes\Services\PatientSearchService;
 use Modules\Patient\Models\Patient;
-use Modules\Pharmacy\Classes\Services\DrugSearchService;
-use Modules\Pharmacy\Classes\Services\MedicationOrderService;
-use Modules\Pharmacy\Classes\Services\MedicationService;
 use Modules\Pharmacy\Enums\DosageForm;
 use Modules\Pharmacy\Enums\MedicationFrequency;
 use Modules\Pharmacy\Enums\MedicationRoute;
@@ -78,7 +75,7 @@ use Modules\Pharmacy\Models\Medication;
 
 class ClinicalWorkspace extends Page implements HasSchemas
 {
-    use CanAutocodeIcd, HasPageShield, InteractsWithSchemas, ManagesWorkspacePatient;
+    use HasPageShield, InteractsWithSchemas, ManagesWorkspacePatient;
 
     protected static ?string $slug = '';
 
@@ -148,14 +145,46 @@ class ClinicalWorkspace extends Page implements HasSchemas
     ];
 
     /**
-     * @var array{transfer_notes: string|null, transfer_out_notes: string|null, transfer_in_notes: string|null, destination_type?: string, admission_source?: string}
+     * Nested keys must exist up-front so Filament Select/RichEditor fields can Livewire-entangle them.
+     *
+     * @var array{
+     *     ward_id: string|null,
+     *     bed_id: string|null,
+     *     notes: string|null,
+     *     transfer_ward_id: string|null,
+     *     transfer_bed_id: string|null,
+     *     transfer_notes: string|null,
+     *     destination_type: string,
+     *     destination_branch_id: string|null,
+     *     destination_label: string|null,
+     *     transfer_out_notes: string|null,
+     *     admission_source: string,
+     *     source_label: string|null,
+     *     from_branch_id: string|null,
+     *     transfer_in_chief_complaint: string|null,
+     *     transfer_in_ward_id: string|null,
+     *     transfer_in_bed_id: string|null,
+     *     transfer_in_notes: string|null
+     * }
      */
     public array $adtFormData = [
+        'ward_id' => null,
+        'bed_id' => null,
+        'notes' => null,
+        'transfer_ward_id' => null,
+        'transfer_bed_id' => null,
         'transfer_notes' => null,
-        'transfer_out_notes' => null,
-        'transfer_in_notes' => null,
         'destination_type' => AdtDestinationType::ExternalFacility->value,
+        'destination_branch_id' => null,
+        'destination_label' => null,
+        'transfer_out_notes' => null,
         'admission_source' => 'local',
+        'source_label' => null,
+        'from_branch_id' => null,
+        'transfer_in_chief_complaint' => null,
+        'transfer_in_ward_id' => null,
+        'transfer_in_bed_id' => null,
+        'transfer_in_notes' => null,
     ];
 
     /**
@@ -296,16 +325,46 @@ class ClinicalWorkspace extends Page implements HasSchemas
     }
 
     /**
-     * @return array{transfer_notes: null, transfer_out_notes: null, transfer_in_notes: null, destination_type: string, admission_source: string}
+     * @return array{
+     *     ward_id: null,
+     *     bed_id: null,
+     *     notes: null,
+     *     transfer_ward_id: null,
+     *     transfer_bed_id: null,
+     *     transfer_notes: null,
+     *     destination_type: string,
+     *     destination_branch_id: null,
+     *     destination_label: null,
+     *     transfer_out_notes: null,
+     *     admission_source: string,
+     *     source_label: null,
+     *     from_branch_id: null,
+     *     transfer_in_chief_complaint: null,
+     *     transfer_in_ward_id: null,
+     *     transfer_in_bed_id: null,
+     *     transfer_in_notes: null
+     * }
      */
     protected function defaultAdtFormData(): array
     {
         return [
+            'ward_id' => null,
+            'bed_id' => null,
+            'notes' => null,
+            'transfer_ward_id' => null,
+            'transfer_bed_id' => null,
             'transfer_notes' => null,
-            'transfer_out_notes' => null,
-            'transfer_in_notes' => null,
             'destination_type' => AdtDestinationType::ExternalFacility->value,
+            'destination_branch_id' => null,
+            'destination_label' => null,
+            'transfer_out_notes' => null,
             'admission_source' => 'local',
+            'source_label' => null,
+            'from_branch_id' => null,
+            'transfer_in_chief_complaint' => null,
+            'transfer_in_ward_id' => null,
+            'transfer_in_bed_id' => null,
+            'transfer_in_notes' => null,
         ];
     }
 
@@ -490,16 +549,15 @@ class ClinicalWorkspace extends Page implements HasSchemas
 
     protected function getHeaderWidgets(): array
     {
-        $widgets = [];
         if ($this->mode !== 'home') {
-            return $widgets;
+            return [];
         }
 
         return [
             CriticalPatientsWidget::class,
             MyTasksWidget::class,
-            ...$widgets,
             ...($this->hasAppointmentModule() ? [WorkspaceTodayAppointmentsWidget::class] : []),
+            ...app(PageWidgetsRegistry::class)->for(static::class, 'header', $this),
         ];
     }
 
@@ -530,13 +588,15 @@ class ClinicalWorkspace extends Page implements HasSchemas
             $widgets[] = PatientVitalsHistoryWidget::make(['patientId' => $this->currentPatient?->id]);
         }
 
-        return $widgets;
-
+        return [
+            ...$widgets,
+            ...app(PageWidgetsRegistry::class)->for(static::class, 'footer', $this),
+        ];
     }
 
     protected function hasAppointmentModule(): bool
     {
-        return class_exists('Modules\\Appointment\\Models\\Appointment');
+        return ModuleAvailability::appointmentEnabled();
     }
 
     public function saveConsultation(): void
@@ -632,6 +692,7 @@ class ClinicalWorkspace extends Page implements HasSchemas
             $this->currentPatient,
             $serviceRequestForm->getState(),
             $this->currentEncounter?->id,
+            lockStatuses: true,
         );
 
         $this->serviceRequestData = [];
@@ -1102,84 +1163,6 @@ class ClinicalWorkspace extends Page implements HasSchemas
         }
     }
 
-    /**
-     * Fill the first uncoded diagnosis row (or append a new row) from the current autocode suggestion.
-     */
-    public function applyAutocodeToDiagnosis(): void
-    {
-        $suggestion = $this->acceptIcdAutocode();
-
-        if ($suggestion === null) {
-            return;
-        }
-
-        $this->fillDiagnosisFromSuggestion($suggestion);
-    }
-
-    /**
-     * Fill the first uncoded diagnosis row (or append a new row) from the ICD browser selection.
-     *
-     * @param  array<string, mixed>  $suggestion
-     */
-    #[On('icd-diagnosis-selected')]
-    public function applyBrowserSelection(array $suggestion, ?string $localId = null): void
-    {
-        if ($localId) {
-            $suggestion['local_id'] = $localId;
-        }
-
-        $this->fillDiagnosisFromSuggestion($suggestion);
-    }
-
-    /**
-     * @param  array<string, mixed>  $suggestion
-     */
-    protected function fillDiagnosisFromSuggestion(array $suggestion): void
-    {
-        $diagnoses = $this->diagnosisFormData['diagnoses'] ?? [];
-
-        foreach ($diagnoses as $index => $row) {
-            if (filled($row['code_search'] ?? null)
-                || filled($row['diagnosis_code_id'] ?? null)
-                || filled($row['icd_entity_id'] ?? null)) {
-                continue;
-            }
-
-            if (! filled($row['description'] ?? null)) {
-                continue;
-            }
-
-            $this->diagnosisFormData['diagnoses'][$index] = $this->diagnosisFromAutocode($row, $suggestion);
-
-            return;
-        }
-
-        $this->diagnosisFormData['diagnoses'][] = $this->diagnosisFromAutocode([], $suggestion);
-    }
-
-    /**
-     * @param  array<string, mixed>  $row
-     * @param  array{local_id: ?string, code: ?string, label: string, external_id: ?string, uri: ?string, source: string}  $suggestion
-     * @return array<string, mixed>
-     */
-    protected function diagnosisFromAutocode(array $row, array $suggestion): array
-    {
-        return array_merge([
-            'type' => DiagnosisType::Primary->value,
-            'is_new_case' => '0',
-            'certainty' => DiagnosisCertainty::Provisional->value,
-            'notes' => null,
-        ], $row, [
-            'diagnosis_code_id' => $suggestion['local_id'] ?? null,
-            'icd_code' => $suggestion['code'],
-            'icd_entity_id' => $suggestion['external_id'],
-            'icd_uri' => $suggestion['uri'],
-            'description' => filled($row['description'] ?? null)
-                ? $row['description']
-                : $suggestion['label'],
-        ]);
-    }
-
     public function updatedServiceRequestDataRequestItemId(?string $requestItemId): void
     {
         $this->labResultData = [];
@@ -1263,6 +1246,20 @@ class ClinicalWorkspace extends Page implements HasSchemas
             return;
         }
 
+        $orderServiceClass = OptionalClass::resolve(
+            'Modules\\Pharmacy\\Classes\\Services\\MedicationOrderService',
+            'Pharmacy',
+        );
+
+        if ($orderServiceClass === null) {
+            Notification::make()
+                ->title('Pharmacy module is not available')
+                ->warning()
+                ->send();
+
+            return;
+        }
+
         if (empty($this->medicationData['items'])) {
             Notification::make()->title('Add at least one medication')->warning()->send();
 
@@ -1278,7 +1275,7 @@ class ClinicalWorkspace extends Page implements HasSchemas
         $medicationItems = $medicationForm->getState()['items'] ?? [];
 
         try {
-            $service = app(MedicationOrderService::class);
+            $service = app($orderServiceClass);
             $request = $service->order(
                 $this->currentPatient,
                 $medicationItems,
@@ -1297,6 +1294,148 @@ class ClinicalWorkspace extends Page implements HasSchemas
                 ->danger()
                 ->send();
         }
+    }
+
+    /**
+     * @return array<int, mixed>
+     */
+    protected function medicationOrderFormSchema(): array
+    {
+        if (! ModuleAvailability::pharmacyEnabled()) {
+            return [
+                TextEntry::make('pharmacy_unavailable')
+                    ->hiddenLabel()
+                    ->state('Pharmacy module is not available.'),
+            ];
+        }
+
+        $drugSearchClass = OptionalClass::resolve(
+            'Modules\\Pharmacy\\Classes\\Services\\DrugSearchService',
+            'Pharmacy',
+        );
+        $medicationServiceClass = OptionalClass::resolve(
+            'Modules\\Pharmacy\\Classes\\Services\\MedicationService',
+            'Pharmacy',
+        );
+
+        if ($drugSearchClass === null || $medicationServiceClass === null) {
+            return [
+                TextEntry::make('pharmacy_unavailable')
+                    ->hiddenLabel()
+                    ->state('Pharmacy module is not available.'),
+            ];
+        }
+
+        return [
+            Repeater::make('items')
+                ->minItems(1)
+                ->columns(2)
+                ->schema([
+                    Select::make('service_id')
+                        ->label('Medication')
+                        ->required()
+                        ->searchable()
+                        ->getSearchResultsUsing(function (string $search) use ($drugSearchClass) {
+                            return collect(app($drugSearchClass)->search($search, 10))
+                                ->mapWithKeys(function (array $result): array {
+                                    if (filled($result['service_id'])) {
+                                        return [
+                                            (string) $result['service_id'] => '[Catalog] '.$result['display_name'],
+                                        ];
+                                    }
+
+                                    if (filled($result['drug_id'])) {
+                                        $prefix = $result['source_provider'] === 'local' ? '[Reference] ' : '[External] ';
+
+                                        return [
+                                            'drug:'.$result['drug_id'] => $prefix.$result['display_name'],
+                                        ];
+                                    }
+
+                                    if (filled($result['medication_id'])) {
+                                        return [
+                                            'medication:'.$result['medication_id'] => $result['display_name'],
+                                        ];
+                                    }
+
+                                    return [];
+                                })
+                                ->all();
+                        })
+                        ->getOptionLabelUsing(function ($value): ?string {
+                            if (str_starts_with((string) $value, 'drug:')) {
+                                $drugId = str($value)->after('drug:')->toString();
+                                $drug = Drug::query()->find($drugId);
+
+                                if (! $drug) {
+                                    return $value;
+                                }
+
+                                $prefix = $drug->source_provider === 'local' ? '[Reference] ' : '[External] ';
+
+                                return $prefix.$drug->display_name;
+                            }
+
+                            if (str_starts_with((string) $value, 'medication:')) {
+                                $medicationId = str($value)->after('medication:')->toString();
+                                $medication = Medication::find($medicationId);
+
+                                return $medication?->service?->name ?? $medication?->generic_name ?? $value;
+                            }
+
+                            return Service::find($value)?->name;
+                        })
+                        ->createOptionForm([
+                            TextInput::make('generic_name')
+                                ->required()
+                                ->maxLength(255),
+                            TextInput::make('brand_name')
+                                ->maxLength(255),
+                            TextInput::make('strength')
+                                ->maxLength(255),
+                            Select::make('dosage_form')
+                                ->options(DosageForm::class)
+                                ->default(DosageForm::TABLET),
+                            TextInput::make('price')
+                                ->label('Price (Cash)')
+                                ->numeric()
+                                ->minValue(0)
+                                ->prefix(config('core.default_currency_symbol', 'GHS'))
+                                ->placeholder('0.00')
+                                ->default(0),
+                        ])
+                        ->createOptionUsing(function (array $data) use ($medicationServiceClass): string {
+                            return app($medicationServiceClass)->createWithService($data)->service_id;
+                        }),
+                    TextInput::make('dosage')
+                        ->label('Dosage')
+                        ->placeholder('e.g. 500mg'),
+                    Select::make('frequency')
+                        ->label('Frequency')
+                        ->options(MedicationFrequency::class)
+                        ->searchable(),
+                    Select::make('route')
+                        ->label('Route')
+                        ->options(MedicationRoute::class)
+                        ->searchable(),
+                    TextInput::make('duration_days')
+                        ->label('Duration (days)')
+                        ->numeric()
+                        ->minValue(1),
+                    Textarea::make('instructions')
+                        ->label('SIG / Instructions')
+                        ->rows(2),
+                    Checkbox::make('prn')
+                        ->label('Take as needed (PRN)'),
+                    TextInput::make('indication')
+                        ->label('Indication'),
+                    TextInput::make('refills')
+                        ->label('Refills')
+                        ->numeric()
+                        ->default(0)
+                        ->minValue(0),
+                ]),
+        ];
     }
 
     public function saveDischarge(): void
@@ -1595,7 +1734,7 @@ class ClinicalWorkspace extends Page implements HasSchemas
                 ->schema(VitalSignForm::quickElements())
                 ->statePath('vitalsData'),
             'serviceRequestForm' => $this->makeSchema()
-                ->schema(ServiceRequestForm::quickElements(hidenEncounter: true))
+                ->schema(ServiceRequestForm::quickElements(hidenEncounter: true, lockStatuses: true))
                 ->statePath('serviceRequestData'),
             'allergyForm' => $this->makeSchema()
                 ->schema(AllergyForm::quickElements())
@@ -1615,116 +1754,7 @@ class ClinicalWorkspace extends Page implements HasSchemas
                 ])
                 ->statePath('consultationData'),
             'medicationForm' => $this->makeSchema()
-                ->schema([
-                    Repeater::make('items')
-                        ->minItems(1)
-                        ->columns(2)
-                        ->schema([
-                            Select::make('service_id')
-                                ->label('Medication')
-                                ->required()
-                                ->searchable()
-                                ->getSearchResultsUsing(function (string $search) {
-                                    return collect(app(DrugSearchService::class)->search($search, 10))
-                                        ->mapWithKeys(function (array $result): array {
-                                            if (filled($result['service_id'])) {
-                                                return [
-                                                    (string) $result['service_id'] => '[Catalog] '.$result['display_name'],
-                                                ];
-                                            }
-
-                                            if (filled($result['drug_id'])) {
-                                                $prefix = $result['source_provider'] === 'local' ? '[Reference] ' : '[External] ';
-
-                                                return [
-                                                    'drug:'.$result['drug_id'] => $prefix.$result['display_name'],
-                                                ];
-                                            }
-
-                                            if (filled($result['medication_id'])) {
-                                                return [
-                                                    'medication:'.$result['medication_id'] => $result['display_name'],
-                                                ];
-                                            }
-
-                                            return [];
-                                        })
-                                        ->all();
-                                })
-                                ->getOptionLabelUsing(function ($value): ?string {
-                                    if (str_starts_with($value, 'drug:')) {
-                                        $drugId = str($value)->after('drug:')->toString();
-                                        $drug = Drug::query()->find($drugId);
-
-                                        if (! $drug) {
-                                            return $value;
-                                        }
-
-                                        $prefix = $drug->source_provider === 'local' ? '[Reference] ' : '[External] ';
-
-                                        return $prefix.$drug->display_name;
-                                    }
-
-                                    if (str_starts_with($value, 'medication:')) {
-                                        $medicationId = str($value)->after('medication:')->toString();
-                                        $medication = Medication::find($medicationId);
-
-                                        return $medication?->service?->name ?? $medication?->generic_name ?? $value;
-                                    }
-
-                                    return Service::find($value)?->name;
-                                })
-                                ->createOptionForm([
-                                    TextInput::make('generic_name')
-                                        ->required()
-                                        ->maxLength(255),
-                                    TextInput::make('brand_name')
-                                        ->maxLength(255),
-                                    TextInput::make('strength')
-                                        ->maxLength(255),
-                                    Select::make('dosage_form')
-                                        ->options(DosageForm::class)
-                                        ->default(DosageForm::TABLET),
-                                    TextInput::make('price')
-                                        ->label('Price (Cash)')
-                                        ->numeric()
-                                        ->minValue(0)
-                                        ->prefix(config('core.default_currency_symbol', 'GHS'))
-                                        ->placeholder('0.00')
-                                        ->default(0),
-                                ])
-                                ->createOptionUsing(function (array $data): string {
-                                    return app(MedicationService::class)->createWithService($data)->service_id;
-                                }),
-                            TextInput::make('dosage')
-                                ->label('Dosage')
-                                ->placeholder('e.g. 500mg'),
-                            Select::make('frequency')
-                                ->label('Frequency')
-                                ->options(MedicationFrequency::class)
-                                ->searchable(),
-                            Select::make('route')
-                                ->label('Route')
-                                ->options(MedicationRoute::class)
-                                ->searchable(),
-                            TextInput::make('duration_days')
-                                ->label('Duration (days)')
-                                ->numeric()
-                                ->minValue(1),
-                            Textarea::make('instructions')
-                                ->label('SIG / Instructions')
-                                ->rows(2),
-                            Checkbox::make('prn')
-                                ->label('Take as needed (PRN)'),
-                            TextInput::make('indication')
-                                ->label('Indication'),
-                            TextInput::make('refills')
-                                ->label('Refills')
-                                ->numeric()
-                                ->default(0)
-                                ->minValue(0),
-                        ]),
-                ])
+                ->schema($this->medicationOrderFormSchema())
                 ->statePath('medicationData'),
             'diagnosisForm' => $this->makeSchema()
                 ->schema(EncounterDiagnosisForm::quickElements())
@@ -1926,21 +1956,17 @@ class ClinicalWorkspace extends Page implements HasSchemas
     }
 
     /**
-     * The Diagnostics module owns the completed-result table, so Clinical only renders it when that
-     * module is installed and the user may see fulfillments; otherwise the simple list is used.
+     * The Diagnostics module owns the completed-result table and registers it via PageWidgetsRegistry.
      *
      * @return class-string|null
      */
     public function completedResultsWidget(): ?string
     {
-        /** @var class-string $widget */
-        $widget = 'Modules\\Diagnostics\\Filament\\Widgets\\CompletedDiagnosticResultsWidget';
+        $widgets = app(PageWidgetsRegistry::class)->for(static::class, 'completed_results', $this);
 
-        if (! class_exists($widget) || ! method_exists($widget, 'canView')) {
-            return null;
-        }
+        $widget = $widgets[0] ?? null;
 
-        return $widget::canView() ? $widget : null;
+        return is_string($widget) ? $widget : null;
     }
 
     #[Computed]

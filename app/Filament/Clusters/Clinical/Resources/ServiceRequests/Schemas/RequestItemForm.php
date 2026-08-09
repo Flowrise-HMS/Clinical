@@ -65,7 +65,10 @@ class RequestItemForm
         ];
     }
 
-    public static function getFormSchema(): array
+    /**
+     * @return array<int, mixed>
+     */
+    public static function getFormSchema(bool $lockStatuses = false): array
     {
         return [
             Grid::make(4)
@@ -100,11 +103,13 @@ class RequestItemForm
                         }),
                 ]),
 
-            Select::make('status')
-                ->options(RequestItemStatus::class)
-                ->default(RequestItemStatus::PENDING)
-                ->required()
-                ->label('Status'),
+            ...($lockStatuses ? [] : [
+                Select::make('status')
+                    ->options(RequestItemStatus::class)
+                    ->default(RequestItemStatus::PENDING)
+                    ->required()
+                    ->label('Status'),
+            ]),
 
             Textarea::make('notes')
                 ->label('Notes/Instructions')

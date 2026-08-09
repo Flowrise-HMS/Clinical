@@ -10,11 +10,13 @@ use Filament\Actions\ViewAction;
 use Filament\Schemas\Schema;
 use Filament\Tables\Columns\IconColumn;
 use Filament\Tables\Columns\TextColumn;
+use Filament\Tables\Filters\Filter;
 use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
 use Modules\Clinical\Enums\NoteStatus;
 use Modules\Clinical\Enums\NoteType;
 use Modules\Clinical\Filament\Clusters\Clinical\Resources\ClinicalNotes\Schemas\ClinicalNoteInfolist;
+use Modules\Core\Filament\Support\DateRangeFilter;
 
 class ClinicalNotesTable
 {
@@ -66,7 +68,7 @@ class ClinicalNotesTable
     }
 
     /**
-     * @return array<int, SelectFilter>
+     * @return array<int, SelectFilter|Filter>
      */
     public static function filters(): array
     {
@@ -84,6 +86,8 @@ class ClinicalNotesTable
                 ->getOptionLabelFromRecordUsing(fn ($record) => $record?->name ?? $record?->email ?? 'Unknown')
                 ->label('Author')
                 ->preload(),
+
+            DateRangeFilter::make('created_at', 'Created'),
         ];
     }
 

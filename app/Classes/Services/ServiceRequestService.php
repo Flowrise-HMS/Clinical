@@ -24,9 +24,10 @@ class ServiceRequestService
         Patient $patient,
         array $requestData,
         ?string $encounterId = null,
-        ?int $orderedBy = null
+        ?int $orderedBy = null,
+        bool $lockStatuses = false,
     ): ServiceRequest {
-        return DB::transaction(function () use ($patient, $requestData, $encounterId, $orderedBy) {
+        return DB::transaction(function () use ($patient, $requestData, $encounterId, $orderedBy, $lockStatuses) {
             $data = [
                 'patient_id' => $patient->id,
                 'encounter_id' => $encounterId,
@@ -36,10 +37,14 @@ class ServiceRequestService
             ];
 
             $optionalFields = [
-                'status', 'priority', 'notes',
+                'priority', 'notes',
                 'guest_name', 'guest_phone', 'guest_email',
                 'metadata',
             ];
+
+            if (! $lockStatuses) {
+                array_unshift($optionalFields, 'status');
+            }
 
             foreach ($optionalFields as $field) {
                 if (isset($requestData[$field])) {
@@ -47,10 +52,18 @@ class ServiceRequestService
                 }
             }
 
+            if ($lockStatuses) {
+                $data['status'] = RequestStatus::ACTIVE;
+            }
+
             $request = ServiceRequest::create($data);
 
             if (! empty($requestData['items'])) {
                 foreach ($requestData['items'] as $itemData) {
+                    if ($lockStatuses) {
+                        unset($itemData['status']);
+                    }
+
                     $this->addItem(
                         $request,
                         $itemData['service_id'],

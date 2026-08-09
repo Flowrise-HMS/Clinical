@@ -3,9 +3,15 @@
 namespace Modules\Clinical\Filament\Clusters\Clinical\Resources\ServiceRequests\Tables;
 
 use Filament\Tables\Columns\TextColumn;
+use Filament\Tables\Filters\Filter;
+use Filament\Tables\Filters\SelectFilter;
+use Illuminate\Database\Eloquent\Builder;
 use Modules\Clinical\Classes\Services\MedicationFulfillmentPolicy;
+use Modules\Clinical\Enums\RequestItemStatus;
 use Modules\Clinical\Models\RequestItem;
 use Modules\Core\Filament\Support\ClientIdentityColumn;
+use Modules\Core\Filament\Support\DateRangeFilter;
+use Modules\Core\Models\ServiceCategory;
 
 class RequestItemsTable
 {
@@ -38,6 +44,37 @@ class RequestItemsTable
                 }),
             TextColumn::make('fulfilledBy.name')->label('Fulfilled By'),
             TextColumn::make('created_at')->label('Date')->dateTime()->sortable(),
+        ];
+    }
+
+    /**
+     * Filters for request-item / order line listings.
+     *
+     * The category filter walks through `service` rather than declaring a nested relationship,
+     * because the category lives two hops from the request item.
+     *
+     * @return array<int, SelectFilter|Filter>
+     */
+    public static function filters(): array
+    {
+        return [
+            SelectFilter::make('status')
+                ->label('Status')
+                ->options(RequestItemStatus::class),
+            SelectFilter::make('category')
+                ->label('Category')
+                ->options(fn (): array => ServiceCategory::query()
+                    ->orderBy('name')
+                    ->pluck('name', 'id')
+                    ->all())
+                ->query(fn (Builder $query, array $data): Builder => $query->when(
+                    $data['value'] ?? null,
+                    fn (Builder $filtered, $categoryId): Builder => $filtered->whereHas(
+                        'service',
+                        fn (Builder $service): Builder => $service->where('category_id', $categoryId),
+                    ),
+                )),
+            DateRangeFilter::make('created_at', 'Ordered'),
         ];
     }
 

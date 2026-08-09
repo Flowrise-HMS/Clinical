@@ -7,7 +7,7 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Gate;
 use Livewire\Attributes\Computed;
 use Modules\Core\Classes\Services\BranchService;
-use Modules\Insurance\Services\PatientInsuranceService;
+use Modules\Core\Support\ModuleAvailability;
 use Modules\Patient\Classes\Services\PatientSearchService;
 use Modules\Patient\Events\PatientRegistered;
 use Modules\Patient\Filament\Clusters\Patient\Resources\Patients\Schemas\PatientForm;
@@ -114,8 +114,8 @@ trait ManagesWorkspacePatient
 
         $schema->model($patient)->saveRelationships();
 
-        if (config('insurance.enabled', true) && app()->bound(PatientInsuranceService::class)) {
-            app(PatientInsuranceService::class)->syncFromFormData($patient->id, $data);
+        if ($this->patientInsuranceService() !== null) {
+            $this->patientInsuranceService()->syncFromFormData($patient->id, $data);
         }
 
         if (class_exists(PatientRegistered::class)) {
@@ -153,8 +153,8 @@ trait ManagesWorkspacePatient
 
         $this->currentPatient->update($data);
 
-        if (config('insurance.enabled', true) && app()->bound(PatientInsuranceService::class)) {
-            app(PatientInsuranceService::class)->syncFromFormData($this->currentPatient->id, $data);
+        if ($this->patientInsuranceService() !== null) {
+            $this->patientInsuranceService()->syncFromFormData($this->currentPatient->id, $data);
         }
 
         $this->loadPatientContext();
@@ -269,12 +269,12 @@ trait ManagesWorkspacePatient
 
         if (! method_exists($this, 'getSchema')) {
             $insuranceData = [];
-            if (config('insurance.enabled', true) && app()->bound(PatientInsuranceService::class)) {
+            if ($this->patientInsuranceService() !== null) {
                 $policy = $patient->insurancePolicies
                     ->where('is_active', true)
                     ->sortByDesc('is_primary')
                     ->first();
-                $insuranceData = app(PatientInsuranceService::class)->formDataFromPolicy($policy);
+                $insuranceData = $this->patientInsuranceService()->formDataFromPolicy($policy);
             }
 
             $this->patientFormData = [
@@ -309,12 +309,12 @@ trait ManagesWorkspacePatient
             'is_student' => $patient->schools->isNotEmpty(),
         ];
 
-        if (config('insurance.enabled', true) && app()->bound(PatientInsuranceService::class)) {
+        if ($this->patientInsuranceService() !== null) {
             $policy = $patient->insurancePolicies
                 ->where('is_active', true)
                 ->sortByDesc('is_primary')
                 ->first();
-            $insuranceData = app(PatientInsuranceService::class)->formDataFromPolicy($policy);
+            $insuranceData = $this->patientInsuranceService()->formDataFromPolicy($policy);
             $data = [...$data, ...$insuranceData];
         }
 
@@ -379,5 +379,20 @@ trait ManagesWorkspacePatient
                 'icon' => 'heroicon-m-plus-circle',
             ],
         ], $tabs);
+    }
+
+    protected function patientInsuranceService(): ?object
+    {
+        if (! config('insurance.enabled', true) || ! ModuleAvailability::insuranceEnabled()) {
+            return null;
+        }
+
+        $class = 'Modules\\Insurance\\Services\\PatientInsuranceService';
+
+        if (! class_exists($class) || ! app()->bound($class)) {
+            return null;
+        }
+
+        return app($class);
     }
 }

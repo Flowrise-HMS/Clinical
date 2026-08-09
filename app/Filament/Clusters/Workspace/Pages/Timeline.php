@@ -7,10 +7,12 @@ use CodeWithDennis\FilamentLucideIcons\Enums\LucideIcon;
 use Filament\Pages\Page;
 use Filament\Support\Enums\Width;
 use Illuminate\Support\Collection;
+use Livewire\Attributes\Url;
 use Modules\Clinical\Classes\Actions\PatientActions;
 use Modules\Clinical\Classes\Services\ClinicalWorkspaceService;
 use Modules\Clinical\Filament\Clusters\Workspace\WorkspaceCluster;
 use Modules\Core\Classes\Support\PageHeaderActionsRegistry;
+use Modules\Core\Classes\Support\PageWidgetsRegistry;
 
 class Timeline extends Page
 {
@@ -29,7 +31,8 @@ class Timeline extends Page
 
     protected static ?string $slug = 'patient/{patient}/timeline';
 
-    public ?string $activeFilter = 'all';
+    #[Url(as: 'filter', except: 'all')]
+    public string $activeFilter = 'all';
 
     public Collection|array|null $timelineEvents;
 
@@ -46,7 +49,7 @@ class Timeline extends Page
     public function boot(): void
     {
         $this->patientId = request()->route('patient') ?? $this->patientId;
-        $this->activeFilter = $this->normalizeFilter(request()->query('filter', 'all'));
+        $this->activeFilter = $this->normalizeFilter($this->activeFilter);
         $this->bootHasPatientContext();
         $this->loadTimelineData();
     }
@@ -54,6 +57,19 @@ class Timeline extends Page
     public function mount(): void
     {
         $this->mountHasPatientContext();
+    }
+
+    public function setFilter(string $filter): void
+    {
+        $normalized = $this->normalizeFilter($filter);
+
+        if ($this->activeFilter === $normalized) {
+            return;
+        }
+
+        $this->activeFilter = $normalized;
+        $this->timelineLimit = 15;
+        $this->loadTimelineData();
     }
 
     protected function getHeaderActions(): array
@@ -78,6 +94,11 @@ class Timeline extends Page
 
             return;
         }
+
+        // Patient-wide timeline — do not scope to the active/latest encounter.
+        $this->workspaceService
+            ->setPatient($this->currentPatient)
+            ->clearEncounter();
 
         $type = $this->activeFilter === 'all' ? null : $this->activeFilter;
         $this->timelineEvents = $this->workspaceService->getTimelineEvents($this->timelineLimit, $type);
@@ -107,14 +128,10 @@ class Timeline extends Page
             ];
         }
 
-        $service = app(ClinicalWorkspaceService::class)
-            ->setPatient($this->currentPatient);
-
-        if ($this->currentEncounter) {
-            $service->setEncounter($this->currentEncounter);
-        }
-
-        return $service->getTimelineEventCounts();
+        return app(ClinicalWorkspaceService::class)
+            ->setPatient($this->currentPatient)
+            ->clearEncounter()
+            ->getTimelineEventCounts();
     }
 
     public function getTimelineEvents(): Collection
@@ -136,7 +153,7 @@ class Timeline extends Page
         }
 
         return [
-
+            ...app(PageWidgetsRegistry::class)->for(static::class, 'footer', $this),
         ];
     }
 
