@@ -52,6 +52,8 @@ it('accepts MedicationRoute enums when resolving default administration context'
 });
 
 it('loads prescription detail without lazy loading when checking mar eligibility', function (): void {
+    config(['clinical.mar_payment.require_before_mar' => false]);
+
     $clinician = User::factory()->create(['branch_id' => $this->branch->id]);
     Permission::findOrCreate('administer_medication', 'web');
     $clinician->givePermissionTo('administer_medication');
@@ -64,7 +66,9 @@ it('loads prescription detail without lazy loading when checking mar eligibility
         'admitted_at' => now()->subHour(),
     ]);
 
-    $service = Service::factory()->create();
+    $service = Service::factory()->create([
+        'requires_payment_before' => false,
+    ]);
     $request = ServiceRequest::factory()->create([
         'patient_id' => $this->patient->id,
         'encounter_id' => $encounter->id,
@@ -81,6 +85,7 @@ it('loads prescription detail without lazy loading when checking mar eligibility
     PrescriptionDetail::factory()->create([
         'request_item_id' => $item->id,
         'administration_context' => AdministrationContext::IN_FACILITY,
+        'prn' => false,
         'total_administrations' => 2,
         'course_end_at' => now()->addDays(2),
     ]);
