@@ -30,6 +30,9 @@ class FhirEncounterTransformer implements FhirResourceContract
         EncounterType::EMERGENCY->value => ['code' => 'EMER', 'display' => 'emergency'],
         EncounterType::VIRTUAL->value => ['code' => 'VR', 'display' => 'virtual'],
         EncounterType::HOME_VISIT->value => ['code' => 'HH', 'display' => 'home health'],
+        EncounterType::ANTENATAL->value => ['code' => 'AMB', 'display' => 'ambulatory'],
+        EncounterType::POSTNATAL->value => ['code' => 'AMB', 'display' => 'ambulatory'],
+        EncounterType::CHILD_WELFARE->value => ['code' => 'AMB', 'display' => 'ambulatory'],
     ];
 
     private const CLASS_SYSTEM = 'http://terminology.hl7.org/CodeSystem/v3-ActCode';
@@ -247,10 +250,10 @@ class FhirEncounterTransformer implements FhirResourceContract
 
         if (isset($fhirResource['class'][0]['coding'][0]['code'])) {
             $code = $fhirResource['class'][0]['coding'][0]['code'];
-            $reverseClassMap = array_combine(
-                array_column(self::CLASS_MAP, 'code'),
-                array_keys(self::CLASS_MAP)
-            );
+            $reverseClassMap = [];
+            foreach (self::CLASS_MAP as $type => $mapping) {
+                $reverseClassMap[$mapping['code']] ??= $type;
+            }
             if (isset($reverseClassMap[$code])) {
                 $attrs['type'] = $reverseClassMap[$code];
             }

@@ -247,6 +247,10 @@ class PatientWorkspace extends Page implements HasActions, HasSchemas, HasTable
             EncounterType::INPATIENT->value => 'Inpatient',
             EncounterType::OUTPATIENT->value => 'Outpatient',
             EncounterType::VIRTUAL->value => 'Virtual',
+            EncounterType::HOME_VISIT->value => 'Home Visit',
+            EncounterType::ANTENATAL->value => 'Antenatal',
+            EncounterType::POSTNATAL->value => 'Postnatal',
+            EncounterType::CHILD_WELFARE->value => 'Child Welfare',
         ];
     }
 

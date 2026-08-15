@@ -1589,6 +1589,9 @@ class ClinicalWorkspace extends Page implements HasSchemas
                                     EncounterType::OUTPATIENT->value => EncounterType::OUTPATIENT->getLabel(),
                                     EncounterType::INPATIENT->value => EncounterType::INPATIENT->getLabel(),
                                     EncounterType::EMERGENCY->value => EncounterType::EMERGENCY->getLabel(),
+                                    EncounterType::ANTENATAL->value => EncounterType::ANTENATAL->getLabel(),
+                                    EncounterType::POSTNATAL->value => EncounterType::POSTNATAL->getLabel(),
+                                    EncounterType::CHILD_WELFARE->value => EncounterType::CHILD_WELFARE->getLabel(),
                                 ])
                                 ->default(EncounterType::OUTPATIENT->value)
                                 ->required()

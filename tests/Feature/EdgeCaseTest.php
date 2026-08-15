@@ -122,12 +122,15 @@ class EdgeCaseTest extends TestCase
     public function test_encounter_type_values(): void
     {
         $values = EncounterType::values();
-        $this->assertCount(5, $values);
+        $this->assertCount(8, $values);
         $this->assertContains('inpatient', $values);
         $this->assertContains('outpatient', $values);
         $this->assertContains('emergency', $values);
         $this->assertContains('virtual', $values);
         $this->assertContains('home_visit', $values);
+        $this->assertContains('antenatal', $values);
+        $this->assertContains('postnatal', $values);
+        $this->assertContains('child_welfare', $values);
     }
 
     // ─── TaskStatus state machine ───────────────────────────────────────────

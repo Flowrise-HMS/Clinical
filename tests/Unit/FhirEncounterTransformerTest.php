@@ -72,6 +72,9 @@ test('toFhir maps all encounter types to class', function () use ($transformer) 
         EncounterType::EMERGENCY->value => ['code' => 'EMER', 'display' => 'emergency'],
         EncounterType::VIRTUAL->value => ['code' => 'VR', 'display' => 'virtual'],
         EncounterType::HOME_VISIT->value => ['code' => 'HH', 'display' => 'home health'],
+        EncounterType::ANTENATAL->value => ['code' => 'AMB', 'display' => 'ambulatory'],
+        EncounterType::POSTNATAL->value => ['code' => 'AMB', 'display' => 'ambulatory'],
+        EncounterType::CHILD_WELFARE->value => ['code' => 'AMB', 'display' => 'ambulatory'],
     ];
 
     foreach ($expected as $typeValue => $mapping) {
