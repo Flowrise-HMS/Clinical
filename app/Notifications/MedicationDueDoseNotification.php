@@ -2,13 +2,13 @@
 
 namespace Modules\Clinical\Notifications;
 
+use Carbon\Carbon;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Notifications\Notification;
 use Modules\Clinical\Models\RequestItem;
 use Modules\Clinical\Notifications\Concerns\BuildsStaffFacingChannels;
-use Modules\Pharmacy\Classes\Data\DoseSlot;
 
 class MedicationDueDoseNotification extends Notification implements ShouldQueue
 {
@@ -16,7 +16,8 @@ class MedicationDueDoseNotification extends Notification implements ShouldQueue
 
     public function __construct(
         protected RequestItem $requestItem,
-        protected DoseSlot $slot,
+        protected int $doseSlotSequence,
+        protected Carbon $dueAt,
         protected string $reminderType,
     ) {}
 
@@ -41,7 +42,7 @@ class MedicationDueDoseNotification extends Notification implements ShouldQueue
             ->subject($subject)
             ->line(__('Client: :client', ['client' => $client]))
             ->line(__('Medication: :drug', ['drug' => $drug]))
-            ->line(__('Due at: :time', ['time' => $this->slot->dueAt->toDayDateTimeString()]))
+            ->line(__('Due at: :time', ['time' => $this->dueAt->toDayDateTimeString()]))
             ->line(__('Please record the dose in the MAR.'));
     }
 
@@ -54,7 +55,7 @@ class MedicationDueDoseNotification extends Notification implements ShouldQueue
         return __('MAR: :drug for :client due :time', [
             'drug' => $drug,
             'client' => $client,
-            'time' => $this->slot->dueAt->format('H:i'),
+            'time' => $this->dueAt->format('H:i'),
         ]);
     }
 
@@ -71,7 +72,8 @@ class MedicationDueDoseNotification extends Notification implements ShouldQueue
             'patient_id' => $item->serviceRequest?->patient_id,
             'patient_name' => $clientIdentity?->name,
             'medication' => $item->service?->name,
-            'due_at' => $this->slot->dueAt->toIso8601String(),
+            'due_at' => $this->dueAt->toIso8601String(),
+            'dose_slot_sequence' => $this->doseSlotSequence,
             'reminder_type' => $this->reminderType,
             'title' => match ($this->reminderType) {
                 'overdue' => 'Overdue medication dose',

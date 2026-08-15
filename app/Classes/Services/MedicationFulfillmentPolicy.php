@@ -4,13 +4,13 @@ namespace Modules\Clinical\Classes\Services;
 
 use App\Models\User;
 use Illuminate\Support\Facades\Schema;
-use Modules\Billing\Enums\InvoiceLineStatus;
-use Modules\Billing\Models\InvoiceLine;
 use Modules\Clinical\Enums\EncounterType;
 use Modules\Clinical\Enums\MedicationAdministrationStatus;
 use Modules\Clinical\Models\Encounter;
 use Modules\Clinical\Models\RequestItem;
 use Modules\Core\Support\AppSettings;
+use Modules\Core\Support\ModuleAvailability;
+use Modules\Core\Support\OptionalClass;
 use Modules\Pharmacy\Enums\AdministrationContext;
 use Modules\Pharmacy\Enums\MedicationRoute;
 use Modules\Pharmacy\Models\Medication;
@@ -162,20 +162,30 @@ class MedicationFulfillmentPolicy
     {
         $item->loadMissing('service');
 
-        if (! class_exists(InvoiceLine::class) || ! Schema::hasTable('invoice_lines')) {
+        if (! ModuleAvailability::billingEnabled() || ! Schema::hasTable('invoice_lines')) {
             return ! ($item->service?->requires_payment_before ?? false);
         }
 
-        $line = InvoiceLine::query()
-            ->where('billable_type', $item::class)
-            ->where('billable_id', $item->id)
-            ->first();
+        $line = OptionalClass::when(
+            'Modules\\Billing\\Models\\InvoiceLine',
+            fn (string $invoiceLineClass) => $invoiceLineClass::query()
+                ->where('billable_type', $item::class)
+                ->where('billable_id', $item->id)
+                ->first(),
+            'Billing',
+        );
 
         if (! $line) {
             return ! ($item->service?->requires_payment_before ?? false);
         }
 
-        return $line->line_status === InvoiceLineStatus::Paid;
+        $paidStatus = OptionalClass::when(
+            'Modules\\Billing\\Enums\\InvoiceLineStatus',
+            fn (string $statusClass) => $statusClass::Paid,
+            'Billing',
+        );
+
+        return $paidStatus !== null && $line->line_status === $paidStatus;
     }
 
     public function shouldCompleteOnDispense(RequestItem $item): bool

@@ -10,9 +10,6 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
-use Illuminate\Database\Eloquent\Relations\HasOne;
-use Illuminate\Database\Eloquent\Relations\MorphOne;
-use Modules\Billing\Enums\InvoiceLineStatus;
 use Modules\Billing\Models\InvoiceLine;
 use Modules\Clinical\Database\Factories\RequestItemFactory;
 use Modules\Clinical\Enums\MedicationAdministrationStatus;
@@ -25,6 +22,14 @@ use Modules\Core\Support\AppSettings;
 use Modules\Core\Support\ModuleAvailability;
 use Modules\Pharmacy\Models\PrescriptionDetail;
 
+/**
+ * @property-read PrescriptionDetail|null $prescriptionDetail
+ * @property-read InvoiceLine|null $invoiceLine
+ *
+ * @method \Illuminate\Database\Eloquent\Relations\HasOne prescriptionDetail()
+ * @method \Illuminate\Database\Eloquent\Relations\MorphOne invoiceLine()
+ * @method \Illuminate\Database\Eloquent\Relations\HasMany dispenses()
+ */
 class RequestItem extends Model
 {
     /** @use HasFactory<RequestItemFactory> */
@@ -97,11 +102,6 @@ class RequestItem extends Model
         return $this->hasMany(Task::class);
     }
 
-    public function prescriptionDetail(): HasOne
-    {
-        return $this->hasOne(PrescriptionDetail::class, 'request_item_id');
-    }
-
     public function medicationAdministrations(): HasMany
     {
         return $this->hasMany(MedicationAdministration::class);
@@ -112,13 +112,12 @@ class RequestItem extends Model
         return $this->belongsTo(Unit::class, 'billing_unit_id');
     }
 
-    public function invoiceLine(): MorphOne
+    public function getPaymentStatusAttribute(): mixed
     {
-        return $this->morphOne(InvoiceLine::class, 'billable');
-    }
+        if (! ModuleAvailability::billingEnabled()) {
+            return null;
+        }
 
-    public function getPaymentStatusAttribute(): ?InvoiceLineStatus
-    {
         return $this->invoiceLine?->line_status;
     }
 

@@ -11,8 +11,7 @@ use Modules\Clinical\Models\Allergy;
 use Modules\Clinical\Models\MedicationAdministration;
 use Modules\Clinical\Models\RequestItem;
 use Modules\Core\Contracts\WardMedicationConsumptionContract;
-use Modules\Pharmacy\Enums\AdministrationContext;
-use Modules\Pharmacy\Models\Medication;
+use Modules\Core\Support\OptionalClass;
 
 class MedicationAdministrationService
 {
@@ -187,7 +186,9 @@ class MedicationAdministrationService
         }
 
         $detail = $item->prescriptionDetail;
-        if ($detail === null || $detail->administration_context !== AdministrationContext::IN_FACILITY) {
+        $context = $detail?->administration_context;
+        $contextValue = is_object($context) && isset($context->value) ? $context->value : $context;
+        if ($detail === null || $contextValue !== 'in_facility') {
             return;
         }
 
@@ -199,9 +200,13 @@ class MedicationAdministrationService
             return;
         }
 
-        $medicationId = Medication::query()
-            ->where('service_id', $item->service_id)
-            ->value('id');
+        $medicationId = OptionalClass::when(
+            'Modules\\Pharmacy\\Models\\Medication',
+            fn (string $medicationClass) => $medicationClass::query()
+                ->where('service_id', $item->service_id)
+                ->value('id'),
+            'Pharmacy',
+        );
 
         if ($medicationId === null) {
             return;
@@ -231,12 +236,14 @@ class MedicationAdministrationService
     public function convertToTakeHome(RequestItem $item, User $user): void
     {
         $detail = $item->prescriptionDetail;
-        if (! $detail || ! $detail->isInFacility()) {
+        $context = $detail?->administration_context;
+        $contextValue = is_object($context) && isset($context->value) ? $context->value : $context;
+        if (! $detail || $contextValue !== 'in_facility') {
             throw new \InvalidArgumentException('Only in-facility orders can be converted to take-home.');
         }
 
         $detail->update([
-            'administration_context' => AdministrationContext::TAKE_HOME,
+            'administration_context' => 'take_home',
         ]);
     }
 
@@ -247,7 +254,7 @@ class MedicationAdministrationService
             ->whereHas('prescriptionDetail')
             ->when($inFacilityOnly, fn ($q) => $q->whereHas(
                 'prescriptionDetail',
-                fn ($q) => $q->where('administration_context', AdministrationContext::IN_FACILITY)
+                fn ($q) => $q->where('administration_context', 'in_facility')
             ))
             ->when($patientId, fn ($q) => $q->whereHas('serviceRequest', fn ($q) => $q->where('patient_id', $patientId)))
             ->with(['service', 'prescriptionDetail', 'medicationAdministrations', 'serviceRequest.patient', 'serviceRequest.encounter'])
@@ -259,7 +266,7 @@ class MedicationAdministrationService
     {
         return RequestItem::query()
             ->whereIn('status', ['pending', 'in_progress'])
-            ->whereHas('prescriptionDetail', fn ($q) => $q->where('administration_context', AdministrationContext::TAKE_HOME))
+            ->whereHas('prescriptionDetail', fn ($q) => $q->where('administration_context', 'take_home'))
             ->when($patientId, fn ($q) => $q->whereHas('serviceRequest', fn ($q) => $q->where('patient_id', $patientId)))
             ->with(['service', 'prescriptionDetail', 'serviceRequest.patient'])
             ->get()

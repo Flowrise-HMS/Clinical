@@ -3,31 +3,37 @@
 namespace Modules\Clinical\Classes\Services;
 
 use Carbon\Carbon;
+use Modules\Clinical\Contracts\PrescriptionScheduleCalculatorContract;
 use Modules\Clinical\Enums\MedicationAdministrationStatus;
 use Modules\Clinical\Models\MedicationAdministration;
 use Modules\Clinical\Models\RequestItem;
 use Modules\Core\Models\Branch;
-use Modules\Pharmacy\Classes\Data\DoseSlot;
-use Modules\Pharmacy\Classes\Services\PrescriptionScheduleCalculator;
-use Modules\Pharmacy\Models\PrescriptionDetail;
 
 class MedicationDoseScheduleService
 {
     public function __construct(
-        protected PrescriptionScheduleCalculator $calculator,
         protected MedicationFulfillmentPolicy $policy,
+        protected ?PrescriptionScheduleCalculatorContract $calculator = null,
     ) {}
 
     /**
-     * @return list<DoseSlot>
+     * @return list<object{sequence: int, dueAt: Carbon}>
      */
-    public function getSchedule(PrescriptionDetail $detail): array
+    public function getSchedule(object $detail): array
     {
+        if ($this->calculator === null) {
+            return [];
+        }
+
         return $this->calculator->buildDoseSchedule($detail);
     }
 
-    public function getNextDueSlot(RequestItem $item): ?DoseSlot
+    public function getNextDueSlot(RequestItem $item): ?object
     {
+        if ($this->calculator === null) {
+            return null;
+        }
+
         $detail = $item->prescriptionDetail;
         if (! $detail || ! $this->policy->requiresMar($detail)) {
             return null;
@@ -55,6 +61,10 @@ class MedicationDoseScheduleService
 
     public function syncNextDoseAt(RequestItem $item): void
     {
+        if ($this->calculator === null) {
+            return;
+        }
+
         $detail = $item->prescriptionDetail;
         if (! $detail) {
             return;
@@ -66,6 +76,10 @@ class MedicationDoseScheduleService
 
     public function markSlotForAdministration(RequestItem $item, MedicationAdministration $administration): void
     {
+        if ($this->calculator === null) {
+            return;
+        }
+
         $detail = $item->prescriptionDetail;
         if (! $detail) {
             return;
@@ -110,10 +124,14 @@ class MedicationDoseScheduleService
     }
 
     /**
-     * @return list<array{request_item:RequestItem,slot:DoseSlot,overdue:bool}>
+     * @return list<array{request_item: RequestItem, slot: object, overdue: bool}>
      */
     public function getOverdueSlots(?Branch $branch = null): array
     {
+        if ($this->calculator === null) {
+            return [];
+        }
+
         $graceMinutes = (int) config('clinical.mar_reminders.grace_minutes', 30);
         $now = now();
         $results = [];
@@ -146,11 +164,11 @@ class MedicationDoseScheduleService
     }
 
     /**
-     * @return list<array{request_item:RequestItem,slot:DoseSlot,reminder_type:string}>
+     * @return list<array{request_item: RequestItem, slot: object, reminder_type: string}>
      */
     public function getDueSoonSlots(?Branch $branch = null): array
     {
-        if (! config('clinical.mar_reminders.enabled', true)) {
+        if ($this->calculator === null || ! config('clinical.mar_reminders.enabled', true)) {
             return [];
         }
 

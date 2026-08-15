@@ -11,6 +11,7 @@ use Modules\Clinical\Notifications\MedicationDueDoseNotification;
 use Modules\Core\Classes\Services\BranchService;
 use Modules\Core\Models\Branch;
 use Modules\Core\Support\AppSettings;
+use Modules\Core\Support\ModuleAvailability;
 
 class SendMarDoseRemindersCommand extends Command
 {
@@ -20,6 +21,12 @@ class SendMarDoseRemindersCommand extends Command
 
     public function handle(MedicationDoseScheduleService $scheduleService, BranchService $branchService): int
     {
+        if (! ModuleAvailability::pharmacyEnabled()) {
+            $this->info('MAR reminders skipped: Pharmacy module is disabled.');
+
+            return self::SUCCESS;
+        }
+
         if (! config('clinical.mar_reminders.enabled', true)) {
             $this->info('MAR reminders are disabled.');
 
@@ -58,7 +65,12 @@ class SendMarDoseRemindersCommand extends Command
             $recipients = $this->resolveRecipients($item, $branch);
 
             foreach ($recipients as $user) {
-                $user->notify(new MedicationDueDoseNotification($item, $slot, $type));
+                $user->notify(new MedicationDueDoseNotification(
+                    $item,
+                    (int) $slot->sequence,
+                    $slot->dueAt,
+                    $type,
+                ));
             }
 
             MedicationDoseReminderLog::create([
