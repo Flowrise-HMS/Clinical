@@ -6,10 +6,14 @@ use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Modules\Clinical\Classes\Services\DiagnosisSearch\CompositeDiagnosisCodeSearch;
 use Modules\Clinical\Classes\Services\MedicationFulfillmentPolicy;
+use Modules\Clinical\Classes\Services\NullPrescriptionScheduleCalculator;
 use Modules\Clinical\Console\SendMarDoseRemindersCommand;
 use Modules\Clinical\Contracts\DiagnosisCodeSearchContract;
+use Modules\Clinical\Contracts\PrescriptionScheduleCalculatorContract;
+use Modules\Clinical\Models\Allergy;
 use Modules\Clinical\Models\ClinicalNote;
 use Modules\Clinical\Models\Encounter;
+use Modules\Clinical\Models\EncounterDiagnosis;
 use Modules\Clinical\Models\MedicationAdministration;
 use Modules\Clinical\Models\RequestItem;
 use Modules\Clinical\Models\ServiceRequest;
@@ -17,6 +21,8 @@ use Modules\Clinical\Models\Task;
 use Modules\Clinical\Models\VitalSign;
 use Modules\Clinical\Observers\EncounterObserver;
 use Modules\Clinical\Observers\RequestItemObserver;
+use Modules\Core\Support\ModuleAvailability;
+use Modules\Core\Support\OptionalClass;
 use Modules\Patient\Models\Patient;
 use Nwidart\Modules\Support\ModuleServiceProvider;
 
@@ -60,6 +66,7 @@ class ClinicalServiceProvider extends ModuleServiceProvider
 
         $this->app->singleton(MedicationFulfillmentPolicy::class);
         $this->app->bind(DiagnosisCodeSearchContract::class, CompositeDiagnosisCodeSearch::class);
+        $this->app->bindIf(PrescriptionScheduleCalculatorContract::class, NullPrescriptionScheduleCalculator::class);
 
         // Register Filament views namespace
         $this->loadViewsFrom(
@@ -77,20 +84,54 @@ class ClinicalServiceProvider extends ModuleServiceProvider
 
         if (class_exists(Patient::class)) {
             Patient::resolveRelationUsing('serviceRequests', function ($patient) {
-                return $patient->hasMany(ServiceRequest::class);
+                return $patient->hasMany(ServiceRequest::class, 'patient_id', 'id');
             });
 
             Patient::resolveRelationUsing('encounters', function ($patient) {
-                return $patient->hasMany(Encounter::class);
+                return $patient->hasMany(Encounter::class, 'patient_id', 'id');
+            });
+
+            Patient::resolveRelationUsing('diagnoses', function ($patient) {
+                return $patient->hasMany(EncounterDiagnosis::class, 'patient_id', 'id');
+            });
+
+            Patient::resolveRelationUsing('latestEncounter', function ($patient) {
+                return $patient->hasOne(Encounter::class, 'patient_id', 'id')
+                    ->orderByDesc('created_at');
+            });
+
+            Patient::resolveRelationUsing('activeEncounter', function ($patient) {
+                return $patient->hasOne(Encounter::class, 'patient_id', 'id')
+                    ->whereNotIn('status', ['finished', 'cancelled'])
+                    ->orderByDesc('created_at');
+            });
+
+            Patient::resolveRelationUsing('latestVitals', function ($patient) {
+                return $patient->hasOne(VitalSign::class, 'patient_id', 'id')
+                    ->latestOfMany('recorded_at');
+            });
+
+            Patient::resolveRelationUsing('allergies', function ($patient) {
+                return $patient->hasMany(Allergy::class, 'patient_id', 'id');
             });
 
             Patient::resolveRelationUsing('clinicalNotes', function ($patient) {
-                return $patient->hasMany(ClinicalNote::class);
+                return $patient->hasMany(ClinicalNote::class, 'patient_id', 'id');
             });
 
             Patient::resolveRelationUsing('vitalSigns', function ($patient) {
-                return $patient->hasMany(VitalSign::class);
+                return $patient->hasMany(VitalSign::class, 'patient_id', 'id');
             });
+
+            OptionalClass::when(
+                'Modules\\Billing\\Models\\Invoice',
+                function (string $invoiceClass): void {
+                    $invoiceClass::resolveRelationUsing('encounter', function ($invoice) {
+                        return $invoice->belongsTo(Encounter::class, 'encounter_id', 'id');
+                    });
+                },
+                'Billing',
+            );
 
             Patient::resolveRelationUsing('medicationAdministrations', function ($patient) {
                 $instance = new MedicationAdministration;
@@ -124,6 +165,10 @@ class ClinicalServiceProvider extends ModuleServiceProvider
 
     protected function configureSchedules(Schedule $schedule): void
     {
+        if (! ModuleAvailability::pharmacyEnabled()) {
+            return;
+        }
+
         $schedule->command('clinical:mar-dose-reminders')->everyFiveMinutes();
     }
 }
