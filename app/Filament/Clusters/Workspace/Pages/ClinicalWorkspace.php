@@ -67,11 +67,6 @@ use Modules\Core\Support\ModuleAvailability;
 use Modules\Core\Support\OptionalClass;
 use Modules\Patient\Classes\Services\PatientSearchService;
 use Modules\Patient\Models\Patient;
-use Modules\Pharmacy\Enums\DosageForm;
-use Modules\Pharmacy\Enums\MedicationFrequency;
-use Modules\Pharmacy\Enums\MedicationRoute;
-use Modules\Pharmacy\Models\Drug;
-use Modules\Pharmacy\Models\Medication;
 
 class ClinicalWorkspace extends Page implements HasSchemas
 {
@@ -1365,7 +1360,11 @@ class ClinicalWorkspace extends Page implements HasSchemas
                         ->getOptionLabelUsing(function ($value): ?string {
                             if (str_starts_with((string) $value, 'drug:')) {
                                 $drugId = str($value)->after('drug:')->toString();
-                                $drug = Drug::query()->find($drugId);
+                                $drug = OptionalClass::when(
+                                    'Modules\\Pharmacy\\Models\\Drug',
+                                    fn (string $class) => $class::query()->find($drugId),
+                                    'Pharmacy',
+                                );
 
                                 if (! $drug) {
                                     return $value;
@@ -1378,7 +1377,11 @@ class ClinicalWorkspace extends Page implements HasSchemas
 
                             if (str_starts_with((string) $value, 'medication:')) {
                                 $medicationId = str($value)->after('medication:')->toString();
-                                $medication = Medication::find($medicationId);
+                                $medication = OptionalClass::when(
+                                    'Modules\\Pharmacy\\Models\\Medication',
+                                    fn (string $class) => $class::find($medicationId),
+                                    'Pharmacy',
+                                );
 
                                 return $medication?->service?->name ?? $medication?->generic_name ?? $value;
                             }
@@ -1394,8 +1397,12 @@ class ClinicalWorkspace extends Page implements HasSchemas
                             TextInput::make('strength')
                                 ->maxLength(255),
                             Select::make('dosage_form')
-                                ->options(DosageForm::class)
-                                ->default(DosageForm::TABLET),
+                                ->options(OptionalClass::resolve('Modules\\Pharmacy\\Enums\\DosageForm', 'Pharmacy') ?? [])
+                                ->default(OptionalClass::when(
+                                    'Modules\\Pharmacy\\Enums\\DosageForm',
+                                    fn (string $class) => $class::TABLET,
+                                    'Pharmacy',
+                                )),
                             TextInput::make('price')
                                 ->label('Price (Cash)')
                                 ->numeric()
@@ -1412,11 +1419,11 @@ class ClinicalWorkspace extends Page implements HasSchemas
                         ->placeholder('e.g. 500mg'),
                     Select::make('frequency')
                         ->label('Frequency')
-                        ->options(MedicationFrequency::class)
+                        ->options(OptionalClass::resolve('Modules\\Pharmacy\\Enums\\MedicationFrequency', 'Pharmacy') ?? [])
                         ->searchable(),
                     Select::make('route')
                         ->label('Route')
-                        ->options(MedicationRoute::class)
+                        ->options(OptionalClass::resolve('Modules\\Pharmacy\\Enums\\MedicationRoute', 'Pharmacy') ?? [])
                         ->searchable(),
                     TextInput::make('duration_days')
                         ->label('Duration (days)')

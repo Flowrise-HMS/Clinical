@@ -6,8 +6,7 @@ use Filament\Widgets\Widget;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Auth;
 use Livewire\Attributes\On;
-use Modules\Appointment\Filament\Clusters\Appointment\Resources\Appointments\AppointmentResource;
-use Modules\Appointment\Models\Appointment;
+use Modules\Core\Support\OptionalClass;
 
 class WorkspaceTodayAppointmentsWidget extends Widget
 {
@@ -32,7 +31,9 @@ class WorkspaceTodayAppointmentsWidget extends Widget
 
     protected function loadAppointments(): void
     {
-        if (! class_exists(Appointment::class) || ! Auth::check()) {
+        $appointmentClass = OptionalClass::resolve('Modules\\Appointment\\Models\\Appointment', 'Appointment');
+
+        if ($appointmentClass === null || ! Auth::check()) {
             $this->appointments = collect();
 
             return;
@@ -50,22 +51,30 @@ class WorkspaceTodayAppointmentsWidget extends Widget
         $start = now()->startOfDay();
         $end = now()->endOfDay();
 
-        $this->appointments = Appointment::query()
-            ->where('branch_id', $branchId)
-            ->where('start_at', '<=', $end)
-            ->where('end_at', '>=', $start)
-            ->with(['patient', 'location'])
-            ->orderBy('start_at')
-            ->limit(25)
-            ->get();
+        $this->appointments = OptionalClass::when(
+            'Modules\\Appointment\\Models\\Appointment',
+            fn (string $class) => $class::query()
+                ->where('branch_id', $branchId)
+                ->where('start_at', '<=', $end)
+                ->where('end_at', '>=', $start)
+                ->with(['patient', 'location'])
+                ->orderBy('start_at')
+                ->limit(25)
+                ->get(),
+            'Appointment',
+        ) ?? collect();
     }
 
-    public function appointmentViewUrl(Appointment $appointment): ?string
+    public function appointmentViewUrl(object $appointment): ?string
     {
         if (! Auth::check() || ! Auth::user()->can('view', $appointment)) {
             return null;
         }
 
-        return AppointmentResource::getUrl('view', ['record' => $appointment]);
+        return OptionalClass::when(
+            'Modules\\Appointment\\Filament\\Clusters\\Appointment\\Resources\\Appointments\\AppointmentResource',
+            fn (string $resource) => $resource::getUrl('view', ['record' => $appointment]),
+            'Appointment',
+        );
     }
 }

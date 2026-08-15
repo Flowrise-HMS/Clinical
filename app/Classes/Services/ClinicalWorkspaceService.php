@@ -7,8 +7,6 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Str;
-use Modules\Appointment\Filament\Clusters\Appointment\Resources\Appointments\AppointmentResource;
-use Modules\Appointment\Models\Appointment;
 use Modules\Clinical\Enums\TaskStatus;
 use Modules\Clinical\Models\ClinicalNote;
 use Modules\Clinical\Models\Encounter;
@@ -17,6 +15,7 @@ use Modules\Clinical\Models\Task;
 use Modules\Clinical\Models\VitalSign;
 use Modules\Clinical\Policies\ServiceRequestPolicy;
 use Modules\Clinical\Policies\TaskPolicy;
+use Modules\Core\Support\OptionalClass;
 use Modules\Patient\Models\Patient;
 
 class ClinicalWorkspaceService
@@ -218,8 +217,13 @@ class ClinicalWorkspaceService
             : ((string) $appointmentType ?: 'N/A');
 
         $url = null;
-        if ($appointment instanceof Appointment && Auth::check() && Auth::user()->can('view', $appointment)) {
-            $url = AppointmentResource::getUrl('view', ['record' => $appointment]);
+        $appointmentClass = OptionalClass::resolve('Modules\\Appointment\\Models\\Appointment', 'Appointment');
+        if ($appointmentClass && $appointment instanceof $appointmentClass && Auth::check() && Auth::user()->can('view', $appointment)) {
+            $url = OptionalClass::when(
+                'Modules\\Appointment\\Filament\\Clusters\\Appointment\\Resources\\Appointments\\AppointmentResource',
+                fn (string $resource) => $resource::getUrl('view', ['record' => $appointment]),
+                'Appointment',
+            );
         }
 
         return [
@@ -237,7 +241,8 @@ class ClinicalWorkspaceService
                 'End' => optional($appointment->end_at)?->format('M j, Y g:i A'),
                 'Type' => $typeLabel,
             ],
-            'is_editable' => $appointment instanceof Appointment
+            'is_editable' => $appointmentClass
+                && $appointment instanceof $appointmentClass
                 && Auth::check()
                 && Auth::user()->can('update', $appointment),
             'url' => $url,
@@ -483,12 +488,11 @@ class ClinicalWorkspaceService
 
     protected function getAppointmentModelQuery(): ?Builder
     {
-        $appointmentModel = 'Modules\\Appointment\\Models\\Appointment';
-        if (! class_exists($appointmentModel)) {
-            return null;
-        }
-
-        return $appointmentModel::query();
+        return OptionalClass::when(
+            'Modules\\Appointment\\Models\\Appointment',
+            fn (string $appointmentModel) => $appointmentModel::query(),
+            'Appointment',
+        );
     }
 
     public function canCreateClinicalNote(): bool

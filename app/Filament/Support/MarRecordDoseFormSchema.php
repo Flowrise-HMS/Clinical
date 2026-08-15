@@ -15,7 +15,7 @@ use Modules\Clinical\Classes\Services\MedicationFulfillmentPolicy;
 use Modules\Clinical\Enums\MedicationAdministrationStatus;
 use Modules\Clinical\Models\RequestItem;
 use Modules\Core\Models\Unit;
-use Modules\Pharmacy\Models\Medication;
+use Modules\Core\Support\OptionalClass;
 
 class MarRecordDoseFormSchema
 {
@@ -115,10 +115,14 @@ class MarRecordDoseFormSchema
      */
     public static function dispenseFields(RequestItem $item): array
     {
-        $medications = Medication::query()
-            ->where('service_id', $item->service_id)
-            ->where('is_active', true)
-            ->pluck('generic_name', 'id');
+        $medications = OptionalClass::when(
+            'Modules\\Pharmacy\\Models\\Medication',
+            fn (string $class) => $class::query()
+                ->where('service_id', $item->service_id)
+                ->where('is_active', true)
+                ->pluck('generic_name', 'id'),
+            'Pharmacy',
+        ) ?? collect();
 
         return [
             Select::make('medication_id')

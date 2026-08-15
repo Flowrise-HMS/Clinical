@@ -6,7 +6,6 @@ use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
-use Modules\Billing\Filament\RelationManagers\EncounterInvoicesRelationManager;
 use Modules\Clinical\Filament\Clusters\Clinical\ClinicalCluster;
 use Modules\Clinical\Filament\Clusters\Clinical\Resources\Encounters\Pages\CreateEncounter;
 use Modules\Clinical\Filament\Clusters\Clinical\Resources\Encounters\Pages\EditEncounter;
@@ -23,6 +22,7 @@ use Modules\Clinical\Filament\Clusters\Clinical\Resources\Encounters\Schemas\Enc
 use Modules\Clinical\Filament\Clusters\Clinical\Resources\Encounters\Tables\EncountersTable;
 use Modules\Clinical\Models\Encounter;
 use Modules\Core\Enums\NavigationGroup;
+use Modules\Core\Support\OptionalClass;
 
 class EncounterResource extends Resource
 {
@@ -61,8 +61,13 @@ class EncounterResource extends Resource
             DiagnosesRelationManager::class,
         ];
 
-        if (class_exists(EncounterInvoicesRelationManager::class)) {
-            $relations[] = EncounterInvoicesRelationManager::class;
+        $invoicesRelationManager = OptionalClass::resolve(
+            'Modules\\Billing\\Filament\\RelationManagers\\EncounterInvoicesRelationManager',
+            'Billing',
+        );
+
+        if ($invoicesRelationManager !== null) {
+            $relations[] = $invoicesRelationManager;
         }
 
         return $relations;
