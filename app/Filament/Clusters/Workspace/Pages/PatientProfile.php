@@ -283,7 +283,8 @@ class PatientProfile extends Page implements HasActions, HasForms, HasInfolists
 
     protected function nhisActivePolicy(Patient $patient): ?object
     {
-        if (! ModuleAvailability::insuranceEnabled() || ! method_exists($patient, 'insurancePolicies')) {
+        if (! ModuleAvailability::insuranceEnabled()
+            || $patient->relationResolver(Patient::class, 'insurancePolicies') === null) {
             return null;
         }
 
