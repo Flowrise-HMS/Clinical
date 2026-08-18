@@ -45,7 +45,7 @@ it('renders the patient column on the allergy list page without lazy loading', f
             $table = $page->instance()->getTable();
             $record = $page->instance()->getTableRecord($this->allergy->getKey());
 
-            expect($table->getColumn('patient.full_name')->record($record)->getStateFromRecord())
-                ->toBe($this->patient->full_name);
+            expect($table->getColumn('client')->record($record)->getState())
+                ->toBe($this->patient->clientIdentity()->displayWithIdentifier());
         });
 });

@@ -5,6 +5,7 @@ namespace Modules\Clinical\Tests\Feature;
 use App\Models\User;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Livewire\Livewire;
+use Modules\Clinical\Enums\EncounterType;
 use Modules\Clinical\Filament\Clusters\Workspace\Pages\ClinicalWorkspace;
 use Modules\Clinical\Models\Encounter;
 use Modules\Core\Enums\CoverageType;
@@ -30,6 +31,35 @@ class ClinicalWorkspaceClaimCheckCodeTest extends TestCase
 
         Permission::findOrCreate('View ClinicalWorkspace', 'web');
         $this->user = User::factory()->create()->givePermissionTo('View ClinicalWorkspace');
+    }
+
+    public function test_encounter_form_nested_keys_exist_for_livewire_entangle(): void
+    {
+        Livewire::actingAs($this->user)
+            ->test(ClinicalWorkspace::class, ['patientId' => $this->patient->id])
+            ->assertSet('encounterFormData.type', EncounterType::OUTPATIENT->value)
+            ->assertSet('encounterFormData.coverage_type', null)
+            ->assertSet('encounterFormData.chief_complaint', null)
+            ->assertSet('encounterFormData.claim_check_code', null);
+    }
+
+    public function test_create_encounter_persists_selected_coverage_type(): void
+    {
+        Livewire::actingAs($this->user)
+            ->test(ClinicalWorkspace::class, ['patientId' => $this->patient->id])
+            ->fillForm([
+                'type' => EncounterType::OUTPATIENT->value,
+                'coverage_type' => CoverageType::NONE->value,
+                'chief_complaint' => 'Headache',
+            ], 'encounterForm')
+            ->call('createEncounter')
+            ->assertHasNoErrors();
+
+        $encounter = Encounter::where('patient_id', $this->patient->id)->first();
+
+        $this->assertNotNull($encounter);
+        $this->assertSame(CoverageType::NONE->value, $encounter->coverage_type?->value);
+        $this->assertSame('Headache', $encounter->chief_complaint);
     }
 
     public function test_claim_check_code_field_only_visible_for_nhis_coverage(): void

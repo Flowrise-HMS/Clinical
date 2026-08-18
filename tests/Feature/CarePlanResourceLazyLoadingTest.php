@@ -52,8 +52,8 @@ it('renders the patient and author columns on the care plan list page without la
             $table = $page->instance()->getTable();
             $record = $page->instance()->getTableRecord($this->carePlan->getKey());
 
-            expect($table->getColumn('patient.full_name')->record($record)->getStateFromRecord())
-                ->toBe($this->patient->full_name)
+            expect($table->getColumn('client')->record($record)->getState())
+                ->toBe($this->patient->clientIdentity()->displayWithIdentifier())
                 ->and($table->getColumn('author.name')->record($record)->getStateFromRecord())
                 ->toBe($this->user->name);
         });

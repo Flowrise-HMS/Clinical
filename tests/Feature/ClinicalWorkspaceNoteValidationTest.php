@@ -5,10 +5,13 @@ namespace Modules\Clinical\Tests\Feature;
 use App\Models\User;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Illuminate\Validation\ValidationException;
+use Modules\Clinical\Enums\EncounterStatus;
+use Modules\Clinical\Enums\EncounterType;
 use Modules\Clinical\Enums\NoteStatus;
 use Modules\Clinical\Enums\NoteType;
 use Modules\Clinical\Filament\Clusters\Workspace\Pages\ClinicalWorkspace;
 use Modules\Clinical\Models\ClinicalNote;
+use Modules\Clinical\Models\Encounter;
 use Modules\Core\Models\Branch;
 use Modules\Patient\Models\Patient;
 use Spatie\Permission\Models\Permission;
@@ -84,6 +87,70 @@ class ClinicalWorkspaceNoteValidationTest extends TestCase
 
         $this->assertSame(NoteType::PROGRESS, $note->note_type);
         $this->assertSame('Morning round', $note->subject);
+        $this->assertStringContainsString('Patient stable overnight', $note->content_html);
+    }
+
+    public function test_save_consultation_persists_rich_editor_html(): void
+    {
+        $this->actingAs($this->doctor);
+
+        $this->openEncounter();
+
+        $page = $this->makeWorkspacePage();
+        $page->selectPatient($this->patient->id);
+        $page->consultationChiefComplaint = 'Headache';
+        $page->consultationData = [
+            'notes' => '<p>SOAP: tension headache, discharge with analgesia.</p>',
+        ];
+
+        $page->saveConsultation();
+
+        $note = ClinicalNote::query()
+            ->where('patient_id', $this->patient->id)
+            ->firstOrFail();
+
+        $this->assertSame(NoteType::CONSULTATION, $note->note_type);
+        $this->assertStringContainsString('tension headache', $note->content_html);
+    }
+
+    public function test_save_consultation_persists_tiptap_document_state(): void
+    {
+        $this->actingAs($this->doctor);
+
+        $this->openEncounter();
+
+        $page = $this->makeWorkspacePage();
+        $page->selectPatient($this->patient->id);
+        $page->consultationData = [
+            'notes' => [
+                'type' => 'doc',
+                'content' => [[
+                    'type' => 'paragraph',
+                    'content' => [[
+                        'type' => 'text',
+                        'text' => 'SOAP plan documented in the editor',
+                    ]],
+                ]],
+            ],
+        ];
+
+        $page->saveConsultation();
+
+        $note = ClinicalNote::query()
+            ->where('patient_id', $this->patient->id)
+            ->firstOrFail();
+
+        $this->assertStringContainsString('SOAP plan documented in the editor', $note->content_html);
+    }
+
+    protected function openEncounter(): void
+    {
+        Encounter::factory()->create([
+            'patient_id' => $this->patient->id,
+            'branch_id' => $this->branch->id,
+            'status' => EncounterStatus::IN_PROGRESS,
+            'type' => EncounterType::OUTPATIENT,
+        ]);
     }
 
     protected function makeWorkspacePage(): ClinicalWorkspace
