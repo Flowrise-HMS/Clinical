@@ -35,12 +35,7 @@ class ClinicalNoteService
         }
 
         if (isset($data['content'])) {
-            if (is_string($data['content'])) {
-                $data['content'] = ['text' => $data['content']];
-            } elseif (is_array($data['content']) && ! array_key_exists('text', $data['content']) && isset($data['content']['type'])) {
-                // TipTap / unexpected nested shapes: keep as structured payload under text if empty body risk
-                $data['content'] = ['text' => $data['content']['text'] ?? ''];
-            }
+            $data['content'] = $this->normalizeNoteContent($data['content']);
         }
 
         return ClinicalNote::create($data);
@@ -200,5 +195,55 @@ class ClinicalNoteService
         }
 
         return $query->orderBy('created_at', 'desc')->get();
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    protected function normalizeNoteContent(mixed $content): array
+    {
+        if (is_string($content)) {
+            return ['text' => $content];
+        }
+
+        if (! is_array($content)) {
+            return ['text' => ''];
+        }
+
+        if (array_key_exists('text', $content) && is_string($content['text'])) {
+            return $content;
+        }
+
+        if (isset($content['type'])) {
+            return ['text' => $this->tiptapToHtml($content)];
+        }
+
+        return $content;
+    }
+
+    /**
+     * @param  array<string, mixed>  $node
+     */
+    protected function tiptapToHtml(array $node): string
+    {
+        $type = $node['type'] ?? '';
+
+        if ($type === 'text') {
+            return e((string) ($node['text'] ?? ''));
+        }
+
+        $inner = '';
+
+        foreach ($node['content'] ?? [] as $child) {
+            if (is_array($child)) {
+                $inner .= $this->tiptapToHtml($child);
+            }
+        }
+
+        return match ($type) {
+            'paragraph' => '<p>'.$inner.'</p>',
+            'doc' => $inner,
+            default => $inner,
+        };
     }
 }

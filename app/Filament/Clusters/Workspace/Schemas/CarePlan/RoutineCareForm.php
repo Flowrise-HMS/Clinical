@@ -56,7 +56,7 @@ class RoutineCareForm
                     Textarea::make('specification')
                         ->rows(2)
                         ->nullable()
-                        ->placeholder(fn (Get $get): string => RoutineCareItem::tryFrom((string) $get('item'))?->getDescription()
+                        ->placeholder(fn (Get $get): string => enum_try_from(RoutineCareItem::class, $get('item'))?->getDescription()
                             ?? 'Enter care instructions for this item')
                         ->helperText('Describe how this care should be given for this patient.')
                         ->required(fn (Get $get): bool => ! $get('not_applicable'))
@@ -74,7 +74,7 @@ class RoutineCareForm
                 ->addable(false)
                 ->reorderable(false)
                 ->itemLabel(fn (array $state): ?string => $state['item_label']
-                    ?? RoutineCareItem::tryFrom((string) ($state['item'] ?? ''))?->getLabel())
+                    ?? enum_try_from(RoutineCareItem::class, $state['item'] ?? null)?->getLabel())
                 ->collapsed(false),
         ];
     }

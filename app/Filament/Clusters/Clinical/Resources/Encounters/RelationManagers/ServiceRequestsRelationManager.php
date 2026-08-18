@@ -18,6 +18,7 @@ use Illuminate\Database\Eloquent\Builder;
 use Modules\Clinical\Enums\RequestPriority;
 use Modules\Clinical\Enums\RequestStatus;
 use Modules\Clinical\Filament\Clusters\Clinical\Resources\ServiceRequests\Schemas\ServiceRequestInfolist;
+use Modules\Core\Filament\Support\ClientIdentityColumn;
 
 class ServiceRequestsRelationManager extends RelationManager
 {
@@ -45,10 +46,8 @@ class ServiceRequestsRelationManager extends RelationManager
                     ->searchable()
                     ->sortable(),
 
-                TextColumn::make('patient.full_name')
-                    ->label('Patient')
-                    ->searchable()
-                    ->sortable()
+                ClientIdentityColumn::make(label: __('Patient'), includeGuestSearch: true)
+                    ->sortable(['patient.last_name'])
                     ->toggleable(isToggledHiddenByDefault: true),
 
                 TextColumn::make('status')

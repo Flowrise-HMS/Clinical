@@ -273,14 +273,6 @@ class MedicationFulfillmentPolicy
 
     protected function normalizeRoute(MedicationRoute|string|null $route): ?MedicationRoute
     {
-        if ($route instanceof MedicationRoute) {
-            return $route;
-        }
-
-        if (! is_string($route) || $route === '') {
-            return null;
-        }
-
-        return MedicationRoute::tryFrom($route);
+        return enum_try_from(MedicationRoute::class, $route);
     }
 }

@@ -165,15 +165,7 @@ class MedicationAdministrationService
 
     protected function normalizeStatus(MedicationAdministrationStatus|string|null $status): ?MedicationAdministrationStatus
     {
-        if ($status instanceof MedicationAdministrationStatus) {
-            return $status;
-        }
-
-        if (! is_string($status) || $status === '') {
-            return null;
-        }
-
-        return MedicationAdministrationStatus::tryFrom($status);
+        return enum_try_from(MedicationAdministrationStatus::class, $status);
     }
 
     protected function recordWardConsumptionIfApplicable(

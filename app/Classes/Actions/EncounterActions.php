@@ -85,7 +85,7 @@ class EncounterActions
             ])
             ->action(fn (array $data) => app(EncounterService::class)->triage(
                 $encounter,
-                is_object($data['priority']) ? $data['priority'] : EncounterPriority::from($data['priority'])
+                enum_from(EncounterPriority::class, $data['priority'])
             ));
     }
 
@@ -170,7 +170,7 @@ class EncounterActions
             ])
             ->action(fn (array $data) => app(AdtService::class)->transferOut(
                 $encounter,
-                AdtDestinationType::from($data['destination_type']),
+                enum_from(AdtDestinationType::class, $data['destination_type']),
                 destinationLabel: $data['destination_label'] ?? null,
                 destinationBranchId: $data['destination_branch_id'] ?? null,
                 notes: $data['notes'] ?? null,
@@ -203,7 +203,7 @@ class EncounterActions
             ])
             ->action(fn (array $data) => app(AdtService::class)->discharge(
                 $encounter,
-                DischargeDisposition::from($data['discharge_disposition']),
+                enum_from(DischargeDisposition::class, $data['discharge_disposition']),
                 $data['transfer_destination'] ?? null,
                 notes: $data['notes'] ?? null,
             ));

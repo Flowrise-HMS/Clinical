@@ -3,13 +3,13 @@
 namespace Modules\Clinical\Filament\Widgets;
 
 use Filament\Actions\Action;
-use Filament\Tables\Columns\TextColumn;
 use Filament\Widgets\TableWidget as BaseTableWidget;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\Auth;
 use Modules\Clinical\Enums\CarePlanStatus;
 use Modules\Clinical\Filament\Clusters\Clinical\Resources\CarePlans\Tables\CarePlansTable;
 use Modules\Clinical\Models\CarePlan;
+use Modules\Core\Filament\Support\ClientIdentityColumn;
 
 class CarePlanWardTableWidget extends BaseTableWidget
 {
@@ -41,9 +41,7 @@ class CarePlanWardTableWidget extends BaseTableWidget
     protected function getTableColumns(): array
     {
         return [
-            TextColumn::make('patient.full_name')
-                ->label('Patient')
-                ->searchable()
+            ClientIdentityColumn::make(label: __('Patient'))
                 ->placeholder('Unknown patient')
                 ->action(
                     Action::make('openPatient')

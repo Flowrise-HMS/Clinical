@@ -154,28 +154,12 @@ class DiagnosisService
 
     protected function resolveType(DiagnosisType|string|null $type): DiagnosisType
     {
-        if ($type instanceof DiagnosisType) {
-            return $type;
-        }
-
-        if (is_string($type) && DiagnosisType::tryFrom($type)) {
-            return DiagnosisType::from($type);
-        }
-
-        return DiagnosisType::Primary;
+        return enum_try_from(DiagnosisType::class, $type) ?? DiagnosisType::Primary;
     }
 
     protected function resolveCertainty(DiagnosisCertainty|string|null $certainty): DiagnosisCertainty
     {
-        if ($certainty instanceof DiagnosisCertainty) {
-            return $certainty;
-        }
-
-        if (is_string($certainty) && DiagnosisCertainty::tryFrom($certainty)) {
-            return DiagnosisCertainty::from($certainty);
-        }
-
-        return DiagnosisCertainty::Provisional;
+        return enum_try_from(DiagnosisCertainty::class, $certainty) ?? DiagnosisCertainty::Provisional;
     }
 
     /**

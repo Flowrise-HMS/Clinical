@@ -16,6 +16,7 @@ use Filament\Schemas\Components\Grid;
 use Filament\Schemas\Components\Utilities\Get;
 use Filament\Schemas\Concerns\InteractsWithSchemas;
 use Filament\Schemas\Contracts\HasSchemas;
+use Filament\Schemas\Schema;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Support\Facades\Auth;
 use Livewire\Attributes\Computed;
@@ -34,17 +35,24 @@ use Modules\Clinical\Classes\Services\FulfillmentService;
 use Modules\Clinical\Classes\Services\ServiceRequestService;
 use Modules\Clinical\Classes\Services\VitalSignService;
 use Modules\Clinical\Enums\AdtDestinationType;
+use Modules\Clinical\Enums\AllergySeverity;
+use Modules\Clinical\Enums\AllergyVerificationStatus;
+use Modules\Clinical\Enums\DiagnosisCertainty;
+use Modules\Clinical\Enums\DiagnosisType;
 use Modules\Clinical\Enums\DischargeDisposition;
 use Modules\Clinical\Enums\EncounterPriority;
 use Modules\Clinical\Enums\EncounterType;
 use Modules\Clinical\Enums\NoteStatus;
 use Modules\Clinical\Enums\NoteType;
+use Modules\Clinical\Enums\OnsetType;
+use Modules\Clinical\Enums\RequestPriority;
 use Modules\Clinical\Filament\Clusters\Clinical\Resources\Allergies\Schemas\AllergyForm;
 use Modules\Clinical\Filament\Clusters\Clinical\Resources\ClinicalNotes\Schemas\ClinicalNoteForm;
 use Modules\Clinical\Filament\Clusters\Clinical\Resources\EncounterDiagnoses\Schemas\EncounterDiagnosisForm;
 use Modules\Clinical\Filament\Clusters\Clinical\Resources\ServiceRequests\Schemas\ServiceRequestForm;
 use Modules\Clinical\Filament\Clusters\Clinical\Resources\VitalSigns\Schemas\VitalSignForm;
 use Modules\Clinical\Filament\Clusters\Workspace\Concerns\ManagesWorkspacePatient;
+use Modules\Clinical\Filament\Clusters\Workspace\Concerns\SeedsSchemaEntangleKeys;
 use Modules\Clinical\Filament\Clusters\Workspace\WorkspaceCluster;
 use Modules\Clinical\Filament\Widgets\CriticalPatientsWidget;
 use Modules\Clinical\Filament\Widgets\MyTasksWidget;
@@ -70,7 +78,7 @@ use Modules\Patient\Models\Patient;
 
 class ClinicalWorkspace extends Page implements HasSchemas
 {
-    use HasPageShield, InteractsWithSchemas, ManagesWorkspacePatient;
+    use HasPageShield, InteractsWithSchemas, ManagesWorkspacePatient, SeedsSchemaEntangleKeys;
 
     protected static ?string $slug = '';
 
@@ -108,15 +116,68 @@ class ClinicalWorkspace extends Page implements HasSchemas
 
     public string $consultationNotes = '';
 
-    public array $diagnosisFormData = [];
+    /**
+     * @var array{diagnoses: list<array<string, mixed>>}
+     */
+    public array $diagnosisFormData = [
+        'diagnoses' => [[
+            'code_search' => null,
+            'description' => null,
+            'type' => DiagnosisType::Primary->value,
+            'is_new_case' => '0',
+            'certainty' => DiagnosisCertainty::Provisional->value,
+            'notes' => null,
+            'diagnosis_code_id' => null,
+            'icd_entity_id' => null,
+            'icd_uri' => null,
+            'icd_code' => null,
+            'icd10_code' => null,
+        ]],
+    ];
 
-    public array $vitalsData = [];
+    /**
+     * @var array<string, mixed>
+     */
+    public array $vitalsData = [
+        'systolic_bp' => null,
+        'diastolic_bp' => null,
+        'heart_rate' => null,
+        'temperature' => null,
+        'spo2' => null,
+        'respiratory_rate' => null,
+        'weight' => null,
+        'height' => null,
+        'calculated_bmi' => null,
+    ];
 
-    public array $serviceRequestData = [];
+    /**
+     * @var array<string, mixed>
+     */
+    public array $serviceRequestData = [
+        'priority' => RequestPriority::ROUTINE->value,
+        'notes' => null,
+        'items' => [],
+        'request_item_id' => null,
+    ];
 
+    /**
+     * @var array<string, mixed>
+     */
     public array $labResultData = [];
 
-    public array $allergyData = [];
+    /**
+     * @var array<string, mixed>
+     */
+    public array $allergyData = [
+        'allergen_type' => null,
+        'allergen_name' => null,
+        'onset_age' => null,
+        'severity' => AllergySeverity::MILD->value,
+        'verification_status' => AllergyVerificationStatus::VERIFIED->value,
+        'onset_type' => OnsetType::ACUTE->value,
+        'reaction' => null,
+        'notes' => null,
+    ];
 
     /**
      * Nested keys must exist up-front so Filament RichEditor can Livewire-entangle them.
@@ -127,9 +188,34 @@ class ClinicalWorkspace extends Page implements HasSchemas
         'notes' => null,
     ];
 
-    public array $medicationData = [];
+    /**
+     * @var array{items: list<array<string, mixed>>}
+     */
+    public array $medicationData = [
+        'items' => [[
+            'service_id' => null,
+            'dosage' => null,
+            'frequency' => null,
+            'route' => null,
+            'duration_days' => null,
+            'instructions' => null,
+            'prn' => false,
+            'indication' => null,
+            'refills' => 0,
+        ]],
+    ];
 
-    public array $encounterFormData = [];
+    /**
+     * Nested keys must exist up-front so Filament Select/Textarea fields can Livewire-entangle them.
+     *
+     * @var array{type: string, coverage_type: string|null, claim_check_code: string|null, chief_complaint: string|null}
+     */
+    public array $encounterFormData = [
+        'type' => EncounterType::OUTPATIENT->value,
+        'coverage_type' => null,
+        'claim_check_code' => null,
+        'chief_complaint' => null,
+    ];
 
     /**
      * @var array{discharge_notes: string|null, discharge_disposition?: string}
@@ -137,6 +223,7 @@ class ClinicalWorkspace extends Page implements HasSchemas
     public array $dischargeData = [
         'discharge_notes' => null,
         'discharge_disposition' => DischargeDisposition::COMPLETED->value,
+        'transfer_destination' => null,
     ];
 
     /**
@@ -186,6 +273,7 @@ class ClinicalWorkspace extends Page implements HasSchemas
      * @var array{notes: string|null}
      */
     public array $referralData = [
+        'destination' => null,
         'notes' => null,
     ];
 
@@ -193,8 +281,10 @@ class ClinicalWorkspace extends Page implements HasSchemas
      * @var array{content: string|null, status?: string}
      */
     public array $noteFormData = [
-        'content' => null,
+        'note_type' => null,
         'status' => NoteStatus::DRAFT->value,
+        'subject' => null,
+        'content' => null,
     ];
 
     protected ?ClinicalWorkspaceService $workspaceService = null;
@@ -261,14 +351,15 @@ class ClinicalWorkspace extends Page implements HasSchemas
 
         $this->searchTerm = '';
         $this->searchResults = [];
-        $this->registerFormData = [];
+        $this->registerFormData = $this->defaultRegistrationFormData();
         $this->confirmDuplicateRegistration = false;
+        $this->recacheHeaderActions();
     }
 
     #[On('select-patient')]
-    public function onSelectPatient(string $id): void
+    public function onSelectPatient(string $patientId): void
     {
-        $this->selectPatient($id);
+        $this->selectPatient($patientId);
     }
 
     public function clearPatient(): void
@@ -280,20 +371,21 @@ class ClinicalWorkspace extends Page implements HasSchemas
         $this->activeTab = '';
         $this->resetFormStates();
         $this->resetPatientManagementState();
+        $this->recacheHeaderActions();
     }
 
     protected function resetFormStates(): void
     {
-        $this->encounterFormData = [];
+        $this->encounterFormData = $this->defaultEncounterFormData();
         $this->consultationChiefComplaint = '';
         $this->consultationNotes = '';
         $this->consultationData = $this->defaultConsultationData();
-        $this->diagnosisFormData = [];
-        $this->vitalsData = [];
-        $this->serviceRequestData = [];
+        $this->diagnosisFormData = $this->defaultDiagnosisFormData();
+        $this->vitalsData = $this->defaultVitalsData();
+        $this->serviceRequestData = $this->defaultServiceRequestData();
         $this->labResultData = [];
-        $this->allergyData = [];
-        $this->medicationData = [];
+        $this->allergyData = $this->defaultAllergyData();
+        $this->medicationData = $this->defaultMedicationData();
         $this->dischargeData = $this->defaultDischargeData();
         $this->adtFormData = $this->defaultAdtFormData();
         $this->referralData = $this->defaultReferralData();
@@ -309,13 +401,27 @@ class ClinicalWorkspace extends Page implements HasSchemas
     }
 
     /**
-     * @return array{discharge_notes: null, discharge_disposition: string}
+     * @return array{type: string, coverage_type: null, claim_check_code: null, chief_complaint: null}
+     */
+    protected function defaultEncounterFormData(): array
+    {
+        return [
+            'type' => EncounterType::OUTPATIENT->value,
+            'coverage_type' => null,
+            'claim_check_code' => null,
+            'chief_complaint' => null,
+        ];
+    }
+
+    /**
+     * @return array{discharge_notes: null, discharge_disposition: string, transfer_destination: null}
      */
     protected function defaultDischargeData(): array
     {
         return [
             'discharge_notes' => null,
             'discharge_disposition' => DischargeDisposition::COMPLETED->value,
+            'transfer_destination' => null,
         ];
     }
 
@@ -364,24 +470,135 @@ class ClinicalWorkspace extends Page implements HasSchemas
     }
 
     /**
-     * @return array{notes: null}
+     * @return array{destination: null, notes: null}
      */
     protected function defaultReferralData(): array
     {
-        return ['notes' => null];
+        return [
+            'destination' => null,
+            'notes' => null,
+        ];
     }
 
     /**
      * The note form declares a draft status default, but the schema is never filled here,
      * so the default is seeded into the state to keep the required status field satisfied.
      *
-     * @return array{content: null, status: string}
+     * @return array{note_type: null, status: string, subject: null, content: null}
      */
     protected function defaultNoteFormData(): array
     {
         return [
-            'content' => null,
+            'note_type' => null,
             'status' => NoteStatus::DRAFT->value,
+            'subject' => null,
+            'content' => null,
+        ];
+    }
+
+    /**
+     * @return array{diagnoses: list<array<string, mixed>>}
+     */
+    protected function defaultDiagnosisFormData(): array
+    {
+        return [
+            'diagnoses' => [$this->defaultDiagnosisItem()],
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    protected function defaultDiagnosisItem(): array
+    {
+        return [
+            'code_search' => null,
+            'description' => null,
+            'type' => DiagnosisType::Primary->value,
+            'is_new_case' => '0',
+            'certainty' => DiagnosisCertainty::Provisional->value,
+            'notes' => null,
+            'diagnosis_code_id' => null,
+            'icd_entity_id' => null,
+            'icd_uri' => null,
+            'icd_code' => null,
+            'icd10_code' => null,
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    protected function defaultVitalsData(): array
+    {
+        return [
+            'systolic_bp' => null,
+            'diastolic_bp' => null,
+            'heart_rate' => null,
+            'temperature' => null,
+            'spo2' => null,
+            'respiratory_rate' => null,
+            'weight' => null,
+            'height' => null,
+            'calculated_bmi' => null,
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    protected function defaultServiceRequestData(): array
+    {
+        return [
+            'priority' => RequestPriority::ROUTINE->value,
+            'notes' => null,
+            'items' => [],
+            'request_item_id' => null,
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    protected function defaultAllergyData(): array
+    {
+        return [
+            'allergen_type' => null,
+            'allergen_name' => null,
+            'onset_age' => null,
+            'severity' => AllergySeverity::MILD->value,
+            'verification_status' => AllergyVerificationStatus::VERIFIED->value,
+            'onset_type' => OnsetType::ACUTE->value,
+            'reaction' => null,
+            'notes' => null,
+        ];
+    }
+
+    /**
+     * @return array{items: list<array<string, mixed>>}
+     */
+    protected function defaultMedicationData(): array
+    {
+        return [
+            'items' => [$this->defaultMedicationItem()],
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    protected function defaultMedicationItem(): array
+    {
+        return [
+            'service_id' => null,
+            'dosage' => null,
+            'frequency' => null,
+            'route' => null,
+            'duration_days' => null,
+            'instructions' => null,
+            'prn' => false,
+            'indication' => null,
+            'refills' => 0,
         ];
     }
 
@@ -407,7 +624,9 @@ class ClinicalWorkspace extends Page implements HasSchemas
             if ($this->currentEncounter) {
                 $existing = $this->diagnosisService->getForEncounter($this->currentEncounter->id);
                 $this->diagnosisFormData = [
-                    'diagnoses' => $existing['diagnoses'] ?: [],
+                    'diagnoses' => $existing['diagnoses'] !== []
+                        ? $existing['diagnoses']
+                        : [$this->defaultDiagnosisItem()],
                 ];
             }
 
@@ -438,14 +657,15 @@ class ClinicalWorkspace extends Page implements HasSchemas
         $openEncounter = $this->getOpenEncounter();
 
         if (! $openEncounter) {
-            $this->encounterFormData = ['type' => EncounterType::OUTPATIENT->value];
+            $this->encounterFormData = $this->defaultEncounterFormData();
 
             return;
         }
 
         $this->encounterFormData = [
+            ...$this->defaultEncounterFormData(),
             'type' => $openEncounter->type?->value ?? EncounterType::OUTPATIENT->value,
-            'coverage_type' => $openEncounter->coverage_type?->value ?? $openEncounter->coverage_type ?? 'none',
+            'coverage_type' => $openEncounter->coverage_type?->value ?? $openEncounter->coverage_type,
             'claim_check_code' => $openEncounter->claim_check_code,
             'chief_complaint' => $openEncounter->chief_complaint,
         ];
@@ -572,7 +792,16 @@ class ClinicalWorkspace extends Page implements HasSchemas
             $actions->patientActionGroups(),
             ...app(PageHeaderActionsRegistry::class)->for(static::class, $this),
         ];
+    }
 
+    /**
+     * Filament caches header actions in `booted`, which runs before `selectPatient()`
+     * on subsequent Livewire requests. Rebuild after the patient context changes.
+     */
+    protected function recacheHeaderActions(): void
+    {
+        $this->cachedHeaderActions = [];
+        $this->cacheInteractsWithHeaderActions();
     }
 
     protected function getFooterWidgets(): array
@@ -602,13 +831,21 @@ class ClinicalWorkspace extends Page implements HasSchemas
             return;
         }
 
-        if (blank($this->consultationData['notes'] ?? null) && blank($this->consultationChiefComplaint)) {
+        $formName = $this->activeTab === 'triage' ? 'triageForm' : 'consultationForm';
+        $consultationForm = $this->getSchema($formName);
+
+        if ($consultationForm === null) {
+            return;
+        }
+
+        $consultationData = $consultationForm->getState();
+        $content = $consultationData['notes'] ?? null;
+
+        if (blank($content) && blank($this->consultationChiefComplaint)) {
             Notification::make()->title('Nothing to save')->warning()->send();
 
             return;
         }
-
-        $content = $this->consultationData['notes'] ?? '';
 
         if (blank($content) && filled($this->consultationChiefComplaint)) {
             $content = '<p>Chief complaint: '.e($this->consultationChiefComplaint).'</p>';
@@ -628,6 +865,9 @@ class ClinicalWorkspace extends Page implements HasSchemas
         if ($this->consultationChiefComplaint && ! $this->currentEncounter->chief_complaint) {
             $this->currentEncounter->update(['chief_complaint' => $this->consultationChiefComplaint]);
         }
+
+        $this->consultationData = $this->defaultConsultationData();
+        $this->consultationChiefComplaint = '';
 
         Notification::make()->title('Consultation saved')->success()->send();
     }
@@ -654,7 +894,7 @@ class ClinicalWorkspace extends Page implements HasSchemas
             $this->currentEncounter?->id,
         );
 
-        $this->vitalsData = [];
+        $this->vitalsData = $this->defaultVitalsData();
         $this->loadPatientContext();
 
         if ($this->postRegistrationFlow) {
@@ -690,7 +930,7 @@ class ClinicalWorkspace extends Page implements HasSchemas
             lockStatuses: true,
         );
 
-        $this->serviceRequestData = [];
+        $this->serviceRequestData = $this->defaultServiceRequestData();
         Notification::make()->title('Service request created')->success()->send();
     }
 
@@ -708,7 +948,7 @@ class ClinicalWorkspace extends Page implements HasSchemas
 
         $this->allergyService->record($this->currentPatient, $allergyForm->getState());
 
-        $this->allergyData = [];
+        $this->allergyData = $this->defaultAllergyData();
         $this->loadPatientContext();
         Notification::make()->title('Allergy recorded')->success()->send();
     }
@@ -737,7 +977,7 @@ class ClinicalWorkspace extends Page implements HasSchemas
 
         $encounterData = $encounterForm->getState();
 
-        $type = EncounterType::tryFrom($encounterData['type'] ?? '')
+        $type = enum_try_from(EncounterType::class, $encounterData['type'] ?? null)
             ?? EncounterType::OUTPATIENT;
 
         $priority = $type === EncounterType::EMERGENCY
@@ -909,7 +1149,8 @@ class ClinicalWorkspace extends Page implements HasSchemas
         $adtData = array_merge($this->adtFormData, $transferOutForm->getState());
 
         try {
-            $destinationType = AdtDestinationType::from(
+            $destinationType = enum_from(
+                AdtDestinationType::class,
                 $adtData['destination_type'] ?? AdtDestinationType::ExternalFacility->value
             );
 
@@ -1145,7 +1386,9 @@ class ClinicalWorkspace extends Page implements HasSchemas
 
             $existing = $this->diagnosisService->getForEncounter($this->currentEncounter->id);
             $this->diagnosisFormData = [
-                'diagnoses' => $existing['diagnoses'] ?: [],
+                'diagnoses' => $existing['diagnoses'] !== []
+                    ? $existing['diagnoses']
+                    : [$this->defaultDiagnosisItem()],
             ];
 
             Notification::make()->title('Diagnoses saved')->success()->send();
@@ -1190,6 +1433,12 @@ class ClinicalWorkspace extends Page implements HasSchemas
         $this->cacheSchema('labResultForm', $this->makeSchema()
             ->schema($schema)
             ->statePath('labResultData'));
+
+        $labResultForm = $this->getSchema('labResultForm');
+
+        if ($labResultForm instanceof Schema) {
+            $this->seedStateKeysForSchema($labResultForm);
+        }
     }
 
     public function saveLabResult(): void
@@ -1220,7 +1469,7 @@ class ClinicalWorkspace extends Page implements HasSchemas
 
         try {
             app(FulfillmentService::class)->fulfill($item, $labResultData);
-            $this->serviceRequestData = [];
+            $this->serviceRequestData = $this->defaultServiceRequestData();
             $this->labResultData = [];
             $this->buildLabResultFormSchema();
             Notification::make()->title('Lab result submitted')->success()->send();
@@ -1279,7 +1528,7 @@ class ClinicalWorkspace extends Page implements HasSchemas
             );
 
             if ($request) {
-                $this->medicationData['items'] = [];
+                $this->medicationData = $this->defaultMedicationData();
                 Notification::make()->title('Medication order created')->success()->send();
             }
         } catch (\Exception $e) {
@@ -1472,7 +1721,7 @@ class ClinicalWorkspace extends Page implements HasSchemas
         try {
             $this->adtService->discharge(
                 $encounter,
-                DischargeDisposition::from($dischargeData['discharge_disposition'] ?? 'completed'),
+                enum_from(DischargeDisposition::class, $dischargeData['discharge_disposition'] ?? 'completed'),
                 $dischargeData['transfer_destination'] ?? null,
                 notes: $dischargeData['discharge_notes'] ?? null,
             );

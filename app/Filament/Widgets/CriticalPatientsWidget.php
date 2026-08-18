@@ -11,7 +11,7 @@ class CriticalPatientsWidget extends Widget
 {
     // use HasWidgetShield;
 
-    protected string $view = 'clinical::widgets.critical-patients-widget';
+    protected string $view = 'clinical::filament.widgets.critical-patients-widget';
 
     protected int $sorting = 1;
 

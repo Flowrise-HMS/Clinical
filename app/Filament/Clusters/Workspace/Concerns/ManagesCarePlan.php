@@ -509,13 +509,9 @@ trait ManagesCarePlan
                     ->findOrFail($data['care_plan_objective_id']);
                 app(CarePlanObjectiveService::class)->evaluate(
                     $objective,
-                    $data['outcome'] instanceof GoalEvaluationOutcome
-                        ? $data['outcome']
-                        : GoalEvaluationOutcome::from($data['outcome']),
+                    enum_from(GoalEvaluationOutcome::class, $data['outcome']),
                     $data['findings'],
-                    $data['next_action'] instanceof GoalEvaluationNextAction
-                        ? $data['next_action']
-                        : GoalEvaluationNextAction::from($data['next_action']),
+                    enum_from(GoalEvaluationNextAction::class, $data['next_action']),
                     $user,
                 );
             })

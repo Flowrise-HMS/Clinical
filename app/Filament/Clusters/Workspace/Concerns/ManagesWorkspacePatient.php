@@ -45,7 +45,7 @@ trait ManagesWorkspacePatient
     public function cancelRegistration(): void
     {
         $this->mode = 'home';
-        $this->registerFormData = [];
+        $this->registerFormData = $this->defaultRegistrationFormData();
         $this->confirmDuplicateRegistration = false;
     }
 
@@ -123,7 +123,7 @@ trait ManagesWorkspacePatient
         }
 
         $this->confirmDuplicateRegistration = false;
-        $this->registerFormData = [];
+        $this->registerFormData = $this->defaultRegistrationFormData();
 
         Notification::make()
             ->title('Patient registered')
@@ -260,7 +260,7 @@ trait ManagesWorkspacePatient
     protected function fillPatientFormDataFromCurrentPatient(): void
     {
         if (! $this->currentPatient) {
-            $this->patientFormData = [];
+            $this->patientFormData = $this->defaultRegistrationFormData();
 
             return;
         }
@@ -347,8 +347,8 @@ trait ManagesWorkspacePatient
 
     protected function resetPatientManagementState(): void
     {
-        $this->registerFormData = [];
-        $this->patientFormData = [];
+        $this->registerFormData = $this->defaultRegistrationFormData();
+        $this->patientFormData = $this->defaultRegistrationFormData();
         $this->postRegistrationFlow = false;
         $this->confirmDuplicateRegistration = false;
     }

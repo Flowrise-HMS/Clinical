@@ -39,7 +39,7 @@ class EditEncounter extends EditRecord
                 ->action(function (array $data) use ($record) {
                     app(EncounterService::class)->triage(
                         $record,
-                        EncounterPriority::from($data['priority'])
+                        enum_from(EncounterPriority::class, $data['priority'])
                     );
                     $this->refreshFormData(['status', 'priority']);
                     Notification::make()
@@ -66,7 +66,7 @@ class EditEncounter extends EditRecord
                 ->action(function (array $data) use ($record) {
                     app(AdtService::class)->transferOut(
                         $record,
-                        AdtDestinationType::from($data['destination_type']),
+                        enum_from(AdtDestinationType::class, $data['destination_type']),
                         destinationLabel: $data['destination_label'] ?? null,
                         destinationBranchId: $data['destination_branch_id'] ?? null,
                         notes: $data['notes'] ?? null,
@@ -82,7 +82,7 @@ class EditEncounter extends EditRecord
                 ->action(function (array $data) use ($record) {
                     app(AdtService::class)->discharge(
                         $record,
-                        DischargeDisposition::from($data['discharge_disposition']),
+                        enum_from(DischargeDisposition::class, $data['discharge_disposition']),
                         $data['transfer_destination'] ?? null,
                         notes: $data['notes'] ?? null,
                     );

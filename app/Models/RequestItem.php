@@ -10,6 +10,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Modules\Billing\Models\InvoiceLine;
 use Modules\Clinical\Database\Factories\RequestItemFactory;
 use Modules\Clinical\Enums\MedicationAdministrationStatus;
 use Modules\Clinical\Enums\RequestItemStatus;
@@ -19,10 +20,11 @@ use Modules\Core\Models\ServiceVariant;
 use Modules\Core\Models\Unit;
 use Modules\Core\Support\AppSettings;
 use Modules\Core\Support\ModuleAvailability;
+use Modules\Pharmacy\Models\PrescriptionDetail;
 
 /**
- * @property-read \Modules\Pharmacy\Models\PrescriptionDetail|null $prescriptionDetail
- * @property-read \Modules\Billing\Models\InvoiceLine|null $invoiceLine
+ * @property-read PrescriptionDetail|null $prescriptionDetail
+ * @property-read InvoiceLine|null $invoiceLine
  *
  * @method \Illuminate\Database\Eloquent\Relations\HasOne prescriptionDetail()
  * @method \Illuminate\Database\Eloquent\Relations\MorphOne invoiceLine()

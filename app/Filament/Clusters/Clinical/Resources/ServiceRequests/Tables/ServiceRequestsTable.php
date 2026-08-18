@@ -32,7 +32,7 @@ class ServiceRequestsTable
                     ->sortable()
                     ->weight('bold'),
 
-                ClientIdentityColumn::make(),
+                ClientIdentityColumn::make(includeGuestSearch: true),
 
                 TextColumn::make('status')
                     ->label('Status')

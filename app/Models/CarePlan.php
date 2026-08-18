@@ -13,14 +13,16 @@ use Modules\Clinical\Database\Factories\CarePlanFactory;
 use Modules\Clinical\Enums\CarePlanCategory;
 use Modules\Clinical\Enums\CarePlanIntent;
 use Modules\Clinical\Enums\CarePlanStatus;
+use Modules\Core\Concerns\ResolvesPatientClientIdentity;
+use Modules\Core\Contracts\ProvidesClientIdentity;
 use Modules\Core\Models\BaseModel;
 use Modules\Core\Models\Branch;
 use Modules\Patient\Models\Patient;
 
-class CarePlan extends BaseModel
+class CarePlan extends BaseModel implements ProvidesClientIdentity
 {
     /** @use HasFactory<CarePlanFactory> */
-    use HasFactory, HasUuids;
+    use HasFactory, HasUuids, ResolvesPatientClientIdentity;
 
     protected $keyType = 'string';
 

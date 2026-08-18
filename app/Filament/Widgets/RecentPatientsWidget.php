@@ -8,7 +8,7 @@ use Modules\Clinical\Classes\Services\ClinicalWorkspaceService;
 
 class RecentPatientsWidget extends Widget
 {
-    protected string $view = 'clinical::widgets.recent-patients-widget';
+    protected string $view = 'clinical::filament.widgets.recent-patients-widget';
 
     protected int $sorting = 4;
 

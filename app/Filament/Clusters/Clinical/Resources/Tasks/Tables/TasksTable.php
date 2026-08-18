@@ -32,7 +32,10 @@ class TasksTable
                     ->searchable()
                     ->sortable(),
 
-                ClientIdentityColumn::make(),
+                ClientIdentityColumn::make(
+                    patientRelation: 'requestItem.serviceRequest.patient',
+                    includeGuestSearch: true,
+                ),
 
                 TextColumn::make('status')
                     ->label('Status')

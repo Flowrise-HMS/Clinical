@@ -6,6 +6,7 @@ use Filament\Widgets\Widget;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Auth;
 use Livewire\Attributes\On;
+use Modules\Core\Classes\Services\BranchService;
 use Modules\Core\Support\OptionalClass;
 
 class WorkspaceTodayAppointmentsWidget extends Widget
@@ -39,30 +40,16 @@ class WorkspaceTodayAppointmentsWidget extends Widget
             return;
         }
 
-        $user = Auth::user();
-        $branchId = $user->branch_id ?? null;
+        $branchId = app(BranchService::class)->getDefaultBranchId();
 
-        if (! $branchId) {
-            $this->appointments = collect();
-
-            return;
-        }
-
-        $start = now()->startOfDay();
-        $end = now()->endOfDay();
-
-        $this->appointments = OptionalClass::when(
-            'Modules\\Appointment\\Models\\Appointment',
-            fn (string $class) => $class::query()
-                ->where('branch_id', $branchId)
-                ->where('start_at', '<=', $end)
-                ->where('end_at', '>=', $start)
-                ->with(['patient', 'location'])
-                ->orderBy('start_at')
-                ->limit(25)
-                ->get(),
-            'Appointment',
-        ) ?? collect();
+        $this->appointments = $appointmentClass::query()
+            ->when($branchId, fn ($query) => $query->where('branch_id', $branchId))
+            ->whereDate('start_at', now()->toDateString())
+            ->whereNotIn('status', ['cancelled', 'noshow'])
+            ->with(['patient', 'location'])
+            ->orderBy('start_at')
+            ->limit(25)
+            ->get();
     }
 
     public function appointmentViewUrl(object $appointment): ?string

@@ -3,7 +3,7 @@
         <div>
             @if($appointments->isEmpty())
                 <div class="flex flex-col items-center justify-center py-6 text-center text-sm text-gray-600 dark:text-gray-400">
-                    <p>{{ __('No appointments scheduled for today in your branch.') }}</p>
+                    <p>{{ __('No appointments scheduled for today in the current branch.') }}</p>
                 </div>
             @else
                 <div class="divide-y divide-gray-200 dark:divide-gray-700">

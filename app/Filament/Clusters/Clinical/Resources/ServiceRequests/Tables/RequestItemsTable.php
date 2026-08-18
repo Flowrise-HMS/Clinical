@@ -91,6 +91,8 @@ class RequestItemsTable
             TextColumn::make('#')->rowIndex(),
             ClientIdentityColumn::make(
                 resolve: fn (RequestItem $record) => $record->serviceRequest?->clientIdentity(),
+                patientRelation: 'serviceRequest.patient',
+                includeGuestSearch: true,
             ),
             TextColumn::make('service.name')
                 ->label('Service')

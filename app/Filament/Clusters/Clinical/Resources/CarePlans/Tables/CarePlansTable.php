@@ -9,6 +9,7 @@ use Filament\Tables\Table;
 use Modules\Clinical\Enums\CarePlanCategory;
 use Modules\Clinical\Enums\CarePlanStatus;
 use Modules\Clinical\Models\CarePlan;
+use Modules\Core\Filament\Support\ClientIdentityColumn;
 
 class CarePlansTable
 {
@@ -18,9 +19,7 @@ class CarePlansTable
     public static function columns(): array
     {
         return [
-            TextColumn::make('patient.full_name')
-                ->label('Patient')
-                ->searchable(),
+            ClientIdentityColumn::make(label: __('Patient')),
             TextColumn::make('category')
                 ->badge()
                 ->sortable(),

@@ -32,7 +32,7 @@ class EncountersTable
                     ->sortable()
                     ->weight('bold'),
 
-                ClientIdentityColumn::make(),
+                ClientIdentityColumn::make(includeGuestSearch: true),
 
                 TextColumn::make('type')
                     ->label('Type')

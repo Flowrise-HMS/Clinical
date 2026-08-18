@@ -10,7 +10,7 @@ use Modules\Clinical\Models\Task;
 
 class MyTasksWidget extends Widget
 {
-    protected string $view = 'clinical::widgets.my-tasks-widget';
+    protected string $view = 'clinical::filament.widgets.my-tasks-widget';
 
     protected static bool $isDiscovered = false;
 

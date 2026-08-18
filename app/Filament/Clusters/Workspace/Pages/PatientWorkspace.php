@@ -31,6 +31,7 @@ use Modules\Clinical\Filament\Widgets\RecentPatientsWidget;
 use Modules\Clinical\Filament\Widgets\WorkspaceTodayAppointmentsWidget;
 use Modules\Core\Classes\Support\PageHeaderActionsRegistry;
 use Modules\Core\Classes\Support\PageWidgetsRegistry;
+use Modules\Core\Filament\Support\ClientIdentityColumn;
 use Modules\Core\Support\ModuleAvailability;
 use Modules\Patient\Classes\Services\PatientSearchService;
 use Modules\Patient\Models\Patient;
@@ -167,11 +168,10 @@ class PatientWorkspace extends Page implements HasActions, HasSchemas, HasTable
                     ->imageSize(80)
                     ->alignCenter()
                     ->extraAttributes(['class' => 'mt-2']),
-                TextColumn::make('full_name')
+                ClientIdentityColumn::make(patientRelation: null, withIdentifier: false)
                     ->size('lg')
                     ->weight('bold')
-                    ->alignCenter()
-                    ->searchable(['first_name', 'last_name', 'mrn', 'phone']),
+                    ->alignCenter(),
                 TextColumn::make('mrn')
                     ->label('MRN')
                     ->alignCenter()
@@ -199,7 +199,7 @@ class PatientWorkspace extends Page implements HasActions, HasSchemas, HasTable
     {
         return [
             TextColumn::make('#')->rowIndex(),
-            TextColumn::make('full_name')
+            ClientIdentityColumn::make(patientRelation: null, searchable: false, withIdentifier: false)
                 ->weight('bold'),
             TextColumn::make('mrn')
                 ->label('MRN')

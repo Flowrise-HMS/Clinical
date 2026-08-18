@@ -11,6 +11,7 @@ use Filament\Tables\Table;
 use Modules\Clinical\Enums\AllergenType;
 use Modules\Clinical\Enums\AllergySeverity;
 use Modules\Clinical\Enums\AllergyVerificationStatus;
+use Modules\Core\Filament\Support\ClientIdentityColumn;
 
 class AllergiesTable
 {
@@ -19,8 +20,8 @@ class AllergiesTable
         return $table
             ->columns([
                 TextColumn::make('#')->rowIndex(),
-                TextColumn::make('patient.full_name')
-                    ->sortable(),
+                ClientIdentityColumn::make(label: __('Patient'))
+                    ->sortable(['patient.last_name']),
                 TextColumn::make('allergen_type')
                     ->badge()
                     ->sortable(),

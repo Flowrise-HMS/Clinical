@@ -13,6 +13,7 @@ use Modules\Clinical\Classes\Services\MedicationFulfillmentPolicy;
 use Modules\Clinical\Filament\Clusters\Clinical\ClinicalCluster;
 use Modules\Clinical\Models\RequestItem;
 use Modules\Core\Classes\Services\BranchService;
+use Modules\Core\Filament\Support\ClientIdentityColumn;
 use Modules\Core\Settings\FeatureSettings;
 
 class MedicationAdministrationBoard extends Page implements HasTable
@@ -60,7 +61,11 @@ class MedicationAdministrationBoard extends Page implements HasTable
             )
             ->defaultSort('prescriptionDetail.next_dose_at')
             ->columns([
-                TextColumn::make('serviceRequest.patient.display_name')->label('Patient'),
+                ClientIdentityColumn::make(
+                    resolve: fn (RequestItem $record) => $record->serviceRequest?->clientIdentity(),
+                    patientRelation: 'serviceRequest.patient',
+                    includeGuestSearch: true,
+                ),
                 TextColumn::make('service.name')->label('Medication'),
                 TextColumn::make('prescriptionDetail.frequency')->label('SIG'),
                 TextColumn::make('remaining')

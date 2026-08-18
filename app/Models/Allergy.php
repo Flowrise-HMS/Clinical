@@ -15,12 +15,14 @@ use Modules\Clinical\Enums\AllergenType;
 use Modules\Clinical\Enums\AllergySeverity;
 use Modules\Clinical\Enums\AllergyVerificationStatus;
 use Modules\Clinical\Enums\OnsetType;
+use Modules\Core\Concerns\ResolvesPatientClientIdentity;
+use Modules\Core\Contracts\ProvidesClientIdentity;
 use Modules\Patient\Models\Patient;
 
-class Allergy extends Model
+class Allergy extends Model implements ProvidesClientIdentity
 {
     /** @use HasFactory<AllergyFactory> */
-    use HasFactory, HasUuids, SoftDeletes;
+    use HasFactory, HasUuids, ResolvesPatientClientIdentity, SoftDeletes;
 
     protected $keyType = 'string';
 
