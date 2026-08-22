@@ -795,12 +795,22 @@ class ClinicalWorkspace extends Page implements HasSchemas
     }
 
     /**
+     * Filament's trait appends into `$cachedHeaderActions`. Reset first so `booted`
+     * (after `mount()`) does not duplicate actions already cached by `selectPatient()`.
+     */
+    public function cacheInteractsWithHeaderActions(): void
+    {
+        $this->cachedHeaderActions = [];
+
+        parent::cacheInteractsWithHeaderActions();
+    }
+
+    /**
      * Filament caches header actions in `booted`, which runs before `selectPatient()`
      * on subsequent Livewire requests. Rebuild after the patient context changes.
      */
     protected function recacheHeaderActions(): void
     {
-        $this->cachedHeaderActions = [];
         $this->cacheInteractsWithHeaderActions();
     }
 

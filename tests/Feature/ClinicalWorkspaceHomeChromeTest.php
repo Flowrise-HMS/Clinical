@@ -93,8 +93,32 @@ it('shows header actions after picking a patient without a full page reload', fu
         ->assertSet('mode', 'patient');
 
     $actions = $page->instance()->getCachedHeaderActions();
+    $actionKeys = collect($actions)
+        ->map(fn ($action) => $action instanceof \Filament\Actions\Action
+            ? $action->getName()
+            : 'group:'.$action->getLabel())
+        ->all();
 
     expect($actions)->not->toBeEmpty()
         ->and($actions[0]->getName())->toBe('view_timeline')
-        ->and($actions[1]->getName())->toBe('view_profile');
+        ->and($actions[1]->getName())->toBe('view_profile')
+        ->and($actionKeys)->toBe(array_values(array_unique($actionKeys)));
+});
+
+it('does not duplicate header actions when the workspace mounts with a patient', function (): void {
+    $this->actingAs($this->user);
+
+    $actions = Livewire::test(ClinicalWorkspace::class, ['patientId' => $this->patient->id])
+        ->assertSet('mode', 'patient')
+        ->instance()
+        ->getCachedHeaderActions();
+
+    $actionKeys = collect($actions)
+        ->map(fn ($action) => $action instanceof \Filament\Actions\Action
+            ? $action->getName()
+            : 'group:'.$action->getLabel())
+        ->all();
+
+    expect($actionKeys)->toContain('view_timeline', 'view_profile')
+        ->and($actionKeys)->toBe(array_values(array_unique($actionKeys)));
 });
