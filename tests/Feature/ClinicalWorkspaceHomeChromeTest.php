@@ -1,6 +1,7 @@
 <?php
 
 use App\Models\User;
+use Filament\Actions\Action;
 use Livewire\Livewire;
 use Modules\Appointment\Enums\AppointmentStatus;
 use Modules\Appointment\Models\Appointment;
@@ -94,7 +95,7 @@ it('shows header actions after picking a patient without a full page reload', fu
 
     $actions = $page->instance()->getCachedHeaderActions();
     $actionKeys = collect($actions)
-        ->map(fn ($action) => $action instanceof \Filament\Actions\Action
+        ->map(fn ($action) => $action instanceof Action
             ? $action->getName()
             : 'group:'.$action->getLabel())
         ->all();
@@ -114,7 +115,7 @@ it('does not duplicate header actions when the workspace mounts with a patient',
         ->getCachedHeaderActions();
 
     $actionKeys = collect($actions)
-        ->map(fn ($action) => $action instanceof \Filament\Actions\Action
+        ->map(fn ($action) => $action instanceof Action
             ? $action->getName()
             : 'group:'.$action->getLabel())
         ->all();
