@@ -95,7 +95,24 @@ class MedicationDoseScheduleService
         $bestSlot = null;
         $bestDiff = PHP_INT_MAX;
 
+        // A slot that already holds a GIVEN dose is spoken for. Without this,
+        // every dose recorded inside the first slot's grace window was stamped
+        // with that same sequence — so a 12-dose QID course could end up as
+        // twelve administrations all labelled slot 1, and the duplicate-slot
+        // check (which reads getNextDueSlot()) never saw a conflict.
+        $takenSequences = $item->medicationAdministrations()
+            ->where('status', MedicationAdministrationStatus::GIVEN)
+            ->whereNotNull('dose_slot_sequence')
+            ->whereKeyNot($administration->getKey())
+            ->pluck('dose_slot_sequence')
+            ->map(fn ($sequence): int => (int) $sequence)
+            ->all();
+
         foreach ($slots as $slot) {
+            if (in_array($slot->sequence, $takenSequences, true)) {
+                continue;
+            }
+
             $diff = abs($adminTime->diffInMinutes($slot->dueAt, false));
             if ($diff <= $graceMinutes && $diff < $bestDiff) {
                 $bestDiff = $diff;

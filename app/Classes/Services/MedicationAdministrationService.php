@@ -3,6 +3,7 @@
 namespace Modules\Clinical\Classes\Services;
 
 use App\Models\User;
+use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -50,7 +51,36 @@ class MedicationAdministrationService
         return ['created' => $created, 'errors' => $errors];
     }
 
+    /**
+     * Record a dose.
+     *
+     * Every safety check — dose cap, duplicate slot, witness attestation, PRN
+     * reason — runs inside the transaction, after taking a row lock on the
+     * request item. Previously they ran before it, so two nurses tapping "Give"
+     * simultaneously both read the same given-dose count, both passed, and both
+     * inserted. The unique guard added in
+     * 2026_08_30_000002_guard_medication_administration_slots is the backstop if
+     * anything ever reaches the insert concurrently anyway.
+     */
     public function administer(RequestItem $item, array $data, ?string $notes = null, ?User $user = null): MedicationAdministration
+    {
+        try {
+            return DB::transaction(function () use ($item, $data, $notes, $user) {
+                RequestItem::query()->whereKey($item->getKey())->lockForUpdate()->first();
+                $item->refresh();
+
+                return $this->recordAdministration($item, $data, $notes, $user);
+            });
+        } catch (UniqueConstraintViolationException) {
+            // Lost a concurrent race for the same slot. Surface it the same way
+            // the in-PHP duplicate check does so callers keep one error type.
+            throw new \InvalidArgumentException(
+                "{$item->service?->name}: a dose has already been recorded for this time slot."
+            );
+        }
+    }
+
+    protected function recordAdministration(RequestItem $item, array $data, ?string $notes, ?User $user): MedicationAdministration
     {
         $user = $user ?? Auth::user();
         $detail = $item->prescriptionDetail;
@@ -132,35 +162,33 @@ class MedicationAdministrationService
             );
         }
 
-        return DB::transaction(function () use ($item, $startedAt, $endedAt, $data, $notes, $user, $status, $quantityGiven, $detail) {
-            $administration = MedicationAdministration::create([
-                'request_item_id' => $item->id,
-                'administered_by' => $user->id,
-                'started_at' => $startedAt,
-                'ended_at' => $endedAt,
-                'quantity_given' => $quantityGiven,
-                'dose_unit_id' => $data['dose_unit_id'] ?? $detail->dose_unit_id,
-                'status' => $status,
-                'witness_confirmed' => filter_var($data['witness_confirmed'] ?? false, FILTER_VALIDATE_BOOLEAN),
-                'omission_reason' => $data['omission_reason'] ?? null,
-                'prn_reason' => $data['prn_reason'] ?? null,
-                'notes' => $notes,
-            ]);
+        $administration = MedicationAdministration::create([
+            'request_item_id' => $item->id,
+            'administered_by' => $user->id,
+            'started_at' => $startedAt,
+            'ended_at' => $endedAt,
+            'quantity_given' => $quantityGiven,
+            'dose_unit_id' => $data['dose_unit_id'] ?? $detail->dose_unit_id,
+            'status' => $status,
+            'witness_confirmed' => filter_var($data['witness_confirmed'] ?? false, FILTER_VALIDATE_BOOLEAN),
+            'omission_reason' => $data['omission_reason'] ?? null,
+            'prn_reason' => $data['prn_reason'] ?? null,
+            'notes' => $notes,
+        ]);
 
-            $this->scheduleService->markSlotForAdministration($item, $administration);
+        $this->scheduleService->markSlotForAdministration($item, $administration);
 
-            if ($item->isPending()) {
-                $item->markAsInProgress();
-            }
+        if ($item->isPending()) {
+            $item->markAsInProgress();
+        }
 
-            if ($this->policy->shouldCompleteOnMar($item)) {
-                $item->markAsFulfilled($user->id);
-            }
+        if ($this->policy->shouldCompleteOnMar($item)) {
+            $item->markAsFulfilled($user->id);
+        }
 
-            $this->recordWardConsumptionIfApplicable($item, $administration, $quantityGiven);
+        $this->recordWardConsumptionIfApplicable($item, $administration, $quantityGiven);
 
-            return $administration;
-        });
+        return $administration;
     }
 
     protected function normalizeStatus(MedicationAdministrationStatus|string|null $status): ?MedicationAdministrationStatus
