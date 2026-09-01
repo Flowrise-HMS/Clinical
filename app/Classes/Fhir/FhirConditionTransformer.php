@@ -136,13 +136,25 @@ class FhirConditionTransformer implements FhirResourceContract
         ])->find($id);
     }
 
+    /**
+     * EncounterDiagnosis extends BaseModel but overrides bootBelongsToBranch() to
+     * an empty method — "diagnoses inherit branch context via the parent encounter"
+     * — so the branch global scope is never registered and the table has no
+     * `branch_id`. Nothing was actually enforcing that inheritance on a direct
+     * query, so this returned every diagnosis in every branch.
+     *
+     * Constraining through `encounter` makes the inheritance real: Encounter is
+     * branch-scoped, and its scope applies inside the subquery.
+     */
     public function query(): Builder
     {
-        return EncounterDiagnosis::with([
-            'encounter',
-            'patient',
-            'diagnosisCode',
-        ]);
+        return EncounterDiagnosis::query()
+            ->whereHas('encounter')
+            ->with([
+                'encounter',
+                'patient',
+                'diagnosisCode',
+            ]);
     }
 
     public function searchableParameters(): array

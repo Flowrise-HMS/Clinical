@@ -219,12 +219,23 @@ class FhirAllergyIntoleranceTransformer implements FhirResourceContract
         ])->find($id);
     }
 
+    /**
+     * Allergy extends plain Model, not BaseModel: there is no `branch_id` column
+     * and no branch global scope, so an unconstrained query returns every allergy
+     * record in the installation. Constraining through `patient` inherits Patient's
+     * own branch scope inside the subquery, which is the only branch dimension
+     * these rows have.
+     *
+     * Without this, bulk export is a whole-database PHI disclosure.
+     */
     public function query(): Builder
     {
-        return Allergy::with([
-            'patient',
-            'verifiedBy',
-        ]);
+        return Allergy::query()
+            ->whereHas('patient')
+            ->with([
+                'patient',
+                'verifiedBy',
+            ]);
     }
 
     public function searchableParameters(): array

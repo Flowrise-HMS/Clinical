@@ -314,12 +314,12 @@ class FhirEncounterTransformer implements FhirResourceContract
 
     public function findById(string $id): ?Model
     {
-        return Encounter::with(['participants.user.practitioner', 'branch', 'department', 'location', 'bed'])->find($id);
+        return Encounter::with(['participants.user'])->find($id);
     }
 
     public function query(): Builder
     {
-        return Encounter::with(['participants.user.practitioner', 'branch', 'department', 'location', 'bed']);
+        return Encounter::with(['participants.user']);
     }
 
     public function searchableParameters(): array

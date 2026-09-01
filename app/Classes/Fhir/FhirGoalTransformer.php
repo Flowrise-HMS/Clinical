@@ -77,12 +77,25 @@ class FhirGoalTransformer implements FhirResourceContract
         return $this->query()->find($id);
     }
 
+    /**
+     * CarePlanObjective and CarePlanDiagnosis both extend BaseModel and both
+     * override bootBelongsToBranch() to an empty method, so neither carries the
+     * branch scope. The constraint therefore has to reach two levels up to
+     * CarePlan, which is scoped.
+     *
+     * This also fixes a null dereference: `toFhir()` reads
+     * `$model->diagnosis->carePlan->patient_id`, and for a cross-branch objective
+     * the eager load resolved `carePlan` to null — because CarePlan *is* scoped —
+     * producing a malformed "Patient/" reference instead of an error.
+     */
     public function query(): Builder
     {
-        return CarePlanObjective::with([
-            'diagnosis.carePlan',
-            'evaluations',
-        ]);
+        return CarePlanObjective::query()
+            ->whereHas('diagnosis.carePlan')
+            ->with([
+                'diagnosis.carePlan',
+                'evaluations',
+            ]);
     }
 
     public function searchableParameters(): array
