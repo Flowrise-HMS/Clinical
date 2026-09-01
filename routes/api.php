@@ -1,8 +1,17 @@
 <?php
 
-use Illuminate\Support\Facades\Route;
-use Modules\Clinical\Http\Controllers\ClinicalController;
-
-Route::middleware(['auth:sanctum'])->prefix('v1')->group(function () {
-    Route::apiResource('clinicals', ClinicalController::class)->names('clinical');
-});
+/*
+|--------------------------------------------------------------------------
+| Clinical API Routes
+|--------------------------------------------------------------------------
+|
+| This file previously registered `apiResource('clinicals', ClinicalController::class)`
+| against the untouched nwidart scaffold controller: `index()` and `show()` returned
+| Blade views from JSON endpoints, and `store()`, `update()` and `destroy()` had empty
+| bodies that answered 200 without writing anything. The group also omitted the
+| `api.branch` middleware, so nothing set the branch context.
+|
+| Clinical resources are being reintroduced through ApiRouteRegistrar, which applies
+| `auth:sanctum` + `api.branch` and gates the whole surface on the Api module.
+|
+*/
