@@ -6,6 +6,7 @@ use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Model;
 use Modules\Clinical\Filament\Clusters\Clinical\ClinicalCluster;
 use Modules\Clinical\Filament\Clusters\Clinical\Resources\Encounters\Pages\CreateEncounter;
 use Modules\Clinical\Filament\Clusters\Clinical\Resources\Encounters\Pages\EditEncounter;
@@ -35,6 +36,26 @@ class EncounterResource extends Resource
     protected static ?string $recordTitleAttribute = 'encounter_number';
 
     protected static ?string $slug = 'clinical/encounters';
+
+    public static function getGloballySearchableAttributes(): array
+    {
+        return ['encounter_number', 'patient.mrn', 'patient.first_name', 'patient.middle_name', 'patient.last_name'];
+    }
+
+    public static function getGlobalSearchResultDetails(Model $record): array
+    {
+        return array_filter([
+            'Patient' => $record->patient?->full_name ?? $record->guest_name,
+            'Type' => $record->type?->getLabel(),
+            'Status' => $record->status?->getLabel(),
+            'Admitted' => $record->admitted_at?->format('d M Y'),
+        ]);
+    }
+
+    public static function getGlobalSearchEloquentQuery(): Builder
+    {
+        return parent::getGlobalSearchEloquentQuery()->with('patient');
+    }
 
     public static function form(Schema $schema): Schema
     {
