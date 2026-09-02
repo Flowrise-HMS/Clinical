@@ -9,13 +9,12 @@ use Filament\Forms\Components\TextInput;
 use Filament\Schemas\Components\Fieldset;
 use Filament\Schemas\Components\Grid;
 use Filament\Schemas\Components\Section;
-use Filament\Schemas\Components\Utilities\Get;
 use Filament\Schemas\Schema;
 use Modules\Clinical\Enums\EncounterPriority;
 use Modules\Clinical\Enums\EncounterStatus;
 use Modules\Clinical\Enums\EncounterType;
+use Modules\Clinical\Filament\Schemas\EncounterCoverageSchema;
 use Modules\Core\Classes\Services\BranchService;
-use Modules\Core\Enums\CoverageType;
 
 class EncounterForm
 {
@@ -84,24 +83,10 @@ class EncounterForm
                                 ->required()
                                 ->label('Status'),
 
-                            Select::make('coverage_type')
-                                ->options(CoverageType::class)
-                                ->native(false)
-                                ->nullable()
-                                ->live()
-                                ->label('Coverage Type'),
+                            EncounterCoverageSchema::coverageField(),
                         ]),
 
-                    TextInput::make('claim_check_code')
-                        ->label('NHIS Claim Check Code')
-                        ->rules(['nullable', 'regex:/^([A-Za-z0-9]{5}|[A-Za-z0-9]{13})$/'])
-                        ->helperText('Dial *842# from an authorized facility phone number and select option 1 ("Generate Claim Code"). Enter the 5-character (non-biometric) or 13-character (biometric) code returned.')
-                        ->visible(function (Get $get): bool {
-                            $coverage = $get('coverage_type');
-
-                            return $coverage === CoverageType::NHIS || $coverage === CoverageType::NHIS->value;
-                        })
-                        ->columnSpanFull(),
+                    EncounterCoverageSchema::claimCheckCodeField(),
 
                     Fieldset::make('Clinical Information')
                         ->schema([

@@ -24,6 +24,11 @@
 
     <div class="flex justify-end gap-2 pt-4">
         @if ($this->hasOpenEncounter())
+            @if ($this->canGenerateClaimCheckCode())
+                <x-filament::button wire:click="generateClaimCheckCode" color="warning" icon="heroicon-m-arrow-path">
+                    Generate NHIS Claim Code
+                </x-filament::button>
+            @endif
             @if ($openEncounter?->type?->isInpatient())
                 <x-filament::button wire:click="$set('activeTab', 'adt')" color="info" icon="heroicon-m-arrows-right-left">
                     Go to ADT

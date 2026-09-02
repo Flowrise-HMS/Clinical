@@ -13,7 +13,6 @@ use Filament\Infolists\Components\TextEntry;
 use Filament\Notifications\Notification;
 use Filament\Pages\Page;
 use Filament\Schemas\Components\Grid;
-use Filament\Schemas\Components\Utilities\Get;
 use Filament\Schemas\Concerns\InteractsWithSchemas;
 use Filament\Schemas\Contracts\HasSchemas;
 use Filament\Schemas\Schema;
@@ -32,6 +31,7 @@ use Modules\Clinical\Classes\Services\ClinicalWorkspaceService;
 use Modules\Clinical\Classes\Services\DiagnosisService;
 use Modules\Clinical\Classes\Services\EncounterService;
 use Modules\Clinical\Classes\Services\FulfillmentService;
+use Modules\Clinical\Classes\Services\NhisClaimCodeGateway;
 use Modules\Clinical\Classes\Services\ServiceRequestService;
 use Modules\Clinical\Classes\Services\VitalSignService;
 use Modules\Clinical\Enums\AdtDestinationType;
@@ -54,6 +54,7 @@ use Modules\Clinical\Filament\Clusters\Clinical\Resources\VitalSigns\Schemas\Vit
 use Modules\Clinical\Filament\Clusters\Workspace\Concerns\ManagesWorkspacePatient;
 use Modules\Clinical\Filament\Clusters\Workspace\Concerns\SeedsSchemaEntangleKeys;
 use Modules\Clinical\Filament\Clusters\Workspace\WorkspaceCluster;
+use Modules\Clinical\Filament\Schemas\EncounterCoverageSchema;
 use Modules\Clinical\Filament\Widgets\CriticalPatientsWidget;
 use Modules\Clinical\Filament\Widgets\MyTasksWidget;
 use Modules\Clinical\Filament\Widgets\PatientVitalsHistoryWidget;
@@ -1006,6 +1007,9 @@ class ClinicalWorkspace extends Page implements HasSchemas
                 'coverage_type' => $coverage,
                 'claim_check_code' => $encounterData['claim_check_code'] ?? null,
             ]);
+
+            $gateway = app(NhisClaimCodeGateway::class);
+            $gateway->notify($gateway->generateFor($encounter->refresh()));
         }
 
         $this->currentEncounter = $encounter->fresh(['bed', 'location']);
@@ -1030,6 +1034,31 @@ class ClinicalWorkspace extends Page implements HasSchemas
         }
 
         Notification::make()->title("{$label} encounter created")->success()->send();
+    }
+
+    public function canGenerateClaimCheckCode(): bool
+    {
+        $encounter = $this->getOpenEncounter();
+
+        return $encounter !== null
+            && $encounter->coverage_type === CoverageType::NHIS
+            && blank($encounter->claim_check_code)
+            && app(NhisClaimCodeGateway::class)->available();
+    }
+
+    public function generateClaimCheckCode(): void
+    {
+        $encounter = $this->getOpenEncounter();
+
+        if ($encounter === null || $encounter->coverage_type !== CoverageType::NHIS || filled($encounter->claim_check_code)) {
+            return;
+        }
+
+        $gateway = app(NhisClaimCodeGateway::class);
+        $gateway->notify($gateway->generateFor($encounter), verbose: true);
+
+        $this->currentEncounter = $encounter->fresh(['bed', 'location']);
+        $this->fillEncounterFormData();
     }
 
     public function admitToBed(): void
@@ -1855,26 +1884,12 @@ class ClinicalWorkspace extends Page implements HasSchemas
                                 ->default(EncounterType::OUTPATIENT->value)
                                 ->required()
                                 ->native(false),
-                            Select::make('coverage_type')
-                                ->label('Coverage Type')
-                                ->options(CoverageType::class)
-                                ->required()
-                                ->live()
-                                ->native(false),
+                            EncounterCoverageSchema::coverageField(),
                             Textarea::make('chief_complaint')
                                 ->label('Chief Complaint')
                                 ->placeholder('Reason for visit')
                                 ->columnSpanFull(),
-                            TextInput::make('claim_check_code')
-                                ->label('NHIS Claim Check Code')
-                                ->rules(['nullable', 'regex:/^([A-Za-z0-9]{5}|[A-Za-z0-9]{13})$/'])
-                                ->helperText('Dial *842# from an authorized facility phone number and select option 1 ("Generate Claim Code"). Enter the 5-character (non-biometric) or 13-character (biometric) code returned.')
-                                ->visible(function (Get $get): bool {
-                                    $coverage = $get('coverage_type');
-
-                                    return $coverage === CoverageType::NHIS || $coverage === CoverageType::NHIS->value;
-                                })
-                                ->columnSpanFull(),
+                            EncounterCoverageSchema::claimCheckCodeField(),
                         ]),
                 ])
                 ->disabled(fn (): bool => $this->hasOpenEncounter())
@@ -2236,6 +2251,20 @@ class ClinicalWorkspace extends Page implements HasSchemas
         $widget = $widgets[0] ?? null;
 
         return is_string($widget) ? $widget : null;
+    }
+
+    /**
+     * Widgets other modules contribute below the patient banner (e.g. the
+     * Billing outstanding-balance card), as Livewire component class-strings.
+     *
+     * @return list<class-string>
+     */
+    public function patientBannerWidgets(): array
+    {
+        return array_values(array_filter(
+            app(PageWidgetsRegistry::class)->for(static::class, 'patient_banner', $this),
+            'is_string',
+        ));
     }
 
     #[Computed]

@@ -18,6 +18,7 @@ use Modules\Clinical\Classes\Services\EncounterService;
 use Modules\Clinical\Classes\Services\FulfillmentService;
 use Modules\Clinical\Classes\Services\MedicationAdministrationService;
 use Modules\Clinical\Classes\Services\MedicationFulfillmentPolicy;
+use Modules\Clinical\Classes\Services\NhisClaimCodeGateway;
 use Modules\Clinical\Classes\Services\ServiceRequestService;
 use Modules\Clinical\Classes\Services\VitalSignService;
 use Modules\Clinical\Filament\Clusters\Clinical\Resources\Allergies\Schemas\AllergyForm;
@@ -186,7 +187,7 @@ class PatientActions
             ->slideOver()
             ->schema(fn ($schema) => AllergyForm::quickElements())
             ->mutateDataUsing(fn (array $data): array => $this->injectAllergyData($data))
-            ->visible(fn () => app(AllergyPolicy::class)->create(Auth::user()))
+            ->visible(fn () => Auth::check() && app(AllergyPolicy::class)->create(Auth::user()))
             ->action(fn (array $data) => $this->allergyService->record(
                 $this->patient,
                 $data
@@ -205,7 +206,7 @@ class PatientActions
             ->schema(EncounterDiagnosisForm::itemElements())
             ->visible(fn () => $this->patient !== null
                 && $this->encounterId !== null
-                && app(EncounterDiagnosisPolicy::class)->create(Auth::user()))
+                && Auth::check() && app(EncounterDiagnosisPolicy::class)->create(Auth::user()))
             ->action(function (array $data) {
                 if (! $this->patient) {
                     return;
@@ -243,7 +244,7 @@ class PatientActions
             ->model(VitalSign::class)
             ->slideOver()
             ->schema(fn () => VitalSignForm::quickElements())
-            ->visible(fn () => app(VitalSignPolicy::class)->create(Auth::user()))
+            ->visible(fn () => Auth::check() && app(VitalSignPolicy::class)->create(Auth::user()))
             ->mutateDataUsing(fn (array $data): array => $this->injectVitalSignData($data))
             ->action(fn (array $data) => $this->vitalSignService->record(
                 $this->patient,
@@ -259,7 +260,7 @@ class PatientActions
             ->label('View Full Profile')
             ->icon('heroicon-m-user-circle')
             ->record($this->patient)
-            ->visible(fn ($record) => app(PatientPolicy::class)->view(Auth::user(), $record))
+            ->visible(fn ($record) => Auth::check() && app(PatientPolicy::class)->view(Auth::user(), $record))
             ->url(fn ($record) => PatientProfile::getUrl(['patient' => $record?->id]), shouldOpenInNewTab: true)
             ->color('gray');
     }
@@ -271,7 +272,7 @@ class PatientActions
             ->icon('heroicon-m-clock')
             ->color('gray')
             ->record($this->patient)
-            ->visible(fn ($record) => app(PatientPolicy::class)->view(Auth::user(), $record))
+            ->visible(fn ($record) => Auth::check() && app(PatientPolicy::class)->view(Auth::user(), $record))
             ->url(fn ($record) => Timeline::getUrl(['patient' => $record?->id]), shouldOpenInNewTab: true);
     }
 
@@ -285,7 +286,7 @@ class PatientActions
             ->color('primary')
             ->visible(fn (): bool => $patient !== null
                 && Auth::user() !== null
-                && app(CarePlanPolicy::class)->viewAny(Auth::user()))
+                && Auth::check() && app(CarePlanPolicy::class)->viewAny(Auth::user()))
             ->url(fn (): string => CarePlanWorkspace::getUrl([
                 'patientId' => $patient?->id,
             ]));
@@ -315,7 +316,7 @@ class PatientActions
             ->color('warning')
             ->record($this->patient)
             ->action(fn ($record) => $record->update(['is_active' => false]))
-            ->visible(fn ($record) => $record->is_active && app(PatientPolicy::class)->update(Auth::user(), $record))
+            ->visible(fn ($record) => $record->is_active && Auth::check() && app(PatientPolicy::class)->update(Auth::user(), $record))
             ->requiresConfirmation()
             ->modalHeading('Deactivate Patient?')
             ->modalDescription('This patient will no longer be able to access services. You can reactivate them later.');
@@ -329,7 +330,7 @@ class PatientActions
             ->model(ClinicalNote::class)
             ->slideOver()
             ->schema(fn ($schema) => ClinicalNoteForm::quickElements())
-            ->visible(fn ($record) => app(ClinicalNotePolicy::class)->create(Auth::user()))
+            ->visible(fn ($record) => Auth::check() && app(ClinicalNotePolicy::class)->create(Auth::user()))
             ->mutateDataUsing(fn (array $data): array => $this->injectClinicalNoteData($data))
             ->action(fn (array $data) => $this->clinicalNoteService->record(
                 $this->patient,
@@ -348,7 +349,7 @@ class PatientActions
             ->model(ServiceRequest::class)
             ->schema(fn ($schema) => ServiceRequestForm::quickElements(hidenEncounter: true, lockStatuses: true))
             ->mutateDataUsing(fn (array $data): array => $this->injectServiceRequestData($data))
-            ->visible(fn ($record) => app(ServiceRequestPolicy::class)->create(Auth::user()))
+            ->visible(fn ($record) => Auth::check() && app(ServiceRequestPolicy::class)->create(Auth::user()))
             ->action(fn (array $data) => $this->serviceRequestService->record(
                 $this->patient,
                 $data,
@@ -619,7 +620,7 @@ class PatientActions
             ->schema(fn ($schema) => EncounterForm::quickElements())
             ->visible(fn (): bool => $this->patient !== null
                 && ! $this->patient->activeEncounter()->exists()
-                && app(EncounterPolicy::class)->create(Auth::user()))
+                && Auth::check() && app(EncounterPolicy::class)->create(Auth::user()))
             ->mutateDataUsing(fn (array $data): array => $this->injectEncounterData($data))
             ->action(fn (array $data) => $this->createEncounter($data))
             ->successNotificationTitle('Encounter created successfully');
@@ -701,7 +702,7 @@ class PatientActions
 
     protected function createEncounter(array $data): Encounter
     {
-        return $this->encounterService->createForPatient(
+        $encounter = $this->encounterService->createForPatient(
             patient: $this->patient,
             type: ($data['type']),
             chiefComplaint: $data['chief_complaint'] ?? null,
@@ -712,6 +713,18 @@ class PatientActions
             departmentId: $data['department_id'] ?? null,
             createdBy: $data['created_by'] ?? null,
         );
+
+        if ($coverage = $data['coverage_type'] ?? null) {
+            $encounter->update([
+                'coverage_type' => $coverage,
+                'claim_check_code' => $data['claim_check_code'] ?? null,
+            ]);
+
+            $gateway = app(NhisClaimCodeGateway::class);
+            $gateway->notify($gateway->generateFor($encounter->refresh()));
+        }
+
+        return $encounter;
     }
 
     protected function injectAllergyData(array $data): array

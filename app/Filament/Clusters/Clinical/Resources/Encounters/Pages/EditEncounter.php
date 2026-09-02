@@ -2,15 +2,18 @@
 
 namespace Modules\Clinical\Filament\Clusters\Clinical\Resources\Encounters\Pages;
 
+use Filament\Actions\Action;
 use Filament\Notifications\Notification;
 use Filament\Resources\Pages\EditRecord;
 use Modules\Clinical\Classes\Actions\EncounterActions;
 use Modules\Clinical\Classes\Services\AdtService;
 use Modules\Clinical\Classes\Services\EncounterService;
+use Modules\Clinical\Classes\Services\NhisClaimCodeGateway;
 use Modules\Clinical\Enums\AdtDestinationType;
 use Modules\Clinical\Enums\DischargeDisposition;
 use Modules\Clinical\Enums\EncounterPriority;
 use Modules\Clinical\Filament\Clusters\Clinical\Resources\Encounters\EncounterResource;
+use Modules\Core\Enums\CoverageType;
 
 class EditEncounter extends EditRecord
 {
@@ -21,6 +24,21 @@ class EditEncounter extends EditRecord
         $record = $this->getRecord();
 
         return [
+            Action::make('generateNhisClaimCode')
+                ->label('Generate NHIS Claim Code')
+                ->icon('heroicon-m-arrow-path')
+                ->color('warning')
+                ->visible(fn (): bool => filled($record->patient_id)
+                    && $record->coverage_type === CoverageType::NHIS
+                    && blank($record->claim_check_code)
+                    && ! $record->isCompleted()
+                    && app(NhisClaimCodeGateway::class)->available())
+                ->action(function () use ($record): void {
+                    $gateway = app(NhisClaimCodeGateway::class);
+                    $gateway->notify($gateway->generateFor($record), verbose: true);
+                    $this->refreshFormData(['claim_check_code']);
+                }),
+
             EncounterActions::admit($record)
                 ->action(function (array $data) use ($record) {
                     app(AdtService::class)->assignBed(

@@ -189,6 +189,12 @@
                 </div>
             </div>
 
+            {{-- Widgets contributed by other modules (e.g. Billing's outstanding balance) --}}
+            @foreach ($this->patientBannerWidgets() as $bannerWidget)
+                @livewire($bannerWidget, ['patientId' => $currentPatient->id],
+                    key('patient-banner-' . $loop->index . '-' . $currentPatient->id))
+            @endforeach
+
             @include('clinical::clinical.workspace.partials.post-registration-banner')
 
             {{-- Role-Specific Content --}}
