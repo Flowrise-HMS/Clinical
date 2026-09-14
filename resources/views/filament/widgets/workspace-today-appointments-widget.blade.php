@@ -10,6 +10,7 @@
                     @foreach($appointments as $appointment)
                         @php
                             $viewUrl = $this->appointmentViewUrl($appointment);
+                            $canCheckIn = $this->canCheckIn($appointment);
                         @endphp
                         <div class="flex flex-wrap items-center justify-between gap-2 py-2 text-sm">
                             <div class="min-w-0 flex-1">
@@ -32,6 +33,9 @@
                                 <x-filament::badge>
                                     {{ $appointment->status->getLabel() }}
                                 </x-filament::badge>
+                                @if($canCheckIn)
+                                    {{ ($this->checkInAction)(['appointment' => $appointment->id]) }}
+                                @endif
                                 @if($viewUrl)
                                     <a href="{{ $viewUrl }}" class="fi-link text-xs font-medium text-primary-600 hover:text-primary-500">
                                         {{ __('View') }}
@@ -44,4 +48,6 @@
             @endif
         </div>
     </x-filament::section>
+
+    <x-filament-actions::modals />
 </x-filament-widgets::widget>

@@ -123,3 +123,98 @@ it('does not duplicate header actions when the workspace mounts with a patient',
     expect($actionKeys)->toContain('view_timeline', 'view_profile')
         ->and($actionKeys)->toBe(array_values(array_unique($actionKeys)));
 });
+
+it('checks a patient in from the widget and hands them to the workspace', function (): void {
+    Permission::findOrCreate('Update Appointment', 'web');
+    $this->user->givePermissionTo('Update Appointment');
+    $this->actingAs($this->user);
+    session(['current_branch_id' => $this->branch->id]);
+
+    $appointment = Appointment::factory()->create([
+        'branch_id' => $this->branch->id,
+        'patient_id' => $this->patient->id,
+        'status' => AppointmentStatus::BOOKED,
+        'start_at' => now()->setTime(10, 0),
+        'end_at' => now()->setTime(10, 30),
+    ]);
+
+    Livewire::test(WorkspaceTodayAppointmentsWidget::class)
+        ->assertOk()
+        ->assertActionVisible('checkIn', ['appointment' => $appointment->id])
+        ->callAction('checkIn', arguments: ['appointment' => $appointment->id])
+        ->assertNotified('Patient checked in')
+        ->assertRedirect(ClinicalWorkspace::getUrl(['patientId' => $this->patient->id]));
+
+    $appointment->refresh();
+
+    expect($appointment->status)->toBe(AppointmentStatus::ARRIVED)
+        ->and($appointment->checked_in_at)->not->toBeNull();
+
+    Livewire::test(ClinicalWorkspace::class, ['patientId' => $this->patient->id])
+        ->assertSet('mode', 'patient')
+        ->assertSet('currentPatient.id', $this->patient->id);
+});
+
+it('hides the check-in button when the user cannot update appointments', function (): void {
+    $this->actingAs($this->user);
+    session(['current_branch_id' => $this->branch->id]);
+
+    $appointment = Appointment::factory()->create([
+        'branch_id' => $this->branch->id,
+        'patient_id' => $this->patient->id,
+        'status' => AppointmentStatus::BOOKED,
+        'start_at' => now()->setTime(11, 0),
+        'end_at' => now()->setTime(11, 30),
+    ]);
+
+    Livewire::test(WorkspaceTodayAppointmentsWidget::class)
+        ->assertOk()
+        ->assertSee($this->patient->full_name)
+        ->assertDontSee('Check in');
+
+    expect($appointment->refresh()->status)->toBe(AppointmentStatus::BOOKED);
+});
+
+it('hides the check-in button once the patient has already arrived', function (): void {
+    Permission::findOrCreate('Update Appointment', 'web');
+    $this->user->givePermissionTo('Update Appointment');
+    $this->actingAs($this->user);
+    session(['current_branch_id' => $this->branch->id]);
+
+    Appointment::factory()->create([
+        'branch_id' => $this->branch->id,
+        'patient_id' => $this->patient->id,
+        'status' => AppointmentStatus::ARRIVED,
+        'start_at' => now()->setTime(12, 0),
+        'end_at' => now()->setTime(12, 30),
+    ]);
+
+    Livewire::test(WorkspaceTodayAppointmentsWidget::class)
+        ->assertOk()
+        ->assertSee('Arrived')
+        ->assertDontSee('Check in');
+});
+
+it('offers check-in to a user with no assigned branch working in the session branch', function (): void {
+    Permission::findOrCreate('Update Appointment', 'web');
+    $this->user->givePermissionTo('Update Appointment');
+    $this->user->update(['branch_id' => null]);
+    $this->actingAs($this->user);
+    session(['current_branch_id' => $this->branch->id]);
+
+    $appointment = Appointment::factory()->create([
+        'branch_id' => $this->branch->id,
+        'patient_id' => $this->patient->id,
+        'status' => AppointmentStatus::BOOKED,
+        'start_at' => now()->setTime(13, 0),
+        'end_at' => now()->setTime(13, 30),
+    ]);
+
+    Livewire::test(WorkspaceTodayAppointmentsWidget::class)
+        ->assertOk()
+        ->assertSee('Check in')
+        ->callAction('checkIn', arguments: ['appointment' => $appointment->id])
+        ->assertRedirect(ClinicalWorkspace::getUrl(['patientId' => $this->patient->id]));
+
+    expect($appointment->refresh()->status)->toBe(AppointmentStatus::ARRIVED);
+});

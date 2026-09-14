@@ -34,7 +34,7 @@ class MedicationDoseScheduleService
             return null;
         }
 
-        $detail = $item->prescriptionDetail;
+        $detail = $item->loadMissing('prescriptionDetail')->prescriptionDetail;
         if (! $detail || ! $this->policy->requiresMar($detail)) {
             return null;
         }
@@ -65,7 +65,7 @@ class MedicationDoseScheduleService
             return;
         }
 
-        $detail = $item->prescriptionDetail;
+        $detail = $item->loadMissing('prescriptionDetail')->prescriptionDetail;
         if (! $detail) {
             return;
         }
@@ -80,7 +80,7 @@ class MedicationDoseScheduleService
             return;
         }
 
-        $detail = $item->prescriptionDetail;
+        $detail = $item->loadMissing('prescriptionDetail')->prescriptionDetail;
         if (! $detail) {
             return;
         }
