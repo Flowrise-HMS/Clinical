@@ -4,11 +4,13 @@ namespace Modules\Clinical\Classes\Actions;
 
 use Closure;
 use Filament\Actions\Action;
+use Filament\Forms\Components\DateTimePicker;
 use Filament\Forms\Components\RichEditor;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Facades\Auth;
 use Modules\Clinical\Classes\Services\AdtService;
 use Modules\Clinical\Classes\Services\BedAssignmentService;
 use Modules\Clinical\Classes\Services\EncounterService;
@@ -18,6 +20,12 @@ use Modules\Clinical\Enums\EncounterPriority;
 use Modules\Clinical\Enums\EncounterStatus;
 use Modules\Clinical\Enums\EncounterType;
 use Modules\Core\Models\Branch;
+use Modules\Core\Support\OptionalClass;
+use Modules\Core\Support\ModuleAvailability;
+use Modules\Clinical\Exceptions\DischargeBlockedException;
+use Modules\Clinical\Classes\Services\DischargeReadinessService;
+use Filament\Notifications\Notification;
+use Filament\Forms\Components\ViewField;
 
 class EncounterActions
 {
@@ -137,7 +145,7 @@ class EncounterActions
         $request = $encounter->pendingAdmissionRequest()->with('requestedWard')->first();
         $wardId = $request?->requested_ward_id;
         $available = $wardId
-            ? app(BedAssignmentService::class)->getAvailableBeds($wardId)
+            ? app(BedAssignmentService::class)->getAvailableBeds($wardId, $encounter->id, $request?->id)
             : collect();
 
         return [
@@ -254,6 +262,107 @@ class EncounterActions
             ));
     }
 
+    public static function isPassVisible(Model $encounter): bool
+    {
+        return $encounter->isInpatient()
+            && filled($encounter->bed_id)
+            && $encounter->status === EncounterStatus::IN_PROGRESS;
+    }
+
+    public static function isReturnFromPassVisible(Model $encounter): bool
+    {
+        return $encounter->isInpatient() && $encounter->status === EncounterStatus::ON_LEAVE;
+    }
+
+    public static function sendOnPass(Model $encounter): Action
+    {
+        return Action::make('send_on_pass')
+            ->label('Send on pass')
+            ->icon('heroicon-m-arrow-right-start-on-rectangle')
+            ->color('warning')
+            ->visible(fn () => self::isPassVisible($encounter))
+            ->modalHeading(__('Send patient on pass'))
+            ->modalDescription(__('The patient leaves the ward temporarily. The bed stays assigned to them.'))
+            ->schema([
+                Textarea::make('reason')
+                    ->label('Reason')
+                    ->rows(2)
+                    ->required(),
+                DateTimePicker::make('expected_return_at')
+                    ->label('Expected return')
+                    ->seconds(false)
+                    ->minDate(now()),
+            ])
+            ->action(fn (array $data) => app(AdtService::class)->sendOnPass(
+                $encounter,
+                $data['reason'] ?? null,
+                filled($data['expected_return_at'] ?? null) ? \Illuminate\Support\Carbon::parse($data['expected_return_at']) : null,
+            ));
+    }
+
+    public static function returnFromPass(Model $encounter): Action
+    {
+        return Action::make('return_from_pass')
+            ->label('Return from pass')
+            ->icon('heroicon-m-arrow-left-end-on-rectangle')
+            ->color('success')
+            ->visible(fn () => self::isReturnFromPassVisible($encounter))
+            ->requiresConfirmation()
+            ->modalHeading(__('Patient returned from pass'))
+            ->action(fn () => app(AdtService::class)->returnFromPass($encounter));
+    }
+
+    public static function setExpectedDischarge(Model $encounter): Action
+    {
+        return Action::make('set_expected_discharge')
+            ->label(fn (): string => $encounter->expected_discharge_at ? __('Change expected discharge') : __('Set expected discharge'))
+            ->icon('heroicon-m-calendar-days')
+            ->color('gray')
+            ->visible(fn () => $encounter->isInpatient() && ! $encounter->isCompleted())
+            ->modalHeading(__('Expected discharge'))
+            ->schema([
+                DateTimePicker::make('expected_discharge_at')
+                    ->label('Expected discharge')
+                    ->seconds(false)
+                    ->default($encounter->expected_discharge_at),
+                Textarea::make('reason')->label('Reason for change')->rows(2),
+            ])
+            ->action(fn (array $data) => app(AdtService::class)->setExpectedDischarge(
+                $encounter,
+                filled($data['expected_discharge_at'] ?? null) ? \Illuminate\Support\Carbon::parse($data['expected_discharge_at']) : null,
+                Auth::id(),
+                $data['reason'] ?? null,
+            ));
+    }
+
+    public static function isCancelAdmissionRequestVisible(Model $encounter, ?int $userId = null, bool $canDecide = false): bool
+    {
+        $request = $encounter->pendingAdmissionRequest()->first();
+
+        return $request !== null && $request->isCancellableBy($userId ?? Auth::id(), $canDecide);
+    }
+
+    public static function cancelAdmissionRequest(Model $encounter, bool $canDecide = false): Action
+    {
+        return Action::make('cancel_admission_request')
+            ->label('Withdraw request')
+            ->icon('heroicon-m-x-circle')
+            ->color('gray')
+            ->visible(fn () => self::isCancelAdmissionRequestVisible($encounter, Auth::id(), $canDecide))
+            ->modalHeading(__('Withdraw admission request'))
+            ->modalDescription(__('The ward will no longer see this request and any reserved bed is released.'))
+            ->schema([
+                Textarea::make('reason')
+                    ->label('Reason (optional)')
+                    ->rows(2),
+            ])
+            ->action(function (array $data) use ($encounter): void {
+                $request = $encounter->pendingAdmissionRequest()->firstOrFail();
+
+                app(AdtService::class)->cancelAdmissionRequest($request, $data['reason'] ?? null);
+            });
+    }
+
     public static function transferInternal(Model $encounter): Action
     {
         return Action::make('transfer_internal')
@@ -276,7 +385,7 @@ class EncounterActions
                 Select::make('bed_id')
                     ->label('Bed')
                     ->options(fn (callable $get) => $get('ward_id')
-                        ? app(BedAssignmentService::class)->getAvailableBeds($get('ward_id'))
+                        ? app(BedAssignmentService::class)->getAvailableBeds($get('ward_id'), $encounter->id)
                         : [])
                     ->searchable()
                     ->required()
@@ -352,26 +461,112 @@ class EncounterActions
             ->modalHeading(__('Discharge Patient'))
             ->modalDescription(__('Discharge the patient from this encounter. This will finalize their stay, free up the assigned bed, and generate any pending invoices for settlement.'))
             ->slideOver()
-            ->schema([
-                Select::make('discharge_disposition')
-                    ->label('Disposition')
-                    ->options(DischargeDisposition::class)
-                    ->default('completed')
-                    ->required()
-                    ->live(),
-                TextInput::make('transfer_destination')
-                    ->label('Transfer Destination')
-                    ->visible(fn (callable $get) => $get('discharge_disposition') === 'transferred'),
-                Textarea::make('notes')
-                    ->label('Discharge notes')
-                    ->rows(2),
-            ])
-            ->action(fn (array $data) => app(AdtService::class)->discharge(
-                $encounter,
-                enum_from(DischargeDisposition::class, $data['discharge_disposition']),
-                $data['transfer_destination'] ?? null,
-                notes: $data['notes'] ?? null,
-            ));
+            ->schema(fn (): array => self::dischargeSchema($encounter))
+            ->action(function (array $data) use ($encounter): void {
+                try {
+                    self::performDischarge($encounter, $data);
+                } catch (DischargeBlockedException $e) {
+                    Notification::make()
+                        ->title(__('Discharge blocked'))
+                        ->body($e->readiness->summary())
+                        ->danger()
+                        ->persistent()
+                        ->send();
+                }
+            });
+    }
+
+    /**
+     * The discharge form, shared by every surface that can discharge.
+     *
+     * @return array<int, mixed>
+     */
+    public static function dischargeSchema(Model $encounter): array
+    {
+        $readiness = $encounter->isInpatient()
+            ? app(DischargeReadinessService::class)->assess($encounter)->toArray()
+            : null;
+        // The checklist is always shown for inpatients; it only gates the form when enforcement is on.
+        $hasBlocking = $readiness !== null && ! $readiness['ready'] && config('clinical.discharge.enforce_readiness', true);
+
+        return array_values(array_filter([
+            $readiness !== null
+                ? ViewField::make('readiness')
+                    ->hiddenLabel()
+                    ->view('clinical::partials.discharge-readiness', ['readiness' => $readiness])
+                    ->dehydrated(false)
+                : null,
+            Select::make('discharge_disposition')
+                ->label('Disposition')
+                ->options(DischargeDisposition::class)
+                ->default('completed')
+                ->required()
+                ->live(),
+            TextInput::make('transfer_destination')
+                ->label('Transfer Destination')
+                ->visible(fn (callable $get) => $get('discharge_disposition') === 'transferred'),
+            $hasBlocking
+                ? Textarea::make('override_reason')
+                    ->label('Override reason')
+                    ->helperText(__('Required to discharge while items above are unresolved (not needed for transfers out or deaths).'))
+                    ->rows(2)
+                    ->required(fn (callable $get) => ! in_array($get('discharge_disposition'), ['transferred', 'deceased'], true))
+                : null,
+            $encounter->isInpatient()
+                ? DateTimePicker::make('follow_up_at')
+                    ->label('Follow-up appointment')
+                    ->helperText(ModuleAvailability::appointmentEnabled()
+                        ? __('A follow-up appointment is booked automatically when set.')
+                        : __('Recorded on the discharge summary.'))
+                    ->seconds(false)
+                    ->minDate(now())
+                : null,
+            $encounter->isInpatient()
+                ? Select::make('follow_up_provider_id')
+                    ->label('Follow-up with')
+                    ->options(fn (): array => self::followUpProviderOptions($encounter))
+                    ->searchable()
+                    ->visible(fn (callable $get) => filled($get('follow_up_at')))
+                : null,
+            Textarea::make('notes')
+                ->label('Discharge notes')
+                ->rows(2),
+        ]));
+    }
+
+    /**
+     * Staff who can be booked for the follow-up; empty when the Staff module is absent.
+     *
+     * @return array<string, string>
+     */
+    public static function followUpProviderOptions(Model $encounter): array
+    {
+        return OptionalClass::when(
+            'Modules\\Staff\\Models\\Staff',
+            fn (string $staff): array => $staff::query()
+                ->when($encounter->branch_id, fn ($q) => $q->where('branch_id', $encounter->branch_id))
+                ->orderBy('first_name')
+                ->get()
+                ->mapWithKeys(fn ($member): array => [$member->id => trim(($member->first_name ?? '').' '.($member->last_name ?? '')) ?: ($member->name ?? $member->id)])
+                ->all(),
+            'Staff',
+        ) ?? [];
+    }
+
+    /**
+     * @param  array<string, mixed>  $data
+     */
+    public static function performDischarge(Model $encounter, array $data): Model
+    {
+        return app(AdtService::class)->discharge(
+            $encounter,
+            enum_from(DischargeDisposition::class, $data['discharge_disposition'] ?? DischargeDisposition::COMPLETED->value),
+            $data['transfer_destination'] ?? null,
+            notes: $data['notes'] ?? $data['discharge_notes'] ?? null,
+            overrideReason: $data['override_reason'] ?? null,
+            followUpAt: filled($data['follow_up_at'] ?? null) ? \Illuminate\Support\Carbon::parse($data['follow_up_at']) : null,
+            followUpProviderId: filled($data['follow_up_provider_id'] ?? null) ? (string) $data['follow_up_provider_id'] : null,
+        );
     }
 
     public static function cancel(Model $encounter): Action
@@ -389,7 +584,7 @@ class EncounterActions
                     ->label('Reason for Cancellation')
                     ->required(),
             ])
-            ->action(fn (array $data) => app(EncounterService::class)->cancelEncounter($encounter, $data['reason']));
+            ->action(fn (array $data) => app(AdtService::class)->cancel($encounter, $data['reason']));
     }
 
     /**

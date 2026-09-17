@@ -149,7 +149,7 @@ class EditEncounter extends EditRecord
 
             EncounterActions::cancel($record)
                 ->action(function (array $data) use ($record) {
-                    app(EncounterService::class)->cancelEncounter($record, $data['reason']);
+                    app(AdtService::class)->cancel($record, $data['reason']);
                     $this->refreshFormData(['status', 'bed_id']);
                     Notification::make()
                         ->title('Encounter cancelled')

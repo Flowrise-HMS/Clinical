@@ -9,6 +9,8 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 use Modules\Clinical\Classes\Services\DiagnosisSearch\CompositeDiagnosisCodeSearch;
 use Modules\Clinical\Classes\Services\MedicationFulfillmentPolicy;
 use Modules\Clinical\Classes\Services\NullPrescriptionScheduleCalculator;
+use Modules\Clinical\Console\BackfillBedStatusCommand;
+use Modules\Clinical\Console\ExpireAdmissionRequestsCommand;
 use Modules\Clinical\Console\SendMarDoseRemindersCommand;
 use Modules\Clinical\Contracts\DiagnosisCodeSearchContract;
 use Modules\Clinical\Contracts\PrescriptionScheduleCalculatorContract;
@@ -46,6 +48,8 @@ class ClinicalServiceProvider extends ModuleServiceProvider
      * @var string[]
      */
     protected array $commands = [
+        BackfillBedStatusCommand::class,
+        ExpireAdmissionRequestsCommand::class,
         SendMarDoseRemindersCommand::class,
     ];
 
@@ -180,6 +184,9 @@ class ClinicalServiceProvider extends ModuleServiceProvider
 
     protected function configureSchedules(Schedule $schedule): void
     {
+        // Admission-request expiry does not depend on any optional module.
+        $schedule->command('clinical:expire-admission-requests')->hourly();
+
         if (! ModuleAvailability::pharmacyEnabled()) {
             return;
         }

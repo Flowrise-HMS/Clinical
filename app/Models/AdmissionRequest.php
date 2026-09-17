@@ -36,6 +36,7 @@ use Modules\Patient\Models\Patient;
  * @property ?int $decided_by
  * @property ?Carbon $decided_at
  * @property ?string $decision_notes
+ * @property ?Carbon $expires_at
  * @property-read Encounter $encounter
  * @property-read ?Patient $patient
  * @property-read Location $requestedWard
@@ -67,12 +68,14 @@ class AdmissionRequest extends BaseModel implements ProvidesClientIdentity
         'decided_by',
         'decided_at',
         'decision_notes',
+        'expires_at',
     ];
 
     protected $casts = [
         'status' => AdmissionRequestStatus::class,
         'requested_at' => 'datetime',
         'decided_at' => 'datetime',
+        'expires_at' => 'datetime',
     ];
 
     protected static function newFactory(): Factory
@@ -123,6 +126,25 @@ class AdmissionRequest extends BaseModel implements ProvidesClientIdentity
     public function scopePending(Builder $query): Builder
     {
         return $query->where('status', AdmissionRequestStatus::Pending->value);
+    }
+
+    /**
+     * Pending requests whose expiry has passed.
+     */
+    public function scopeDueToExpire(Builder $query, ?\DateTimeInterface $at = null): Builder
+    {
+        return $query->pending()
+            ->whereNotNull('expires_at')
+            ->where('expires_at', '<=', $at ?? now());
+    }
+
+    public function isCancellableBy(?int $userId, bool $canDecide = false): bool
+    {
+        if (! $this->isPending()) {
+            return false;
+        }
+
+        return $canDecide || ($userId !== null && (int) $this->requested_by === $userId);
     }
 
     public function isPending(): bool

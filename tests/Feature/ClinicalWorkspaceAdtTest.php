@@ -131,7 +131,7 @@ class ClinicalWorkspaceAdtTest extends TestCase
 
         $encounter->refresh();
         $this->assertSame($this->bedA->id, $encounter->bed_id);
-        $this->assertSame(EncounterStatus::ARRIVED, $encounter->status);
+        $this->assertSame(EncounterStatus::IN_PROGRESS, $encounter->status);
         $this->assertDatabaseHas('encounter_location_events', [
             'encounter_id' => $encounter->id,
             'event_type' => AdtEventType::Admitted->value,

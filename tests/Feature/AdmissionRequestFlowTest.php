@@ -13,6 +13,8 @@ use Modules\Clinical\Enums\AdtEventType;
 use Modules\Clinical\Enums\DischargeDisposition;
 use Modules\Clinical\Enums\EncounterStatus;
 use Modules\Clinical\Enums\EncounterType;
+use Modules\Clinical\Enums\ParticipantRole;
+use Modules\Core\Enums\BedStatus;
 use Modules\Clinical\Models\Encounter;
 use Modules\Core\Models\Branch;
 use Modules\Core\Models\Location;
@@ -77,7 +79,12 @@ class AdmissionRequestFlowTest extends TestCase
         $this->assertNull($encounter->bed_id);
         $this->assertSame(EncounterStatus::ARRIVED, $encounter->status);
         $this->assertTrue($encounter->hasPendingAdmissionRequest());
-        $this->assertTrue(app(BedAssignmentService::class)->getAvailableBeds($this->ward->id)->has($this->bedA->id));
+        // The preferred bed is held for this request, so it leaves the general pool but stays pickable for the acceptor.
+        $this->assertSame(BedStatus::RESERVED, $this->bedA->fresh()->bedStatus());
+        $this->assertSame($request->id, $this->bedA->fresh()->status_reference);
+        $this->assertFalse(app(BedAssignmentService::class)->getAvailableBeds($this->ward->id)->has($this->bedA->id));
+        $this->assertTrue(app(BedAssignmentService::class)->getAvailableBeds($this->ward->id, $encounter->id, $request->id)->has($this->bedA->id));
+        $this->assertNotNull($request->expires_at);
         $this->assertDatabaseHas('encounter_location_events', [
             'encounter_id' => $encounter->id,
             'event_type' => AdtEventType::AdmissionRequested->value,
@@ -126,15 +133,19 @@ class AdmissionRequestFlowTest extends TestCase
         ]);
     }
 
-    public function test_accept_marks_planned_encounter_as_arrived(): void
+    public function test_accept_starts_ward_care_for_a_planned_encounter(): void
     {
         $encounter = $this->outpatientEncounter(EncounterStatus::PLANNED);
         $request = app(AdtService::class)->requestAdmission($encounter, $this->ward->id, requestedBy: $this->doctor->id);
 
         $admitted = app(AdtService::class)->acceptAdmission($request, $this->bedA->id, actedBy: $this->nurse->id);
 
-        $this->assertSame(EncounterStatus::ARRIVED, $admitted->status);
+        $this->assertSame(EncounterStatus::IN_PROGRESS, $admitted->status);
+        $this->assertTrue($admitted->canTransitionTo(EncounterStatus::FINISHED));
         $this->assertSame($this->bedA->id, $admitted->bed_id);
+        $this->assertSame(BedStatus::OCCUPIED, $this->bedA->fresh()->bedStatus());
+        $this->assertDatabaseHas('encounter_participants', ['encounter_id' => $encounter->id, 'user_id' => $this->doctor->id, 'role' => ParticipantRole::ATTENDING->value]);
+        $this->assertDatabaseHas('encounter_participants', ['encounter_id' => $encounter->id, 'user_id' => $this->nurse->id, 'role' => ParticipantRole::NURSE->value]);
         $this->assertDatabaseHas('encounter_location_events', [
             'encounter_id' => $encounter->id,
             'event_type' => AdtEventType::Admitted->value,

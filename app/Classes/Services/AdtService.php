@@ -11,9 +11,19 @@ use Modules\Clinical\Enums\DischargeDisposition;
 use Modules\Clinical\Enums\EncounterPriority;
 use Modules\Clinical\Enums\EncounterStatus;
 use Modules\Clinical\Enums\EncounterType;
+use Modules\Clinical\Enums\ParticipantRole;
+use Modules\Clinical\Events\AdmissionAccepted;
+use Modules\Clinical\Events\AdmissionRejected;
+use Modules\Clinical\Events\AdmissionRequestCancelled;
+use Modules\Clinical\Events\AdmissionRequested;
+use Modules\Clinical\Events\PatientAdmitted;
+use Modules\Clinical\Events\PatientDischarged;
+use Modules\Clinical\Events\PatientTransferred;
+use Modules\Clinical\Exceptions\DischargeBlockedException;
 use Modules\Clinical\Models\AdmissionRequest;
 use Modules\Clinical\Models\Encounter;
 use Modules\Clinical\Models\EncounterLocationEvent;
+use Modules\Core\Classes\Services\BedStatusService;
 use Modules\Core\Models\Branch;
 use Modules\Core\Models\Location;
 use Modules\Patient\Models\Patient;
@@ -23,6 +33,7 @@ class AdtService
     public function __construct(
         protected EncounterService $encounterService,
         protected BedAssignmentService $bedAssignmentService,
+        protected BedStatusService $bedStatusService,
     ) {}
 
     public function admit(
@@ -36,7 +47,7 @@ class AdtService
     ): Encounter {
         return DB::transaction(function () use ($patient, $bedId, $departmentId, $chiefComplaint, $priority, $actedBy, $notes) {
             $actedBy ??= Auth::id();
-            $this->assertBedAvailable($bedId);
+            $this->assertBedAvailable($bedId, patientGender: $this->genderOf($patient));
 
             $encounter = $this->resolveEncounterForAdmission($patient, $chiefComplaint, $priority, $actedBy);
 
@@ -46,16 +57,19 @@ class AdtService
 
             $from = $this->snapshot($encounter);
 
-            $encounter = $this->bedAssignmentService->assignBed($encounter, $bedId, $actedBy);
-            $encounter = $this->syncLocationFromBed($encounter, $bedId);
+            $encounter = $this->occupyBed($encounter, $bedId, $actedBy);
+            $encounter = $this->encounterService->beginInpatientCare($encounter, $actedBy);
+            $this->encounterService->ensureParticipant($encounter, $actedBy, ParticipantRole::ATTENDING, $actedBy);
 
-            $this->logEvent(
+            $event = $this->logEvent(
                 encounter: $encounter,
                 type: AdtEventType::Admitted,
                 from: $from,
                 actedBy: $actedBy,
                 notes: $notes,
             );
+
+            $this->dispatchAfterCommit(new PatientAdmitted($encounter, $event, 'admit'));
 
             return $encounter->fresh(['bed', 'location', 'department', 'patient']);
         });
@@ -80,19 +94,19 @@ class AdtService
                 throw new \InvalidArgumentException(__('Encounter is not active for internal transfer.'));
             }
 
-            $this->assertBedAvailable($toBedId, $encounter->id);
+            $this->assertBedAvailable($toBedId, $encounter->id, patientGender: $this->genderOf($encounter->patient));
 
             $from = $this->snapshot($encounter);
 
-            $encounter = $this->bedAssignmentService->assignBed($encounter, $toBedId, $actedBy);
-            $encounter = $this->syncLocationFromBed($encounter, $toBedId);
+            $encounter = $this->occupyBed($encounter, $toBedId, $actedBy);
+            $this->releaseBed($from['bed_id'], $encounter->id, $actedBy);
 
             if ($toDepartmentId) {
                 $encounter->update(['department_id' => $toDepartmentId]);
                 $encounter = $encounter->fresh();
             }
 
-            $this->logEvent(
+            $event = $this->logEvent(
                 encounter: $encounter,
                 type: AdtEventType::TransferredInternal,
                 from: $from,
@@ -100,6 +114,10 @@ class AdtService
                 notes: $notes,
                 destinationType: AdtDestinationType::InternalUnit,
             );
+
+            if ($encounter->isInpatient()) {
+                $this->dispatchAfterCommit(new PatientTransferred($encounter, $event));
+            }
 
             return $encounter->fresh(['bed', 'location', 'department', 'patient']);
         });
@@ -139,7 +157,10 @@ class AdtService
                 $actedBy,
             );
 
-            $this->logEvent(
+            $this->releaseBed($from['bed_id'], $encounter->id, $actedBy);
+            $this->releasePendingRequests($encounter, $actedBy);
+
+            $event = $this->logEvent(
                 encounter: $encounter,
                 type: AdtEventType::TransferredOut,
                 from: $from,
@@ -149,6 +170,10 @@ class AdtService
                 destinationBranchId: $destinationBranchId,
                 destinationLabel: $label,
             );
+
+            if ($encounter->isInpatient()) {
+                $this->dispatchAfterCommit(new PatientDischarged($encounter, $event));
+            }
 
             return $encounter->fresh(['patient', 'branch']);
         });
@@ -168,7 +193,7 @@ class AdtService
         return DB::transaction(function () use ($patient, $bedId, $sourceLabel, $fromBranchId, $departmentId, $chiefComplaint, $priority, $actedBy, $notes) {
             $actedBy ??= Auth::id();
             $this->assertNoOpenEncounter($patient);
-            $this->assertBedAvailable($bedId);
+            $this->assertBedAvailable($bedId, patientGender: $this->genderOf($patient));
 
             $encounter = $this->encounterService->createForPatient(
                 patient: $patient,
@@ -190,10 +215,11 @@ class AdtService
 
             $from = $this->snapshot($encounter);
 
-            $encounter = $this->bedAssignmentService->assignBed($encounter, $bedId, $actedBy);
-            $encounter = $this->syncLocationFromBed($encounter, $bedId);
+            $encounter = $this->occupyBed($encounter, $bedId, $actedBy);
+            $encounter = $this->encounterService->beginInpatientCare($encounter, $actedBy);
+            $this->encounterService->ensureParticipant($encounter, $actedBy, ParticipantRole::ATTENDING, $actedBy);
 
-            $this->logEvent(
+            $event = $this->logEvent(
                 encounter: $encounter,
                 type: AdtEventType::TransferredIn,
                 from: $from,
@@ -204,23 +230,34 @@ class AdtService
                 destinationLabel: $sourceLabel,
             );
 
+            $this->dispatchAfterCommit(new PatientAdmitted($encounter, $event, 'transfer_in'));
+
             return $encounter->fresh(['bed', 'location', 'department', 'patient']);
         });
     }
 
+    /**
+     * @throws DischargeBlockedException when readiness is enforced, blocking
+     *                                   items remain, and no override reason is given
+     */
     public function discharge(
         Encounter $encounter,
         ?DischargeDisposition $disposition = null,
         ?string $transferDestination = null,
         ?string $notes = null,
         ?int $actedBy = null,
+        ?string $overrideReason = null,
+        ?\DateTimeInterface $followUpAt = null,
+        ?string $followUpProviderId = null,
     ): Encounter {
-        return DB::transaction(function () use ($encounter, $disposition, $transferDestination, $notes, $actedBy) {
+        return DB::transaction(function () use ($encounter, $disposition, $transferDestination, $notes, $actedBy, $overrideReason, $followUpAt, $followUpProviderId) {
             $actedBy ??= Auth::id();
             $encounter = $encounter->fresh();
             $from = $this->snapshot($encounter);
 
             $disposition ??= DischargeDisposition::COMPLETED;
+
+            $override = $this->assertDischargeReady($encounter, $disposition, $overrideReason, $followUpAt, $actedBy);
 
             $encounter = $this->encounterService->discharge(
                 $encounter,
@@ -229,12 +266,35 @@ class AdtService
                 $actedBy,
             );
 
+            $metadata = $encounter->metadata ?? [];
+
             if (filled($notes)) {
-                $metadata = array_merge($encounter->metadata ?? [], ['discharge_notes' => $notes]);
-                $encounter->forceFill(['metadata' => $metadata])->saveQuietly();
+                $metadata['discharge_notes'] = $notes;
             }
 
-            $this->logEvent(
+            if ($override !== null) {
+                $metadata['discharge_override'] = $override;
+            }
+
+            if ($followUpAt !== null) {
+                $metadata['follow_up'] = [
+                    'at' => $followUpAt->format(DATE_ATOM),
+                    'provider_id' => $followUpProviderId,
+                    'set_by' => $actedBy,
+                ];
+
+                $encounter->dischargeSummary()->whereNull('follow_up_at')->update([
+                    'follow_up_at' => $followUpAt,
+                    'follow_up_provider_id' => $followUpProviderId,
+                ]);
+            }
+
+            $encounter->forceFill(['metadata' => $metadata])->saveQuietly();
+
+            $this->releaseBed($from['bed_id'], $encounter->id, $actedBy);
+            $this->releasePendingRequests($encounter, $actedBy);
+
+            $event = $this->logEvent(
                 encounter: $encounter,
                 type: $disposition === DischargeDisposition::TRANSFERRED
                     ? AdtEventType::TransferredOut
@@ -248,8 +308,57 @@ class AdtService
                 destinationLabel: $transferDestination,
             );
 
+            if ($encounter->isInpatient()) {
+                $this->dispatchAfterCommit(new PatientDischarged(
+                    $encounter,
+                    $event,
+                    $followUpAt ? \Illuminate\Support\Carbon::instance($followUpAt) : null,
+                    $followUpProviderId,
+                ));
+            }
+
             return $encounter->fresh(['patient', 'branch']);
         });
+    }
+
+    /**
+     * Inpatient discharges must pass the readiness checklist unless the
+     * clinician records why they are overriding it. Transfers out and deaths
+     * are exempt from blocking (the warnings are still recorded).
+     *
+     * @return array<string, mixed>|null the override record to store, if any
+     */
+    protected function assertDischargeReady(
+        Encounter $encounter,
+        DischargeDisposition $disposition,
+        ?string $overrideReason,
+        ?\DateTimeInterface $followUpAt,
+        ?int $actedBy,
+    ): ?array {
+        if (! $encounter->isInpatient() || ! config('clinical.discharge.enforce_readiness', true)) {
+            return null;
+        }
+
+        $readiness = app(DischargeReadinessService::class)->assess($encounter, [
+            'follow_up_at' => $followUpAt?->format(DATE_ATOM),
+        ]);
+
+        if ($readiness->isReady()) {
+            return null;
+        }
+
+        $exempt = in_array($disposition, [DischargeDisposition::TRANSFERRED, DischargeDisposition::DECEASED], true);
+
+        if (! $exempt && blank($overrideReason)) {
+            throw new DischargeBlockedException($readiness);
+        }
+
+        return [
+            'reason' => $exempt && blank($overrideReason) ? __('Exempt: :disposition', ['disposition' => $disposition->getLabel()]) : $overrideReason,
+            'items' => array_column($readiness->blocking(), 'key'),
+            'by' => $actedBy,
+            'at' => now()->toIso8601String(),
+        ];
     }
 
     public function assignBed(
@@ -257,24 +366,32 @@ class AdtService
         string $bedId,
         ?int $actedBy = null,
         ?string $notes = null,
+        ?string $reservationReference = null,
     ): Encounter {
-        return DB::transaction(function () use ($encounter, $bedId, $actedBy, $notes) {
+        return DB::transaction(function () use ($encounter, $bedId, $actedBy, $notes, $reservationReference) {
             $actedBy ??= Auth::id();
             $encounter = $encounter->fresh();
             $from = $this->snapshot($encounter);
 
-            $wasPlanned = $encounter->canTransitionTo(EncounterStatus::ARRIVED);
+            $wasPlanned = $encounter->status === EncounterStatus::PLANNED;
 
-            $encounter = $this->bedAssignmentService->assignBed($encounter, $bedId, $actedBy);
-            $encounter = $this->syncLocationFromBed($encounter, $bedId);
+            $encounter = $this->occupyBed($encounter, $bedId, $actedBy, $reservationReference);
 
-            $this->logEvent(
+            if ($encounter->isInpatient()) {
+                $encounter = $this->encounterService->beginInpatientCare($encounter, $actedBy);
+            }
+
+            $event = $this->logEvent(
                 encounter: $encounter,
                 type: $wasPlanned ? AdtEventType::Admitted : AdtEventType::BedAssigned,
                 from: $from,
                 actedBy: $actedBy,
                 notes: $notes,
             );
+
+            if ($encounter->isInpatient() && $from['bed_id'] === null) {
+                $this->dispatchAfterCommit(new PatientAdmitted($encounter, $event, $reservationReference ? 'accept' : 'assign'));
+            }
 
             return $encounter->fresh(['bed', 'location', 'department', 'patient']);
         });
@@ -313,6 +430,8 @@ class AdtService
                 throw new \InvalidArgumentException(__('The selected ward does not belong to this encounter\'s branch.'));
             }
 
+            $bed = null;
+
             if ($bedId !== null) {
                 $bed = Location::query()->find($bedId);
 
@@ -320,6 +439,8 @@ class AdtService
                     throw new \InvalidArgumentException(__('The preferred bed is not in the selected ward.'));
                 }
             }
+
+            $expiryHours = config('clinical.admissions.request_expiry_hours');
 
             $request = AdmissionRequest::query()->create([
                 'encounter_id' => $encounter->id,
@@ -331,7 +452,15 @@ class AdtService
                 'notes' => $notes,
                 'requested_by' => $requestedBy,
                 'requested_at' => now(),
+                'expires_at' => $expiryHours ? now()->addHours((int) $expiryHours) : null,
             ]);
+
+            if ($bed !== null
+                && config('clinical.beds.reserve_on_request', true)
+                && $bed->bedStatus()->isAssignable()
+                && ! Encounter::active()->where('bed_id', $bed->id)->exists()) {
+                $this->bedStatusService->reserve($bed, $request->id, __('Admission request'), $requestedBy);
+            }
 
             $this->logEvent(
                 encounter: $encounter,
@@ -343,6 +472,8 @@ class AdtService
                 destinationBranchId: $encounter->branch_id,
                 destinationLabel: $ward->name,
             );
+
+            $this->dispatchAfterCommit(new AdmissionRequested($request));
 
             return $request->fresh(['encounter', 'requestedWard', 'requestedBed', 'requester']);
         });
@@ -378,16 +509,29 @@ class AdtService
                 throw new \InvalidArgumentException(__('The bed must be in the requested ward.'));
             }
 
-            $this->assertBedAvailable($bedId, $encounter->id);
+            if ($encounter->type === EncounterType::EMERGENCY && $encounter->status === EncounterStatus::ARRIVED) {
+                throw new \InvalidArgumentException(__('Triage the patient before admitting them to a ward.'));
+            }
+
+            $this->assertBedAvailable($bedId, $encounter->id, $request->id, $this->genderOf($encounter->patient));
 
             if ($encounter->type !== EncounterType::INPATIENT) {
                 $encounter->update([
                     'type' => EncounterType::INPATIENT,
                     'admitted_at' => $encounter->admitted_at ?? now(),
                 ]);
+                $encounter = $encounter->fresh();
             }
 
-            $encounter = $this->assignBed($encounter, $bedId, $actedBy, $notes);
+            // Whatever bed was reserved for this request is released unless it is the one chosen.
+            if ($request->requested_bed_id !== null && $request->requested_bed_id !== $bedId) {
+                $this->releaseReservation($request->requested_bed_id, $request->id, $actedBy);
+            }
+
+            $encounter = $this->assignBed($encounter, $bedId, $actedBy, $notes, $request->id);
+
+            $this->encounterService->ensureParticipant($encounter, $request->requested_by, ParticipantRole::ATTENDING, $actedBy);
+            $this->encounterService->ensureParticipant($encounter, $actedBy, ParticipantRole::NURSE, $actedBy);
 
             $request->update([
                 'status' => AdmissionRequestStatus::Accepted,
@@ -396,6 +540,8 @@ class AdtService
                 'decided_at' => now(),
                 'decision_notes' => $notes,
             ]);
+
+            $this->dispatchAfterCommit(new AdmissionAccepted($request, $encounter));
 
             return $encounter->fresh(['bed', 'location', 'department', 'patient']);
         });
@@ -425,6 +571,8 @@ class AdtService
                 'decision_notes' => $reason,
             ]);
 
+            $this->releaseReservation($request->requested_bed_id, $request->id, $actedBy);
+
             $encounter = $request->encounter;
 
             $this->logEvent(
@@ -438,8 +586,288 @@ class AdtService
                 destinationLabel: $request->requestedWard?->name,
             );
 
+            $this->dispatchAfterCommit(new AdmissionRejected($request));
+
             return $request->fresh(['encounter', 'requestedWard', 'decider']);
         });
+    }
+
+    /**
+     * Records (or clears) the planned discharge date and keeps a short history
+     * so slipped dates are visible.
+     */
+    public function setExpectedDischarge(Encounter $encounter, ?\DateTimeInterface $at, ?int $actedBy = null, ?string $reason = null): Encounter
+    {
+        $actedBy ??= Auth::id();
+        $encounter = $encounter->fresh();
+
+        if (! $encounter->isInpatient() || $encounter->isCompleted()) {
+            throw new \InvalidArgumentException(__('Expected discharge only applies to an open inpatient stay.'));
+        }
+
+        $history = $encounter->metadata['expected_discharge_history'] ?? [];
+        $history[] = [
+            'at' => $at?->format(DATE_ATOM),
+            'set_by' => $actedBy,
+            'set_at' => now()->toIso8601String(),
+            'reason' => $reason,
+        ];
+
+        $encounter->forceFill([
+            'expected_discharge_at' => $at,
+            'metadata' => array_merge($encounter->metadata ?? [], ['expected_discharge_history' => array_slice($history, -10)]),
+        ])->save();
+
+        return $encounter->fresh();
+    }
+
+    /**
+     * Cancels the encounter and records the bed movement so the audit trail
+     * shows how the bed was freed.
+     */
+    public function cancel(Encounter $encounter, ?string $reason = null, ?int $actedBy = null): Encounter
+    {
+        return DB::transaction(function () use ($encounter, $reason, $actedBy): Encounter {
+            $actedBy ??= Auth::id();
+            $encounter = $encounter->fresh();
+            $from = $this->snapshot($encounter);
+
+            $this->releasePendingRequests($encounter, $actedBy);
+
+            $encounter = $this->encounterService->cancelEncounter($encounter, $reason);
+
+            $this->releaseBed($from['bed_id'], $encounter->id, $actedBy);
+
+            $this->logEvent(
+                encounter: $encounter,
+                type: AdtEventType::Cancelled,
+                from: $from,
+                actedBy: $actedBy,
+                notes: $reason,
+            );
+
+            return $encounter->fresh(['patient', 'branch']);
+        });
+    }
+
+    /**
+     * The patient leaves the ward temporarily; the bed stays theirs.
+     */
+    public function sendOnPass(
+        Encounter $encounter,
+        ?string $reason = null,
+        ?\DateTimeInterface $expectedReturnAt = null,
+        ?int $actedBy = null,
+    ): Encounter {
+        return DB::transaction(function () use ($encounter, $reason, $expectedReturnAt, $actedBy): Encounter {
+            $actedBy ??= Auth::id();
+            $encounter = $encounter->fresh();
+
+            if (! $encounter->isInpatient() || blank($encounter->bed_id)) {
+                throw new \InvalidArgumentException(__('Only an admitted inpatient can be sent on pass.'));
+            }
+
+            $from = $this->snapshot($encounter);
+            $encounter = $this->encounterService->putOnLeave($encounter, $reason);
+
+            $encounter->forceFill(['metadata' => array_merge($encounter->metadata ?? [], [
+                'pass' => [
+                    'reason' => $reason,
+                    'started_at' => now()->toIso8601String(),
+                    'expected_return_at' => $expectedReturnAt?->format(DATE_ATOM),
+                    'sent_by' => $actedBy,
+                ],
+            ])])->saveQuietly();
+
+            $this->logEvent(
+                encounter: $encounter,
+                type: AdtEventType::OnPass,
+                from: $from,
+                actedBy: $actedBy,
+                notes: $reason,
+            );
+
+            return $encounter->fresh(['bed', 'location', 'patient']);
+        });
+    }
+
+    public function returnFromPass(Encounter $encounter, ?int $actedBy = null): Encounter
+    {
+        return DB::transaction(function () use ($encounter, $actedBy): Encounter {
+            $actedBy ??= Auth::id();
+            $encounter = $encounter->fresh();
+            $from = $this->snapshot($encounter);
+
+            $encounter = $this->encounterService->returnFromLeave($encounter);
+
+            $pass = $encounter->metadata['pass'] ?? null;
+
+            if (is_array($pass)) {
+                $encounter->forceFill(['metadata' => array_merge($encounter->metadata ?? [], [
+                    'pass' => array_merge($pass, ['returned_at' => now()->toIso8601String()]),
+                ])])->saveQuietly();
+            }
+
+            $this->logEvent(
+                encounter: $encounter,
+                type: AdtEventType::ReturnedFromPass,
+                from: $from,
+                actedBy: $actedBy,
+            );
+
+            return $encounter->fresh(['bed', 'location', 'patient']);
+        });
+    }
+
+    /**
+     * The requester (or ward staff) withdraws a pending request.
+     */
+    public function cancelAdmissionRequest(AdmissionRequest $request, ?string $reason = null, ?int $actedBy = null): AdmissionRequest
+    {
+        return $this->closeRequest($request, AdmissionRequestStatus::Cancelled, AdtEventType::AdmissionCancelled, $reason, $actedBy);
+    }
+
+    public function expireAdmissionRequest(AdmissionRequest $request): AdmissionRequest
+    {
+        return $this->closeRequest($request, AdmissionRequestStatus::Expired, AdtEventType::AdmissionExpired, __('Expired without a decision'), null);
+    }
+
+    protected function closeRequest(
+        AdmissionRequest $request,
+        AdmissionRequestStatus $status,
+        AdtEventType $eventType,
+        ?string $reason,
+        ?int $actedBy,
+    ): AdmissionRequest {
+        return DB::transaction(function () use ($request, $status, $eventType, $reason, $actedBy): AdmissionRequest {
+            $request = $request->fresh(['encounter', 'requestedWard']);
+
+            if (! $request->isPending()) {
+                throw new \InvalidArgumentException(__('This admission request has already been decided.'));
+            }
+
+            $request->update([
+                'status' => $status,
+                'decided_by' => $actedBy,
+                'decided_at' => now(),
+                'decision_notes' => $reason,
+            ]);
+
+            $this->releaseReservation($request->requested_bed_id, $request->id, $actedBy);
+
+            $encounter = $request->encounter;
+
+            if ($encounter !== null) {
+                $this->logEvent(
+                    encounter: $encounter,
+                    type: $eventType,
+                    from: $this->snapshot($encounter),
+                    actedBy: $actedBy,
+                    notes: $reason,
+                    destinationType: AdtDestinationType::Branch,
+                    destinationBranchId: $encounter->branch_id,
+                    destinationLabel: $request->requestedWard?->name,
+                );
+            }
+
+            $this->dispatchAfterCommit(new AdmissionRequestCancelled($request, $status === AdmissionRequestStatus::Expired));
+
+            return $request->fresh(['encounter', 'requestedWard', 'decider']);
+        });
+    }
+
+    /**
+     * Occupies the bed for the encounter: validates, records bed + ward on
+     * the encounter, and marks the bed occupied.
+     */
+    protected function occupyBed(Encounter $encounter, string $bedId, ?int $actedBy, ?string $reservationReference = null): Encounter
+    {
+        $bed = $this->bedAssignmentService->assertAssignable(
+            $bedId,
+            $encounter->branch_id,
+            $encounter->id,
+            $reservationReference,
+            $this->genderOf($encounter->patient),
+        );
+
+        $encounter->update([
+            'bed_id' => $bedId,
+            'location_id' => $bed->parent_id ?? $encounter->location_id,
+        ]);
+
+        $this->bedStatusService->markOccupied($bed, $encounter->id, $reservationReference, $actedBy);
+
+        return $encounter->fresh();
+    }
+
+    protected function releaseBed(?string $bedId, string $encounterId, ?int $actedBy): void
+    {
+        if ($bedId === null) {
+            return;
+        }
+
+        $bed = Location::withoutGlobalScope('branch')->find($bedId);
+
+        if ($bed === null || ! $bed->isBed()) {
+            return;
+        }
+
+        $this->bedStatusService->release(
+            $bed,
+            $encounterId,
+            (bool) config('clinical.beds.cleaning_on_discharge', true),
+            $actedBy,
+        );
+    }
+
+    protected function releaseReservation(?string $bedId, string $requestId, ?int $actedBy): void
+    {
+        if ($bedId === null) {
+            return;
+        }
+
+        $bed = Location::withoutGlobalScope('branch')->find($bedId);
+
+        if ($bed !== null && $bed->isBed()) {
+            $this->bedStatusService->releaseReservation($bed, $requestId, $actedBy);
+        }
+    }
+
+    /**
+     * Any request still pending when the encounter closes is withdrawn.
+     */
+    protected function releasePendingRequests(Encounter $encounter, ?int $actedBy): void
+    {
+        foreach ($encounter->admissionRequests()->pending()->get() as $request) {
+            $request->update([
+                'status' => AdmissionRequestStatus::Cancelled,
+                'decided_by' => $actedBy,
+                'decided_at' => now(),
+                'decision_notes' => __('Encounter closed'),
+            ]);
+
+            $this->releaseReservation($request->requested_bed_id, $request->id, $actedBy);
+        }
+    }
+
+    /**
+     * Domain events fire once the outermost transaction commits (and never on
+     * rollback), so listeners always see committed rows.
+     */
+    protected function dispatchAfterCommit(object $event): void
+    {
+        DB::afterCommit(fn () => event($event));
+    }
+
+    protected function genderOf(?Patient $patient): ?string
+    {
+        $gender = $patient?->gender;
+
+        if ($gender === null) {
+            return null;
+        }
+
+        return is_object($gender) && isset($gender->value) ? (string) $gender->value : (string) $gender;
     }
 
     protected function resolveEncounterForAdmission(
@@ -474,31 +902,14 @@ class AdtService
         }
     }
 
-    protected function assertBedAvailable(string $bedId, ?string $exceptEncounterId = null): void
-    {
-        $query = Encounter::active()
-            ->where('bed_id', $bedId);
-
-        if ($exceptEncounterId) {
-            $query->where('id', '!=', $exceptEncounterId);
-        }
-
-        if ($query->exists()) {
-            throw new \RuntimeException(__('clinical::messages.bed_already_occupied'));
-        }
-    }
-
-    protected function syncLocationFromBed(Encounter $encounter, string $bedId): Encounter
-    {
-        $bed = Location::query()->find($bedId);
-        if ($bed?->parent_id) {
-            $encounter->update([
-                'bed_id' => $bedId,
-                'location_id' => $bed->parent_id,
-            ]);
-        }
-
-        return $encounter->fresh();
+    protected function assertBedAvailable(
+        string $bedId,
+        ?string $exceptEncounterId = null,
+        ?string $forRequestId = null,
+        ?string $patientGender = null,
+        ?string $branchId = null,
+    ): Location {
+        return $this->bedAssignmentService->assertAssignable($bedId, $branchId, $exceptEncounterId, $forRequestId, $patientGender);
     }
 
     /**

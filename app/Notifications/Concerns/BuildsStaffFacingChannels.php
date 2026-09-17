@@ -4,9 +4,12 @@ namespace Modules\Clinical\Notifications\Concerns;
 
 trait BuildsStaffFacingChannels
 {
-    protected function staffChannelsFor(object $notifiable): array
+    /**
+     * @param  array<int, string>|null  $configured  Channel list to honour; defaults to the MAR reminder channels.
+     */
+    protected function staffChannelsFor(object $notifiable, ?array $configured = null): array
     {
-        $configured = config('clinical.mar_reminders.channels', ['database']);
+        $configured ??= config('clinical.mar_reminders.channels', ['database']);
         $channels = [];
 
         if (in_array('database', $configured, true)) {

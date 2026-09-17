@@ -11,6 +11,8 @@ enum AdmissionRequestStatus: string implements HasColor, HasLabel
     case Pending = 'pending';
     case Accepted = 'accepted';
     case Rejected = 'rejected';
+    case Cancelled = 'cancelled';
+    case Expired = 'expired';
 
     public function getLabel(): string|Htmlable|null
     {
@@ -18,6 +20,8 @@ enum AdmissionRequestStatus: string implements HasColor, HasLabel
             self::Pending => 'Pending',
             self::Accepted => 'Accepted',
             self::Rejected => 'Rejected',
+            self::Cancelled => 'Withdrawn',
+            self::Expired => 'Expired',
         };
     }
 
@@ -27,6 +31,7 @@ enum AdmissionRequestStatus: string implements HasColor, HasLabel
             self::Pending => 'warning',
             self::Accepted => 'success',
             self::Rejected => 'danger',
+            self::Cancelled, self::Expired => 'gray',
         };
     }
 

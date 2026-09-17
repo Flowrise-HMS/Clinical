@@ -10,6 +10,8 @@ use Modules\Clinical\Enums\AdtEventType;
 use Modules\Clinical\Enums\DischargeDisposition;
 use Modules\Clinical\Enums\EncounterStatus;
 use Modules\Clinical\Enums\EncounterType;
+use Modules\Clinical\Enums\ParticipantRole;
+use Modules\Core\Enums\BedStatus;
 use Modules\Clinical\Models\Encounter;
 use Modules\Clinical\Models\EncounterLocationEvent;
 use Modules\Core\Models\Branch;
@@ -40,6 +42,7 @@ class AdtServiceTest extends TestCase
         parent::setUp();
 
         $this->migrateModules(['Core', 'Patient', 'Clinical']);
+        config(['clinical.discharge.enforce_readiness' => false]);
 
         $this->service = app(AdtService::class);
         $this->branch = Branch::factory()->create();
@@ -80,10 +83,19 @@ class AdtServiceTest extends TestCase
         );
 
         $this->assertSame(EncounterType::INPATIENT, $encounter->type);
-        $this->assertSame(EncounterStatus::ARRIVED, $encounter->status);
+        $this->assertSame(EncounterStatus::IN_PROGRESS, $encounter->status, 'ward care starts as soon as a bed is assigned');
+        $this->assertNotNull($encounter->admitted_at);
         $this->assertSame($this->bedA->id, $encounter->bed_id);
         $this->assertSame($this->ward->id, $encounter->location_id);
         $this->assertSame($this->branch->id, $encounter->branch_id);
+        $this->assertTrue($encounter->canTransitionTo(EncounterStatus::FINISHED), 'discharge must be reachable after admission');
+        $this->assertSame(BedStatus::OCCUPIED, $this->bedA->fresh()->bedStatus());
+        $this->assertSame($encounter->id, $this->bedA->fresh()->status_reference);
+        $this->assertDatabaseHas('encounter_participants', [
+            'encounter_id' => $encounter->id,
+            'user_id' => $this->user->id,
+            'role' => ParticipantRole::ATTENDING->value,
+        ]);
 
         $this->assertDatabaseHas('encounter_location_events', [
             'encounter_id' => $encounter->id,

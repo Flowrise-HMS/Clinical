@@ -24,6 +24,9 @@ use Livewire\Attributes\On;
 use Livewire\Attributes\Url;
 use Modules\Clinical\Classes\Actions\EncounterActions;
 use Modules\Clinical\Classes\Actions\PatientActions;
+use Modules\Clinical\Models\DischargeSummary;
+use Modules\Clinical\Exceptions\DischargeBlockedException;
+use Modules\Clinical\Classes\Actions\DischargeSummaryActions;
 use Modules\Clinical\Classes\Services\AdtService;
 use Modules\Clinical\Classes\Services\AllergyService;
 use Modules\Clinical\Classes\Services\BedAssignmentService;
@@ -42,6 +45,7 @@ use Modules\Clinical\Enums\DiagnosisCertainty;
 use Modules\Clinical\Enums\DiagnosisType;
 use Modules\Clinical\Enums\DischargeDisposition;
 use Modules\Clinical\Enums\EncounterPriority;
+use Modules\Clinical\Enums\EncounterStatus;
 use Modules\Clinical\Enums\EncounterType;
 use Modules\Clinical\Enums\NoteStatus;
 use Modules\Clinical\Enums\NoteType;
@@ -57,6 +61,7 @@ use Modules\Clinical\Filament\Clusters\Workspace\Concerns\SeedsSchemaEntangleKey
 use Modules\Clinical\Filament\Clusters\Workspace\WorkspaceCluster;
 use Modules\Clinical\Filament\Schemas\EncounterCoverageSchema;
 use Modules\Clinical\Filament\Widgets\CriticalPatientsWidget;
+use Modules\Clinical\Filament\Widgets\LongStayPatientsWidget;
 use Modules\Clinical\Filament\Widgets\MyTasksWidget;
 use Modules\Clinical\Filament\Widgets\PatientVitalsHistoryWidget;
 use Modules\Clinical\Filament\Widgets\PendingAdmissionsWidget;
@@ -73,7 +78,6 @@ use Modules\Core\Classes\Support\PageHeaderActionsRegistry;
 use Modules\Core\Classes\Support\PageWidgetsRegistry;
 use Modules\Core\Enums\CoverageType;
 use Modules\Core\Models\Branch;
-use Modules\Core\Models\Service;
 use Modules\Core\Settings\FeatureSettings;
 use Modules\Core\Support\ModuleAvailability;
 use Modules\Core\Support\OptionalClass;
@@ -226,12 +230,15 @@ class ClinicalWorkspace extends Page implements HasSchemas
     ];
 
     /**
-     * @var array{discharge_notes: string|null, discharge_disposition?: string}
+     * @var array{notes: string|null, discharge_disposition: string, transfer_destination: string|null, override_reason: string|null, follow_up_at: string|null, follow_up_provider_id: string|null}
      */
     public array $dischargeData = [
-        'discharge_notes' => null,
+        'notes' => null,
         'discharge_disposition' => DischargeDisposition::COMPLETED->value,
         'transfer_destination' => null,
+        'override_reason' => null,
+        'follow_up_at' => null,
+        'follow_up_provider_id' => null,
     ];
 
     /**
@@ -427,9 +434,12 @@ class ClinicalWorkspace extends Page implements HasSchemas
     protected function defaultDischargeData(): array
     {
         return [
-            'discharge_notes' => null,
+            'notes' => null,
             'discharge_disposition' => DischargeDisposition::COMPLETED->value,
             'transfer_destination' => null,
+            'override_reason' => null,
+            'follow_up_at' => null,
+            'follow_up_provider_id' => null,
         ];
     }
 
@@ -680,7 +690,7 @@ class ClinicalWorkspace extends Page implements HasSchemas
     }
 
     /**
-     * @return array{type: ?string, status: ?string, status_color: string, ward: ?string, bed: ?string, los: ?string}
+     * @return array{type: ?string, status: ?string, status_color: string, ward: ?string, bed: ?string, los: ?string, admission_pending: bool, on_pass: bool, expected_discharge: ?string, long_stay: bool}
      */
     public function getEncounterStatusChip(): array
     {
@@ -695,6 +705,9 @@ class ClinicalWorkspace extends Page implements HasSchemas
                 'bed' => null,
                 'los' => null,
                 'admission_pending' => false,
+                'on_pass' => false,
+                'expected_discharge' => null,
+                'long_stay' => false,
             ];
         }
 
@@ -708,6 +721,9 @@ class ClinicalWorkspace extends Page implements HasSchemas
             'bed' => $encounter->bed?->name,
             'los' => $encounter->duration,
             'admission_pending' => $encounter->hasPendingAdmissionRequest(),
+            'on_pass' => $encounter->status === EncounterStatus::ON_LEAVE,
+            'expected_discharge' => $encounter->expected_discharge_at?->format('D j M'),
+            'long_stay' => $encounter->isLongStay(),
         ];
     }
 
@@ -780,6 +796,7 @@ class ClinicalWorkspace extends Page implements HasSchemas
 
         return [
             CriticalPatientsWidget::class,
+            LongStayPatientsWidget::class,
             MyTasksWidget::class,
             PendingAdmissionsWidget::class,
             ...($this->hasAppointmentModule() ? [WorkspaceTodayAppointmentsWidget::class] : []),
@@ -1310,6 +1327,120 @@ class ClinicalWorkspace extends Page implements HasSchemas
             && app(EncounterPolicy::class)->update($user, $encounter);
     }
 
+    public function sendOnPassAction(): Action
+    {
+        $encounter = $this->getOpenEncounter();
+
+        if ($encounter === null) {
+            return Action::make('send_on_pass')->hidden();
+        }
+
+        return EncounterActions::sendOnPass($encounter)
+            ->button()
+            ->authorize(fn (): bool => $this->canUpdateEncounter($encounter))
+            ->after(fn () => $this->refreshAdtContext($encounter->fresh()))
+            ->successNotificationTitle('Patient sent on pass');
+    }
+
+    public function returnFromPassAction(): Action
+    {
+        $encounter = $this->getOpenEncounter();
+
+        if ($encounter === null) {
+            return Action::make('return_from_pass')->hidden();
+        }
+
+        return EncounterActions::returnFromPass($encounter)
+            ->button()
+            ->authorize(fn (): bool => $this->canUpdateEncounter($encounter))
+            ->after(fn () => $this->refreshAdtContext($encounter->fresh()))
+            ->successNotificationTitle('Patient returned from pass');
+    }
+
+    public function cancelAdmissionRequestAction(): Action
+    {
+        $encounter = $this->getOpenEncounter();
+
+        if ($encounter === null) {
+            return Action::make('cancel_admission_request')->hidden();
+        }
+
+        return EncounterActions::cancelAdmissionRequest($encounter, $this->canUpdateEncounter($encounter))
+            ->button()
+            ->after(fn () => $this->refreshAdtContext($encounter->fresh()))
+            ->successNotificationTitle('Admission request withdrawn');
+    }
+
+    public function dischargeSummaryAction(): Action
+    {
+        $encounter = $this->getOpenEncounter();
+
+        if ($encounter === null || ! $encounter->isInpatient()) {
+            return Action::make('discharge_summary')->hidden();
+        }
+
+        return DischargeSummaryActions::edit($encounter)
+            ->button()
+            ->authorize(fn (): bool => $this->canUpdateEncounter($encounter))
+            ->after(fn () => $this->refreshAdtContext($encounter->fresh()));
+    }
+
+    public function signDischargeSummaryAction(): Action
+    {
+        $encounter = $this->getOpenEncounter();
+
+        if ($encounter === null || ! $encounter->isInpatient()) {
+            return Action::make('signDischargeSummary')->hidden();
+        }
+
+        // Page actions resolve by method name ("{name}Action"), so the name must match.
+        return DischargeSummaryActions::sign($encounter)
+            ->name('signDischargeSummary')
+            ->button()
+            ->after(fn () => $this->refreshAdtContext($encounter->fresh()));
+    }
+
+    public function printDischargeSummaryAction(): Action
+    {
+        $encounter = $this->getOpenEncounter();
+
+        if ($encounter === null || ! $encounter->isInpatient()) {
+            return Action::make('print_discharge_summary')->hidden();
+        }
+
+        return DischargeSummaryActions::print($encounter)->button();
+    }
+
+    public function setExpectedDischargeAction(): Action
+    {
+        $encounter = $this->getOpenEncounter();
+
+        if ($encounter === null || ! $encounter->isInpatient()) {
+            return Action::make('setExpectedDischarge')->hidden();
+        }
+
+        return EncounterActions::setExpectedDischarge($encounter)
+            ->name('setExpectedDischarge')
+            ->link()
+            ->authorize(fn (): bool => $this->canUpdateEncounter($encounter))
+            ->after(fn () => $this->refreshAdtContext($encounter->fresh()))
+            ->successNotificationTitle('Expected discharge updated');
+    }
+
+    public function getDischargeSummary(): ?DischargeSummary
+    {
+        return $this->getOpenEncounter()?->dischargeSummary()->with(['author', 'signer'])->first();
+    }
+
+    public function canShowPassOnAdt(?Encounter $encounter = null): bool
+    {
+        $encounter ??= $this->getOpenEncounter();
+
+        return $encounter !== null
+            && $this->canUpdateEncounter($encounter)
+            && (EncounterActions::isPassVisible($encounter) || EncounterActions::isReturnFromPassVisible($encounter));
+    }
+
     public function acceptAdmissionAction(): Action
     {
         $encounter = $this->getOpenEncounter();
@@ -1511,14 +1642,24 @@ class ClinicalWorkspace extends Page implements HasSchemas
      */
     public function getWardOptions(): array
     {
-        $branchId = $this->currentEncounter?->branch_id
-            ?? $this->currentPatient?->branch_id;
+        $branchId = $this->prescribingBranchId();
 
         if (blank($branchId)) {
             return [];
         }
 
         return $this->bedAssignmentService->getWardsForBranch($branchId)->all();
+    }
+
+    /**
+     * Branch the current encounter (or patient) belongs to; used to scope
+     * stock counts in the medication picker. Null means "unknown", never a
+     * default branch.
+     */
+    protected function prescribingBranchId(): ?string
+    {
+        return $this->currentEncounter?->branch_id
+            ?? $this->currentPatient?->branch_id;
     }
 
     /**
@@ -1530,7 +1671,13 @@ class ClinicalWorkspace extends Page implements HasSchemas
             return [];
         }
 
-        return $this->bedAssignmentService->getAvailableBeds($wardId)->all();
+        $encounter = $this->getOpenEncounter();
+
+        return $this->bedAssignmentService->getAvailableBeds(
+            $wardId,
+            $encounter?->id,
+            $encounter?->pendingAdmissionRequest()->value('id'),
+        )->all();
     }
 
     public function saveDiagnoses(): void
@@ -1739,8 +1886,8 @@ class ClinicalWorkspace extends Page implements HasSchemas
             ];
         }
 
-        $drugSearchClass = OptionalClass::resolve(
-            'Modules\\Pharmacy\\Classes\\Services\\DrugSearchService',
+        $optionFormatterClass = OptionalClass::resolve(
+            'Modules\\Pharmacy\\Classes\\Services\\MedicationSearchOptionFormatter',
             'Pharmacy',
         );
         $medicationServiceClass = OptionalClass::resolve(
@@ -1748,7 +1895,7 @@ class ClinicalWorkspace extends Page implements HasSchemas
             'Pharmacy',
         );
 
-        if ($drugSearchClass === null || $medicationServiceClass === null) {
+        if ($optionFormatterClass === null || $medicationServiceClass === null) {
             return [
                 TextEntry::make('pharmacy_unavailable')
                     ->hiddenLabel()
@@ -1765,64 +1912,11 @@ class ClinicalWorkspace extends Page implements HasSchemas
                         ->label('Medication')
                         ->required()
                         ->searchable()
-                        ->getSearchResultsUsing(function (string $search) use ($drugSearchClass) {
-                            return collect(app($drugSearchClass)->search($search, 10))
-                                ->mapWithKeys(function (array $result): array {
-                                    if (filled($result['service_id'])) {
-                                        return [
-                                            (string) $result['service_id'] => '[Catalog] '.$result['display_name'],
-                                        ];
-                                    }
-
-                                    if (filled($result['drug_id'])) {
-                                        $prefix = $result['source_provider'] === 'local' ? '[Reference] ' : '[External] ';
-
-                                        return [
-                                            'drug:'.$result['drug_id'] => $prefix.$result['display_name'],
-                                        ];
-                                    }
-
-                                    if (filled($result['medication_id'])) {
-                                        return [
-                                            'medication:'.$result['medication_id'] => $result['display_name'],
-                                        ];
-                                    }
-
-                                    return [];
-                                })
-                                ->all();
-                        })
-                        ->getOptionLabelUsing(function ($value): ?string {
-                            if (str_starts_with((string) $value, 'drug:')) {
-                                $drugId = str($value)->after('drug:')->toString();
-                                $drug = OptionalClass::when(
-                                    'Modules\\Pharmacy\\Models\\Drug',
-                                    fn (string $class) => $class::query()->find($drugId),
-                                    'Pharmacy',
-                                );
-
-                                if (! $drug) {
-                                    return $value;
-                                }
-
-                                $prefix = $drug->source_provider === 'local' ? '[Reference] ' : '[External] ';
-
-                                return $prefix.$drug->display_name;
-                            }
-
-                            if (str_starts_with((string) $value, 'medication:')) {
-                                $medicationId = str($value)->after('medication:')->toString();
-                                $medication = OptionalClass::when(
-                                    'Modules\\Pharmacy\\Models\\Medication',
-                                    fn (string $class) => $class::find($medicationId),
-                                    'Pharmacy',
-                                );
-
-                                return $medication?->service?->name ?? $medication?->generic_name ?? $value;
-                            }
-
-                            return Service::find($value)?->name;
-                        })
+                        ->allowHtml()
+                        ->getSearchResultsUsing(fn (string $search): array => app($optionFormatterClass)
+                            ->searchOptions($search, $this->prescribingBranchId(), 10))
+                        ->getOptionLabelUsing(fn ($value): ?string => app($optionFormatterClass)
+                            ->optionLabel((string) $value, $this->prescribingBranchId()))
                         ->createOptionForm([
                             TextInput::make('generic_name')
                                 ->required()
@@ -1847,7 +1941,10 @@ class ClinicalWorkspace extends Page implements HasSchemas
                                 ->default(0),
                         ])
                         ->createOptionUsing(function (array $data) use ($medicationServiceClass): string {
-                            return app($medicationServiceClass)->createWithService($data)->service_id;
+                            // Ad-hoc rows land in Pharmacy's "needs pricing" queue.
+                            return app($medicationServiceClass)
+                                ->createWithService($data + ['is_formulary' => false])
+                                ->service_id;
                         }),
                     TextInput::make('dosage')
                         ->label('Dosage')
@@ -1906,18 +2003,20 @@ class ClinicalWorkspace extends Page implements HasSchemas
         $dischargeData = $dischargeForm->getState();
 
         try {
-            $this->adtService->discharge(
-                $encounter,
-                enum_from(DischargeDisposition::class, $dischargeData['discharge_disposition'] ?? 'completed'),
-                $dischargeData['transfer_destination'] ?? null,
-                notes: $dischargeData['discharge_notes'] ?? null,
-            );
+            EncounterActions::performDischarge($encounter, $dischargeData);
 
             $this->dischargeData = $this->defaultDischargeData();
             $this->currentEncounter = null;
             $this->currentPatient?->unsetRelation('activeEncounter');
             $this->loadPatientContext();
             Notification::make()->title('Patient discharged')->success()->send();
+        } catch (DischargeBlockedException $e) {
+            Notification::make()
+                ->title('Discharge blocked')
+                ->body($e->readiness->summary())
+                ->danger()
+                ->persistent()
+                ->send();
         } catch (\Exception $e) {
             Notification::make()
                 ->title('Discharge failed')
@@ -2193,18 +2292,9 @@ class ClinicalWorkspace extends Page implements HasSchemas
                 ->schema(EncounterDiagnosisForm::quickElements())
                 ->statePath('diagnosisFormData'),
             'dischargeForm' => $this->makeSchema()
-                ->schema([
-                    Select::make('discharge_disposition')
-                        ->label('Disposition')
-                        ->options(DischargeDisposition::class)
-                        ->default('completed')
-                        ->required(),
-                    TextInput::make('transfer_destination')
-                        ->label('Transfer Destination')
-                        ->visible(fn ($get) => $get('discharge_disposition') === 'transferred'),
-                    RichEditor::make('discharge_notes')
-                        ->label('Discharge Notes'),
-                ])
+                ->schema(fn (): array => ($encounter = $this->getOpenEncounter())
+                    ? EncounterActions::dischargeSchema($encounter)
+                    : [])
                 ->statePath('dischargeData'),
             'noteForm' => $this->makeSchema()
                 ->schema(ClinicalNoteForm::quickElements())

@@ -34,6 +34,9 @@ use Modules\Patient\Models\Patient;
  * @property string|null $guest_name
  * @property string|null $guest_phone
  * @property string|null $guest_email
+ * @property ?\Illuminate\Support\Carbon $admitted_at
+ * @property ?\Illuminate\Support\Carbon $discharged_at
+ * @property ?\Illuminate\Support\Carbon $expected_discharge_at
  */
 class Encounter extends BaseModel implements ProvidesClientIdentity
 {
@@ -60,6 +63,7 @@ class Encounter extends BaseModel implements ProvidesClientIdentity
         'transfer_destination',
         'admitted_at',
         'discharged_at',
+        'expected_discharge_at',
         'bed_id',
         'guest_name',
         'guest_phone',
@@ -76,6 +80,7 @@ class Encounter extends BaseModel implements ProvidesClientIdentity
         'coverage_type' => CoverageType::class,
         'admitted_at' => 'datetime',
         'discharged_at' => 'datetime',
+        'expected_discharge_at' => 'datetime',
         'metadata' => 'array',
     ];
 
@@ -205,6 +210,11 @@ class Encounter extends BaseModel implements ProvidesClientIdentity
         return $this->hasMany(EncounterDiagnosis::class, 'encounter_id');
     }
 
+    public function dischargeSummary(): HasOne
+    {
+        return $this->hasOne(DischargeSummary::class);
+    }
+
     public function activeParticipants(): HasMany
     {
         return $this->hasMany(EncounterParticipant::class)->where('status', ParticipantStatus::ACTIVE);
@@ -299,6 +309,55 @@ class Encounter extends BaseModel implements ProvidesClientIdentity
         );
     }
 
+    /**
+     * Whole days since admission (or the full stay once discharged).
+     */
+    public function getLosDaysAttribute(): ?int
+    {
+        if (! $this->admitted_at) {
+            return null;
+        }
+
+        $end = $this->discharged_at ?? now();
+
+        return (int) $this->admitted_at->diffInDays($end);
+    }
+
+    /**
+     * A stay is "long" once it exceeds the configured number of days, or once
+     * the expected discharge date has passed.
+     */
+    public function isLongStay(?int $thresholdDays = null): bool
+    {
+        if (! $this->isInpatient() || ! $this->isActive() || ! $this->admitted_at) {
+            return false;
+        }
+
+        if ($this->expected_discharge_at && $this->expected_discharge_at->isPast()) {
+            return true;
+        }
+
+        $thresholdDays ??= (int) config('clinical.admissions.long_stay_days', 7);
+
+        return $thresholdDays > 0 && ($this->los_days ?? 0) > $thresholdDays;
+    }
+
+    /**
+     * @param  Builder<Encounter>  $query
+     * @return Builder<Encounter>
+     */
+    public function scopeLongStay(Builder $query, ?int $thresholdDays = null): Builder
+    {
+        $thresholdDays ??= (int) config('clinical.admissions.long_stay_days', 7);
+
+        return $query
+            ->where('type', EncounterType::INPATIENT->value)
+            ->whereNotIn('status', [EncounterStatus::FINISHED->value, EncounterStatus::CANCELLED->value])
+            ->where(fn (Builder $q) => $q
+                ->where('admitted_at', '<', now()->subDays($thresholdDays))
+                ->orWhere(fn (Builder $expected) => $expected->whereNotNull('expected_discharge_at')->where('expected_discharge_at', '<', now())));
+    }
+
     public function getDurationAttribute(): ?string
     {
         if (! $this->admitted_at) {
@@ -321,8 +380,18 @@ class Encounter extends BaseModel implements ProvidesClientIdentity
         return $this->admitted_at->diffInMinutes($end);
     }
 
+    /**
+     * Inpatients may start ward care straight from arrival: triage is an
+     * emergency-department step, not a prerequisite for occupying a bed.
+     */
     public function canTransitionTo(EncounterStatus $newStatus): bool
     {
+        if ($this->isInpatient()
+            && $this->status === EncounterStatus::ARRIVED
+            && $newStatus === EncounterStatus::IN_PROGRESS) {
+            return true;
+        }
+
         return $this->status->canTransitionTo($newStatus);
     }
 

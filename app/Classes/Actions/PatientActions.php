@@ -122,6 +122,11 @@ class PatientActions
             $this->acceptAdmissionAction(),
             $this->rejectAdmissionAction(),
             $this->triageAction(),
+            $this->sendOnPassAction(),
+            $this->returnFromPassAction(),
+            $this->cancelAdmissionRequestAction(),
+            $this->dischargeSummaryAction(),
+            $this->printDischargeSummaryAction(),
             $this->carePlanAction(),
             $this->medicationAdminAction(),
             $this->medicationCanvasAction(),
@@ -749,6 +754,69 @@ class PatientActions
             ->record($encounter)
             ->authorize(fn (): bool => $this->canUpdateEncounter($encounter))
             ->successNotificationTitle('Patient triaged successfully');
+    }
+
+    public function sendOnPassAction(): Action
+    {
+        $encounter = $this->resolveEncounter();
+
+        if (! $encounter) {
+            return Action::make('send_on_pass')->hidden();
+        }
+
+        return EncounterActions::sendOnPass($encounter)
+            ->record($encounter)
+            ->authorize(fn (): bool => $this->canUpdateEncounter($encounter))
+            ->successNotificationTitle('Patient sent on pass');
+    }
+
+    public function returnFromPassAction(): Action
+    {
+        $encounter = $this->resolveEncounter();
+
+        if (! $encounter) {
+            return Action::make('return_from_pass')->hidden();
+        }
+
+        return EncounterActions::returnFromPass($encounter)
+            ->record($encounter)
+            ->authorize(fn (): bool => $this->canUpdateEncounter($encounter))
+            ->successNotificationTitle('Patient returned from pass');
+    }
+
+    public function dischargeSummaryAction(): Action
+    {
+        $encounter = $this->resolveEncounter();
+
+        if (! $encounter || ! $encounter->isInpatient()) {
+            return Action::make('discharge_summary')->hidden();
+        }
+
+        return DischargeSummaryActions::edit($encounter)->record($encounter);
+    }
+
+    public function printDischargeSummaryAction(): Action
+    {
+        $encounter = $this->resolveEncounter();
+
+        if (! $encounter || ! $encounter->isInpatient()) {
+            return Action::make('print_discharge_summary')->hidden();
+        }
+
+        return DischargeSummaryActions::print($encounter)->record($encounter);
+    }
+
+    public function cancelAdmissionRequestAction(): Action
+    {
+        $encounter = $this->resolveEncounter();
+
+        if (! $encounter) {
+            return Action::make('cancel_admission_request')->hidden();
+        }
+
+        return EncounterActions::cancelAdmissionRequest($encounter, $this->canUpdateEncounter($encounter))
+            ->record($encounter)
+            ->successNotificationTitle('Admission request withdrawn');
     }
 
     protected function canUpdateEncounter(Encounter $encounter): bool

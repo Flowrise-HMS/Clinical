@@ -6,85 +6,87 @@ use Illuminate\Support\Facades\Notification;
 use Modules\Clinical\Enums\EncounterStatus;
 use Modules\Clinical\Events\EncounterFinished;
 use Modules\Clinical\Models\Encounter;
-use Modules\Clinical\Notifications\PatientAdmittedNotification;
-use Modules\Clinical\Notifications\PatientDischargedNotification;
-use Modules\Patient\Models\EmergencyContact;
+use Modules\Clinical\Notifications\VisitCompletedNotification;
+use Modules\Clinical\Notifications\VisitStartedNotification;
+use Modules\Clinical\Support\PatientNotificationAudience;
 use Modules\Patient\Models\Patient;
 
+/**
+ * Outpatient visit notifications and the EncounterFinished event. Inpatient
+ * admission/transfer/discharge messages are driven by AdtService events, so
+ * an admitted patient is never told their "visit" started or ended.
+ */
 class EncounterObserver
 {
     public function created(Encounter $encounter): void
     {
-        $this->maybeNotifyAdmitted($encounter);
+        $this->maybeNotifyVisitStarted($encounter);
     }
 
     public function updated(Encounter $encounter): void
     {
-        $this->maybeNotifyAdmitted($encounter);
+        $this->maybeNotifyVisitStarted($encounter);
 
         if ($encounter->wasChanged('status') && $encounter->status === EncounterStatus::FINISHED) {
-            $this->notifyDischarged($encounter);
+            if (! $encounter->isInpatient()) {
+                $this->notifyVisitCompleted($encounter);
+            }
+
             EncounterFinished::dispatch($encounter->fresh());
         }
     }
 
-    protected function maybeNotifyAdmitted(Encounter $encounter): void
+    protected function maybeNotifyVisitStarted(Encounter $encounter): void
     {
+        if ($encounter->isInpatient()) {
+            return;
+        }
+
         if (! in_array($encounter->status, [EncounterStatus::ARRIVED, EncounterStatus::IN_PROGRESS], true)) {
             return;
         }
 
         $meta = $encounter->metadata ?? [];
-        if (! empty($meta['notified_admitted'])) {
+        if (! empty($meta['notified_visit_started_at']) || ! empty($meta['notified_admitted'])) {
             return;
         }
 
-        if ($encounter->patient_id === null) {
-            return;
-        }
-
-        $encounter->loadMissing('patient.emergencyContacts', 'branch', 'department');
-
-        $patient = $encounter->patient;
-        if (! $patient instanceof Patient) {
+        $patient = $this->patientOf($encounter);
+        if ($patient === null) {
             return;
         }
 
         Notification::send(
-            $this->encounterAudience($patient),
-            new PatientAdmittedNotification($encounter->fresh(['patient', 'branch', 'department']))
+            PatientNotificationAudience::for($patient),
+            new VisitStartedNotification($encounter->fresh(['patient', 'branch', 'department']))
         );
 
-        $merged = array_merge($encounter->metadata ?? [], ['notified_admitted' => true]);
-        $encounter->forceFill(['metadata' => $merged])->saveQuietly();
+        $encounter->forceFill(['metadata' => array_merge($encounter->metadata ?? [], [
+            'notified_visit_started_at' => now()->toIso8601String(),
+        ])])->saveQuietly();
     }
 
-    protected function notifyDischarged(Encounter $encounter): void
+    protected function notifyVisitCompleted(Encounter $encounter): void
     {
-        if ($encounter->patient_id === null) {
-            return;
-        }
-
-        $encounter->loadMissing('patient.emergencyContacts', 'branch');
-
-        $patient = $encounter->patient;
-        if (! $patient instanceof Patient) {
+        $patient = $this->patientOf($encounter);
+        if ($patient === null) {
             return;
         }
 
         Notification::send(
-            $this->encounterAudience($patient),
-            new PatientDischargedNotification($encounter->fresh(['patient', 'branch']))
+            PatientNotificationAudience::for($patient),
+            new VisitCompletedNotification($encounter->fresh(['patient', 'branch']))
         );
     }
 
-    /**
-     * @return array<int, Patient|EmergencyContact>
-     */
-    protected function encounterAudience(Patient $patient): array
+    protected function patientOf(Encounter $encounter): ?Patient
     {
-        $patient->loadMissing('emergencyContacts');
+        if ($encounter->patient_id === null) {
+            return null;
+        }
 
-        return array_merge([$patient], $patient->emergencyContacts->all());
+        $encounter->loadMissing('patient');
+
+        return $encounter->patient instanceof Patient ? $encounter->patient : null;
     }
 }

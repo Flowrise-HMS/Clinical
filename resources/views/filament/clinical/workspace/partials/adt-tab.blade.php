@@ -11,6 +11,7 @@
     $pendingAdmission = $openEncounter ? $this->getPendingAdmissionRequest() : null;
     $decidedAdmission = $openEncounter ? $this->getLatestDecidedAdmissionRequest() : null;
     $hasBed = $openEncounter && filled($openEncounter->bed_id);
+    $canShowPass = $openEncounter ? $this->canShowPassOnAdt($openEncounter) : false;
     $renderedSection = false;
 @endphp
 <div class="space-y-6">
@@ -36,6 +37,14 @@
                 @endif
                 @if ($chip['los'])
                     <x-filament::badge color="info">Admitted for {{ $chip['los'] }}</x-filament::badge>
+                @endif
+                @if ($chip['expected_discharge'] ?? null)
+                    <x-filament::badge :color="($chip['long_stay'] ?? false) ? 'warning' : 'gray'" icon="heroicon-m-calendar-days">Expected discharge {{ $chip['expected_discharge'] }}</x-filament::badge>
+                @elseif ($chip['long_stay'] ?? false)
+                    <x-filament::badge color="warning" icon="heroicon-m-clock">Long stay</x-filament::badge>
+                @endif
+                @if ($chip['on_pass'] ?? false)
+                    <x-filament::badge color="warning" icon="heroicon-m-arrow-right-start-on-rectangle">On pass</x-filament::badge>
                 @endif
                 @if ($chip['admission_pending'] ?? false)
                     <x-filament::badge color="warning" icon="heroicon-m-clock">Admission pending</x-filament::badge>
@@ -79,12 +88,13 @@
                             <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">{{ $pendingAdmission->notes }}</p>
                         @endif
                     </div>
-                    @if ($canDecideAdmission)
-                        <div class="flex items-center gap-2">
+                    <div class="flex items-center gap-2">
+                        @if ($canDecideAdmission)
                             {{ $this->acceptAdmissionAction }}
                             {{ $this->rejectAdmissionAction }}
-                        </div>
-                    @endif
+                        @endif
+                        {{ $this->cancelAdmissionRequestAction }}
+                    </div>
                 </div>
                 @unless ($canDecideAdmission)
                     <p class="text-xs text-gray-500 dark:text-gray-400">
@@ -133,6 +143,36 @@
             </x-filament::badge>
         @endif
 
+        @if ($canShowPass)
+            @php $renderedSection = true; @endphp
+            <div class="space-y-3 rounded-xl border border-gray-200 dark:border-gray-700 p-4">
+                <div class="flex flex-wrap items-start justify-between gap-2">
+                    <div>
+                        <h4 class="text-sm font-semibold text-gray-900 dark:text-white">Pass / leave</h4>
+                        <p class="text-sm text-gray-500 dark:text-gray-400">
+                            @if ($chip['expected_discharge'] ?? null)
+                    <x-filament::badge :color="($chip['long_stay'] ?? false) ? 'warning' : 'gray'" icon="heroicon-m-calendar-days">Expected discharge {{ $chip['expected_discharge'] }}</x-filament::badge>
+                @elseif ($chip['long_stay'] ?? false)
+                    <x-filament::badge color="warning" icon="heroicon-m-clock">Long stay</x-filament::badge>
+                @endif
+                @if ($chip['on_pass'] ?? false)
+                                The patient is away from the ward on pass; the bed is still theirs.
+                                @if (filled($openEncounter->metadata['pass']['expected_return_at'] ?? null))
+                                    Expected back {{ \Illuminate\Support\Carbon::parse($openEncounter->metadata['pass']['expected_return_at'])->diffForHumans() }}.
+                                @endif
+                            @else
+                                Let the patient leave temporarily without giving up the bed.
+                            @endif
+                        </p>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        {{ $this->sendOnPassAction }}
+                        {{ $this->returnFromPassAction }}
+                    </div>
+                </div>
+            </div>
+        @endif
+
         @if ($canUpdate && $hasBed)
             @php $renderedSection = true; @endphp
             <div class="space-y-3 rounded-xl border border-gray-200 dark:border-gray-700 p-4">
@@ -176,6 +216,32 @@
                         </p>
                     </div>
                     {{ $this->completeEncounterAction }}
+                </div>
+            </div>
+        @endif
+
+        @if ($openEncounter?->isInpatient() && $hasBed)
+            @php $renderedSection = true; $summary = $this->getDischargeSummary(); @endphp
+            <div class="space-y-3 rounded-xl border border-gray-200 dark:border-gray-700 p-4">
+                <div class="flex flex-wrap items-start justify-between gap-2">
+                    <div>
+                        <h4 class="text-sm font-semibold text-gray-900 dark:text-white">Discharge planning</h4>
+                        <p class="text-sm text-gray-500 dark:text-gray-400">
+                            @if ($summary)
+                                Summary {{ strtolower($summary->status->getLabel()) }}
+                                @if ($summary->signed_at) by {{ $summary->signer?->name }} {{ $summary->signed_at->diffForHumans() }} @elseif ($summary->author) — drafted by {{ $summary->author->name }} @endif.
+                            @else
+                                No discharge summary drafted yet.
+                            @endif
+                            {{ $chip['expected_discharge'] ? 'Expected discharge '.$chip['expected_discharge'].'.' : 'No expected discharge date set.' }}
+                        </p>
+                    </div>
+                    <div class="flex flex-wrap items-center gap-2">
+                        {{ $this->setExpectedDischargeAction }}
+                        {{ $this->dischargeSummaryAction }}
+                        {{ $this->signDischargeSummaryAction }}
+                        {{ $this->printDischargeSummaryAction }}
+                    </div>
                 </div>
             </div>
         @endif

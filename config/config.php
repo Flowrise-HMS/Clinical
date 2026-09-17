@@ -5,6 +5,52 @@ return [
 
     'permissions' => [
         'manage_clinical_settings' => 'ManageClinicalSettings',
+        'manage_bed_status' => 'Manage Bed Status',
+        'sign_discharge_summary' => 'Sign Discharge Summary',
+        'print_discharge_summary' => 'Print Discharge Summary',
+    ],
+
+    /*
+     * Inpatient (IPD) behaviour.
+     */
+    'admissions' => [
+        // Pending admission requests expire after this many hours; null disables expiry.
+        'request_expiry_hours' => 24,
+        // Length of stay (days) after which an inpatient is flagged as a long stay.
+        'long_stay_days' => 7,
+    ],
+
+    'beds' => [
+        // Discharge/transfer leaves the bed in "cleaning" (true) or straight back to "available".
+        'cleaning_on_discharge' => true,
+        // Requesting admission with a preferred bed reserves it until the request is decided.
+        'reserve_on_request' => true,
+    ],
+
+    'wards' => [
+        // Roles (in the ward's branch) that receive ward-targeted staff notifications.
+        'notify_roles' => ['nurse'],
+    ],
+
+    // Channels for staff-facing ADT notifications (admission requests, decisions, transfers).
+    'adt_notifications' => [
+        'channels' => ['database', 'mail'],
+    ],
+
+    'discharge' => [
+        'enforce_readiness' => true,
+        'require_signed_summary' => true,
+        // Readiness item => blocking|warning|info
+        'readiness' => [
+            'pending_medication_doses' => 'blocking',
+            'undispensed_take_home_meds' => 'warning',
+            'pending_diagnostics' => 'blocking',
+            'financial_hold' => 'blocking',
+            'unsigned_notes' => 'warning',
+            'discharge_diagnosis' => 'blocking',
+            'discharge_summary_signed' => 'blocking',
+            'follow_up_booked' => 'info',
+        ],
     ],
 
     'mar_payment' => [

@@ -132,6 +132,84 @@ class EncounterService
         return $encounter->fresh();
     }
 
+    /**
+     * Bring an inpatient to IN_PROGRESS once a bed is assigned so ward care
+     * (and eventually discharge) is reachable. Planned admissions are walked
+     * through arrival; an arrived or triaged encounter is simply started.
+     * No triage is fabricated: Encounter::canTransitionTo() lets inpatients
+     * start from ARRIVED directly.
+     */
+    public function beginInpatientCare(Encounter $encounter, ?int $actedBy = null): Encounter
+    {
+        $encounter = $encounter->fresh();
+
+        if ($encounter->isCompleted()) {
+            throw new \InvalidArgumentException(__('Cannot start care for a completed encounter.'));
+        }
+
+        if (in_array($encounter->status, [EncounterStatus::IN_PROGRESS, EncounterStatus::ON_LEAVE], true)) {
+            return $encounter;
+        }
+
+        if ($encounter->status === EncounterStatus::PLANNED) {
+            $encounter = $this->admitPatient($encounter, $actedBy);
+        }
+
+        return $this->startEncounter($encounter);
+    }
+
+    /**
+     * Adds the user in the given role unless they are already active on the
+     * encounter in any role. Returns null when nothing was added.
+     */
+    public function ensureParticipant(
+        Encounter $encounter,
+        ?int $userId,
+        ParticipantRole $role,
+        ?int $joinedBy = null,
+    ): ?EncounterParticipant {
+        if ($userId === null) {
+            return null;
+        }
+
+        $alreadyActive = $encounter->participants()
+            ->where('user_id', $userId)
+            ->where('status', ParticipantStatus::ACTIVE)
+            ->exists();
+
+        if ($alreadyActive) {
+            return null;
+        }
+
+        return $this->addParticipant($encounter, $userId, $role, $joinedBy);
+    }
+
+    /**
+     * Makes the user the encounter's active nurse, completing whoever held
+     * the role before (a handover, not a second nurse).
+     */
+    public function assignNurse(Encounter $encounter, int $userId, ?int $assignedBy = null): EncounterParticipant
+    {
+        return DB::transaction(function () use ($encounter, $userId, $assignedBy): EncounterParticipant {
+            $current = $encounter->participants()
+                ->where('role', ParticipantRole::NURSE)
+                ->where('status', ParticipantStatus::ACTIVE)
+                ->get();
+
+            foreach ($current as $participant) {
+                if ((int) $participant->user_id === $userId) {
+                    return $participant;
+                }
+
+                $participant->update(['status' => ParticipantStatus::COMPLETED, 'left_at' => now()]);
+            }
+
+            $this->removeParticipant($encounter, $userId);
+
+            return $this->addParticipant($encounter, $userId, ParticipantRole::NURSE, $assignedBy);
+        });
+    }
+
     public function putOnLeave(Encounter $encounter, ?string $reason = null): Encounter
     {
         if (! $encounter->canTransitionTo(EncounterStatus::ON_LEAVE)) {
@@ -245,6 +323,7 @@ class EncounterService
         $encounter->update([
             'status' => EncounterStatus::CANCELLED,
             'bed_id' => null,
+            'location_id' => null,
             'metadata' => array_merge($encounter->metadata ?? [], ['cancel_reason' => $reason]),
         ]);
 

@@ -5,62 +5,54 @@ namespace Modules\Clinical\Notifications;
 use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Notifications\Notification;
 use Modules\Clinical\Models\Encounter;
-use Modules\Clinical\Notifications\Concerns\BuildsPatientFacingChannels;
-use Modules\Core\Notifications\Concerns\RespectsNotificationSettings;
-use Modules\Core\Support\AppSettings;
+use Modules\Clinical\Notifications\Concerns\PatientFacingAdtNotification;
 
+/**
+ * Sent to the patient and their emergency contacts when the patient is
+ * admitted to a ward bed (direct admission, accepted request, or transfer in).
+ */
 class PatientAdmittedNotification extends Notification
 {
-    use BuildsPatientFacingChannels, RespectsNotificationSettings;
+    use PatientFacingAdtNotification;
 
     public function __construct(protected Encounter $encounter) {}
 
     public function via(object $notifiable): array
     {
-        $channels = $this->channelsFor($notifiable);
-
-        try {
-            $settings = app(AppSettings::class)->notifications();
-            $billing = app(AppSettings::class)->billing();
-
-            return $this->applyNotificationSettings(
-                $channels,
-                $settings->patient_admitted_mail,
-                $settings->patient_admitted_sms,
-                $billing->sms_enabled,
-            );
-        } catch (\Throwable) {
-            return $channels;
-        }
+        return $this->settingsChannels($notifiable, 'patient_admitted_mail', 'patient_admitted_sms');
     }
 
     public function toMail(object $notifiable): MailMessage
     {
-        $encounter = $this->encounter->loadMissing(['patient', 'branch', 'department']);
+        $encounter = $this->encounter->loadMissing(['patient', 'branch', 'department', 'location', 'bed']);
+        $ward = $this->wardLabel($encounter);
+        $attending = $this->attendingName($encounter);
 
         return (new MailMessage)
-            ->subject(__('You have been admitted — :branch', ['branch' => $encounter->branch?->name ?? config('app.name')]))
-            ->line(__('Hello :name,', ['name' => $encounter->patient?->full_name ?? __('Patient')]))
-            ->line(__('Your encounter :number has started at :branch.', [
+            ->subject(__('Admitted to :branch', ['branch' => $this->branchName($encounter)]))
+            ->line(__('Hello :name,', ['name' => $this->patientName($encounter)]))
+            ->line(__(':patient has been admitted to :branch (encounter :number).', [
+                'patient' => $this->patientName($encounter),
+                'branch' => $this->branchName($encounter),
                 'number' => $encounter->encounter_number,
-                'branch' => $encounter->branch?->name ?? config('app.name'),
             ]))
-            ->when($encounter->admitted_at, fn (MailMessage $m) => $m->line(__('Admitted at: :time', ['time' => $encounter->admitted_at->toDayDateTimeString()])))
+            ->when($ward, fn (MailMessage $m) => $m->line(__('Ward: :ward', ['ward' => $ward])))
             ->when($encounter->department, fn (MailMessage $m) => $m->line(__('Department: :dept', ['dept' => $encounter->department->name])))
-            ->line(__('Bring your hospital card on each visit.'))
+            ->when($attending, fn (MailMessage $m) => $m->line(__('Attending clinician: :name', ['name' => $attending])))
+            ->when($encounter->admitted_at, fn (MailMessage $m) => $m->line(__('Admitted at: :time', ['time' => $encounter->admitted_at->toDayDateTimeString()])))
+            ->line(__('Visiting hours and what to bring can be confirmed with the ward.'))
             ->salutation(config('app.name'));
     }
 
     public function toSms(object $notifiable): string
     {
-        $encounter = $this->encounter->loadMissing(['patient', 'branch']);
+        $encounter = $this->encounter->loadMissing(['branch', 'location', 'bed']);
+        $ward = $this->wardLabel($encounter);
 
-        return __(
-            'Admitted at :branch. Encounter :number. Bring your hospital card on each visit.',
-            [
-                'branch' => $encounter->branch?->name ?? config('app.name'),
-                'number' => $encounter->encounter_number,
-            ]
-        );
+        return __('Admitted to :branch:ward. Encounter :number.', [
+            'branch' => $this->branchName($encounter),
+            'ward' => $ward ? ' ('.$ward.')' : '',
+            'number' => $encounter->encounter_number,
+        ]);
     }
 }

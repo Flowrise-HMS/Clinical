@@ -3,6 +3,7 @@
 namespace Modules\Clinical\Filament\Widgets;
 
 use Filament\Actions\Action;
+use Filament\Forms\Components\Textarea;
 use Filament\Notifications\Notification;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\Filter;
@@ -117,6 +118,14 @@ class PendingAdmissionsWidget extends BaseTableWidget
                 ->label(__('Requested'))
                 ->since()
                 ->dateTimeTooltip()
+                ->sortable()
+                ->toggleable(),
+            TextColumn::make('expires_at')
+                ->label(__('Expires'))
+                ->since()
+                ->dateTimeTooltip()
+                ->placeholder('—')
+                ->color(fn (AdmissionRequest $record): ?string => $record->expires_at?->isPast() ? 'danger' : ($record->expires_at?->lt(now()->addHours(2)) ? 'warning' : null))
                 ->sortable()
                 ->toggleable(),
             TextColumn::make('notes')
@@ -235,6 +244,32 @@ class PendingAdmissionsWidget extends BaseTableWidget
                         Notification::make()->title(__('Admission rejected'))->warning()->send();
                     } catch (\Throwable $e) {
                         Notification::make()->title(__('Reject failed'))->body($e->getMessage())->danger()->send();
+                    }
+                }),
+            Action::make('cancel')
+                ->label(__('Withdraw'))
+                ->icon('heroicon-m-arrow-uturn-left')
+                ->color('gray')
+                ->size('xs')
+                ->visible(fn (AdmissionRequest $record): bool => $record->isCancellableBy(Auth::id(), $this->canDecide($record)))
+                ->modalHeading(__('Withdraw admission request'))
+                ->modalDescription(fn (AdmissionRequest $record): string => EncounterActions::pendingRequestSummary($record->encounter))
+                ->schema([
+                    Textarea::make('reason')->label(__('Reason (optional)'))->rows(2),
+                ])
+                ->action(function (AdmissionRequest $record, array $data): void {
+                    if (! $record->isCancellableBy(Auth::id(), $this->canDecide($record))) {
+                        Notification::make()->title(__('Not authorized'))->danger()->send();
+
+                        return;
+                    }
+
+                    try {
+                        app(AdtService::class)->cancelAdmissionRequest($record, $data['reason'] ?? null);
+
+                        Notification::make()->title(__('Admission request withdrawn'))->success()->send();
+                    } catch (\Throwable $e) {
+                        Notification::make()->title(__('Withdraw failed'))->body($e->getMessage())->danger()->send();
                     }
                 }),
         ];
