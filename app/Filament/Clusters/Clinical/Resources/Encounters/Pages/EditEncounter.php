@@ -41,14 +41,50 @@ class EditEncounter extends EditRecord
 
             EncounterActions::admit($record)
                 ->action(function (array $data) use ($record) {
-                    app(AdtService::class)->assignBed(
+                    app(AdtService::class)->requestAdmission(
                         $record,
+                        $data['ward_id'],
+                        bedId: $data['bed_id'] ?? null,
+                        notes: $data['notes'] ?? null,
+                    );
+                    Notification::make()
+                        ->title('Admission requested — awaiting ward acceptance')
+                        ->success()
+                        ->send();
+                }),
+
+            EncounterActions::acceptAdmission($record)
+                ->action(function (array $data) use ($record) {
+                    app(AdtService::class)->acceptAdmission(
+                        $record->pendingAdmissionRequest()->firstOrFail(),
                         $data['bed_id'],
                         notes: $data['notes'] ?? null,
                     );
-                    $this->refreshFormData(['status', 'bed_id', 'location_id', 'admitted_at']);
+                    $this->refreshFormData(['type', 'status', 'bed_id', 'location_id', 'admitted_at']);
                     Notification::make()
-                        ->title('Patient admitted successfully')
+                        ->title('Admission accepted — patient admitted to bed')
+                        ->success()
+                        ->send();
+                }),
+
+            EncounterActions::rejectAdmission($record)
+                ->action(function (array $data) use ($record) {
+                    app(AdtService::class)->rejectAdmission(
+                        $record->pendingAdmissionRequest()->firstOrFail(),
+                        $data['reason'],
+                    );
+                    Notification::make()
+                        ->title('Admission rejected')
+                        ->warning()
+                        ->send();
+                }),
+
+            EncounterActions::complete($record)
+                ->action(function (array $data) use ($record) {
+                    app(EncounterService::class)->completeEncounter($record, notes: $data['notes'] ?? null);
+                    $this->refreshFormData(['status', 'discharge_disposition', 'discharged_at', 'bed_id']);
+                    Notification::make()
+                        ->title('Encounter completed')
                         ->success()
                         ->send();
                 }),

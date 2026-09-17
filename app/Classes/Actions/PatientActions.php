@@ -112,8 +112,11 @@ class PatientActions
         return ActionGroup::make([
             $this->printHospitalCardAction(),
             $this->encounter(),
+            $this->completeEncounterAction(),
             $this->cancelEncounterAction(),
             $this->admitAction(),
+            $this->acceptAdmissionAction(),
+            $this->rejectAdmissionAction(),
             $this->triageAction(),
             $this->carePlanAction(),
             $this->medicationAdminAction(),
@@ -653,7 +656,50 @@ class PatientActions
         return EncounterActions::admit($encounter)
             ->record($encounter)
             ->authorize(fn (): bool => $this->canUpdateEncounter($encounter))
-            ->successNotificationTitle('Patient admitted successfully');
+            ->successNotificationTitle('Admission requested — awaiting ward acceptance');
+    }
+
+    public function acceptAdmissionAction(): Action
+    {
+        $encounter = $this->resolveEncounter();
+
+        if (! $encounter) {
+            return Action::make('accept_admission')->hidden();
+        }
+
+        return EncounterActions::acceptAdmission($encounter)
+            ->record($encounter)
+            ->authorize(fn (): bool => $this->canUpdateEncounter($encounter))
+            ->successNotificationTitle('Admission accepted — patient admitted to bed');
+    }
+
+    public function rejectAdmissionAction(): Action
+    {
+        $encounter = $this->resolveEncounter();
+
+        if (! $encounter) {
+            return Action::make('reject_admission')->hidden();
+        }
+
+        return EncounterActions::rejectAdmission($encounter)
+            ->record($encounter)
+            ->authorize(fn (): bool => $this->canUpdateEncounter($encounter))
+            ->successNotificationTitle('Admission rejected');
+    }
+
+    public function completeEncounterAction(): Action
+    {
+        $encounter = $this->resolveEncounter();
+
+        if (! $encounter) {
+            return Action::make('complete_encounter')->hidden();
+        }
+
+        return EncounterActions::complete($encounter)
+            ->name('complete_encounter')
+            ->record($encounter)
+            ->authorize(fn (): bool => $this->canUpdateEncounter($encounter))
+            ->successNotificationTitle('Encounter completed');
     }
 
     /**

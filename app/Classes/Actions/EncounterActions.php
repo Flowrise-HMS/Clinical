@@ -21,12 +21,37 @@ use Modules\Core\Models\Branch;
 
 class EncounterActions
 {
+    /**
+     * Admission can be requested for any open visit that does not occupy a
+     * bed yet, unless a request is already waiting on ward staff.
+     */
     public static function isAdmitVisible(Model $encounter): bool
     {
-        return $encounter->canTransitionTo(EncounterStatus::ARRIVED)
-            || ($encounter->type === EncounterType::INPATIENT
-                && $encounter->status?->isActive()
-                && blank($encounter->bed_id));
+        if ($encounter->isCompleted() || filled($encounter->bed_id)) {
+            return false;
+        }
+
+        if (! ($encounter->status === EncounterStatus::PLANNED || $encounter->status?->isActive())) {
+            return false;
+        }
+
+        return ! $encounter->hasPendingAdmissionRequest();
+    }
+
+    public static function isAdmissionDecisionVisible(Model $encounter): bool
+    {
+        return ! $encounter->isCompleted() && $encounter->hasPendingAdmissionRequest();
+    }
+
+    /**
+     * Inpatients leave through discharge; every other active visit is simply
+     * completed once the consultation is over.
+     */
+    public static function isCompleteVisible(Model $encounter): bool
+    {
+        return $encounter->status?->isActive()
+            && $encounter->type !== EncounterType::INPATIENT
+            && blank($encounter->bed_id);
     }
 
     public static function isDischargeVisible(Model $encounter): bool
@@ -37,35 +62,175 @@ class EncounterActions
     public static function admit(Model $encounter): Action
     {
         return Action::make('admit')
-            ->label('Admit Patient')
+            ->label('Request Admission')
             ->icon('heroicon-m-arrow-right-start-on-rectangle')
             ->color('success')
             ->visible(fn () => self::isAdmitVisible($encounter))
-            ->modalHeading(__('Admit Patient'))
-            ->modalDescription(__('Admit the patient to a ward and bed. This will mark the encounter as Arrived and assign the selected bed. Only beds not currently occupied by another active patient are shown.'))
+            ->modalHeading(__('Request admission'))
+            ->modalDescription(__('Ask ward staff to admit this patient. The ward nurse will accept the request and confirm the bed, or reject it with a reason. No bed is occupied until the request is accepted.'))
+            ->modalSubmitActionLabel(__('Send request'))
             ->slideOver()
+            ->schema(self::requestAdmissionSchema($encounter))
+            ->action(fn (array $data) => app(AdtService::class)->requestAdmission(
+                $encounter,
+                $data['ward_id'],
+                bedId: $data['bed_id'] ?? null,
+                notes: $data['notes'] ?? null,
+            ));
+    }
+
+    /**
+     * @return array<int, mixed>
+     */
+    public static function requestAdmissionSchema(Model $encounter): array
+    {
+        return [
+            Select::make('ward_id')
+                ->label('Ward / Room')
+                ->options(fn () => app(BedAssignmentService::class)->getWardsForBranch($encounter->branch_id))
+                ->searchable()
+                ->required()
+                ->live()
+                ->afterStateUpdated(fn ($state, callable $set) => $set('bed_id', null)),
+            Select::make('bed_id')
+                ->label('Preferred bed (optional)')
+                ->helperText(__('Ward staff confirm the final bed when they accept.'))
+                ->options(fn (callable $get) => $get('ward_id')
+                    ? app(BedAssignmentService::class)->getAvailableBeds($get('ward_id'))
+                    : [])
+                ->searchable()
+                ->disabled(fn (callable $get) => blank($get('ward_id'))),
+            Textarea::make('notes')
+                ->label('Notes for the ward')
+                ->rows(2),
+        ];
+    }
+
+    public static function acceptAdmission(Model $encounter): Action
+    {
+        return Action::make('accept_admission')
+            ->label('Accept Admission')
+            ->icon('heroicon-m-check-circle')
+            ->color('success')
+            ->visible(fn () => self::isAdmissionDecisionVisible($encounter))
+            ->modalHeading(__('Accept admission'))
+            ->modalDescription(fn (): string => self::pendingRequestSummary($encounter))
+            ->modalSubmitActionLabel(__('Admit to bed'))
+            ->slideOver()
+            ->schema(fn (): array => self::acceptAdmissionSchema($encounter))
+            ->action(function (array $data) use ($encounter): void {
+                $request = $encounter->pendingAdmissionRequest()->firstOrFail();
+
+                app(AdtService::class)->acceptAdmission(
+                    $request,
+                    $data['bed_id'],
+                    notes: $data['notes'] ?? null,
+                );
+            });
+    }
+
+    /**
+     * @return array<int, mixed>
+     */
+    public static function acceptAdmissionSchema(Model $encounter): array
+    {
+        $request = $encounter->pendingAdmissionRequest()->with('requestedWard')->first();
+        $wardId = $request?->requested_ward_id;
+        $available = $wardId
+            ? app(BedAssignmentService::class)->getAvailableBeds($wardId)
+            : collect();
+
+        return [
+            Select::make('bed_id')
+                ->label($request?->requestedWard?->name
+                    ? __('Bed in :ward', ['ward' => $request->requestedWard->name])
+                    : __('Bed'))
+                ->options($available)
+                ->default($request && $available->has($request->requested_bed_id) ? $request->requested_bed_id : null)
+                ->searchable()
+                ->required(),
+            Textarea::make('notes')
+                ->label('Notes')
+                ->rows(2),
+        ];
+    }
+
+    public static function rejectAdmission(Model $encounter): Action
+    {
+        return Action::make('reject_admission')
+            ->label('Reject Admission')
+            ->icon('heroicon-m-x-circle')
+            ->color('danger')
+            ->visible(fn () => self::isAdmissionDecisionVisible($encounter))
+            ->modalHeading(__('Reject admission'))
+            ->modalDescription(fn (): string => self::pendingRequestSummary($encounter))
+            ->modalSubmitActionLabel(__('Reject'))
+            ->schema(self::rejectAdmissionSchema())
+            ->action(function (array $data) use ($encounter): void {
+                $request = $encounter->pendingAdmissionRequest()->firstOrFail();
+
+                app(AdtService::class)->rejectAdmission($request, $data['reason']);
+            });
+    }
+
+    /**
+     * @return array<int, mixed>
+     */
+    public static function rejectAdmissionSchema(): array
+    {
+        return [
+            Textarea::make('reason')
+                ->label('Reason for rejection')
+                ->rows(3)
+                ->required(),
+        ];
+    }
+
+    public static function pendingRequestSummary(Model $encounter): string
+    {
+        $request = $encounter->pendingAdmissionRequest()->with(['requestedWard', 'requestedBed', 'requester'])->first();
+
+        if ($request === null) {
+            return __('No admission request is pending.');
+        }
+
+        $parts = [
+            __('Requested ward: :ward', ['ward' => $request->requestedWard?->name ?? '—']),
+        ];
+
+        if ($request->requestedBed) {
+            $parts[] = __('Preferred bed: :bed', ['bed' => $request->requestedBed->name]);
+        }
+
+        $parts[] = __('Requested by :name :when', [
+            'name' => $request->requester?->name ?? __('unknown'),
+            'when' => $request->requested_at?->diffForHumans() ?? '',
+        ]);
+
+        if (filled($request->notes)) {
+            $parts[] = __('Notes: :notes', ['notes' => $request->notes]);
+        }
+
+        return implode(' · ', $parts);
+    }
+
+    public static function complete(Model $encounter): Action
+    {
+        return Action::make('complete')
+            ->label('Complete Encounter')
+            ->icon('heroicon-m-check-badge')
+            ->color('success')
+            ->visible(fn () => self::isCompleteVisible($encounter))
+            ->modalHeading(__('Complete Encounter'))
+            ->modalDescription(__('Mark this visit as finished. The encounter is closed and any pending charges are finalized for billing.'))
+            ->modalSubmitActionLabel(__('Complete'))
             ->schema([
-                Select::make('ward_id')
-                    ->label('Ward / Room')
-                    ->options(fn () => app(BedAssignmentService::class)->getWardsForBranch($encounter->branch_id))
-                    ->searchable()
-                    ->live()
-                    ->afterStateUpdated(fn ($state, callable $set) => $set('bed_id', null)),
-                Select::make('bed_id')
-                    ->label('Bed')
-                    ->options(fn (callable $get) => $get('ward_id')
-                        ? app(BedAssignmentService::class)->getAvailableBeds($get('ward_id'))
-                        : [])
-                    ->searchable()
-                    ->required()
-                    ->disabled(fn (callable $get) => blank($get('ward_id'))),
                 Textarea::make('notes')
-                    ->label('Notes')
+                    ->label('Completion notes')
                     ->rows(2),
             ])
-            ->action(fn (array $data) => app(AdtService::class)->assignBed(
+            ->action(fn (array $data) => app(EncounterService::class)->completeEncounter(
                 $encounter,
-                $data['bed_id'],
                 notes: $data['notes'] ?? null,
             ));
     }
@@ -227,43 +392,21 @@ class EncounterActions
             ->action(fn (array $data) => app(EncounterService::class)->cancelEncounter($encounter, $data['reason']));
     }
 
+    /**
+     * @deprecated Use admit() — admissions now go through a ward request.
+     */
     public static function assignToWard(
         Model $encounter,
         BedAssignmentService $bedAssignmentService,
         ?Closure $onSuccess = null,
     ): Action {
-        $action = Action::make('assign_to_ward')
-            ->label('Assign to Ward / Bed')
-            ->icon('heroicon-m-building-office')
-            ->color('success')
-            ->slideOver()
-            ->modalHeading(__('Assign to Ward / Bed'))
-            ->modalDescription(__('Select a ward and bed for this patient. If the encounter is still in Planned status, it will be admitted automatically. The bed must not be occupied by another active patient.'))
-            ->visible(fn () => $encounter->type === EncounterType::INPATIENT
-                && ($encounter->canTransitionTo(EncounterStatus::ARRIVED) || $encounter?->status?->isActive()))
-            ->schema([
-                Select::make('ward_id')
-                    ->label('Ward / Room')
-                    ->options(fn (): array => $bedAssignmentService->getWardsForBranch($encounter->branch_id)->toArray())
-                    ->searchable()
-                    ->live()
-                    ->afterStateUpdated(fn ($state, callable $set) => $set('bed_id', null)),
-                Select::make('bed_id')
-                    ->label('Bed')
-                    ->options(fn (callable $get): array => $get('ward_id')
-                        ? $bedAssignmentService->getAvailableBeds($get('ward_id'))->toArray()
-                        : [])
-                    ->searchable()
-                    ->required()
-                    ->disabled(fn (callable $get) => blank($get('ward_id'))),
-                Textarea::make('notes')
-                    ->label('Notes')
-                    ->rows(2),
-            ])
-            ->action(function (array $data) use ($encounter, $onSuccess) {
-                app(AdtService::class)->assignBed(
+        return self::admit($encounter)
+            ->name('assign_to_ward')
+            ->action(function (array $data) use ($encounter, $onSuccess): void {
+                app(AdtService::class)->requestAdmission(
                     $encounter,
-                    $data['bed_id'],
+                    $data['ward_id'],
+                    bedId: $data['bed_id'] ?? null,
                     notes: $data['notes'] ?? null,
                 );
 
@@ -271,7 +414,5 @@ class EncounterActions
                     ($onSuccess)($data);
                 }
             });
-
-        return $action;
     }
 }

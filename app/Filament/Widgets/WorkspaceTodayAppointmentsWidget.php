@@ -26,6 +26,7 @@ class WorkspaceTodayAppointmentsWidget extends Widget implements HasActions, Has
     protected static bool $isDiscovered = false;
 
     protected int $sorting = 3;
+    protected int|string|array $columnSpan = 'full';
 
     public Collection $appointments;
 
@@ -44,7 +45,7 @@ class WorkspaceTodayAppointmentsWidget extends Widget implements HasActions, Has
     {
         $appointmentClass = OptionalClass::resolve('Modules\\Appointment\\Models\\Appointment', 'Appointment');
 
-        if ($appointmentClass === null || ! Auth::check()) {
+        if ($appointmentClass === null || !Auth::check()) {
             $this->appointments = collect();
 
             return;
@@ -53,7 +54,7 @@ class WorkspaceTodayAppointmentsWidget extends Widget implements HasActions, Has
         $branchId = app(BranchService::class)->getDefaultBranchId();
 
         $this->appointments = $appointmentClass::query()
-            ->when($branchId, fn ($query) => $query->where('branch_id', $branchId))
+            ->when($branchId, fn($query) => $query->where('branch_id', $branchId))
             ->whereDate('start_at', now()->toDateString())
             ->whereNotIn('status', ['cancelled', 'noshow'])
             ->with(['patient', 'location'])
@@ -64,13 +65,13 @@ class WorkspaceTodayAppointmentsWidget extends Widget implements HasActions, Has
 
     public function appointmentViewUrl(object $appointment): ?string
     {
-        if (! Auth::check() || ! Auth::user()->can('view', $appointment)) {
+        if (!Auth::check() || !Auth::user()->can('view', $appointment)) {
             return null;
         }
 
         return OptionalClass::when(
             'Modules\\Appointment\\Filament\\Clusters\\Appointment\\Resources\\Appointments\\AppointmentResource',
-            fn (string $resource) => $resource::getUrl('view', ['record' => $appointment]),
+            fn(string $resource) => $resource::getUrl('view', ['record' => $appointment]),
             'Appointment',
         );
     }
@@ -80,7 +81,7 @@ class WorkspaceTodayAppointmentsWidget extends Widget implements HasActions, Has
      */
     public function canCheckIn(object $appointment): bool
     {
-        if (! Auth::check() || ! Auth::user()->can('update', $appointment)) {
+        if (!Auth::check() || !Auth::user()->can('update', $appointment)) {
             return false;
         }
 
@@ -114,7 +115,7 @@ class WorkspaceTodayAppointmentsWidget extends Widget implements HasActions, Has
             ->action(function (array $arguments): void {
                 $appointment = $this->findAppointment($arguments['appointment'] ?? null);
 
-                if ($appointment === null || ! $this->canCheckIn($appointment)) {
+                if ($appointment === null || !$this->canCheckIn($appointment)) {
                     Notification::make()
                         ->title(__('This appointment can no longer be checked in.'))
                         ->warning()
@@ -145,7 +146,7 @@ class WorkspaceTodayAppointmentsWidget extends Widget implements HasActions, Has
                     ->success()
                     ->send();
 
-                if (! $appointment->patient_id) {
+                if (!$appointment->patient_id) {
                     $this->loadAppointments();
 
                     return;

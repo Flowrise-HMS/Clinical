@@ -194,6 +194,48 @@ class EncounterService
         return $encounter->fresh();
     }
 
+    /**
+     * Close a visit once care is done. Non-inpatient encounters are never
+     * explicitly "started", so an arrived or triaged visit is walked through
+     * the intermediate states before it is finished; the observer then fires
+     * EncounterFinished exactly as it does for a discharge.
+     */
+    public function completeEncounter(
+        Encounter $encounter,
+        ?string $notes = null,
+        ?int $completedBy = null,
+    ): Encounter {
+        if (! $encounter->status->isActive()) {
+            throw new \InvalidArgumentException(__('Only an active encounter can be completed.'));
+        }
+
+        return DB::transaction(function () use ($encounter, $notes, $completedBy): Encounter {
+            $encounter = $encounter->fresh();
+
+            if ($encounter->status === EncounterStatus::ARRIVED) {
+                $encounter = $this->triage($encounter, $encounter->priority ?? EncounterPriority::default());
+            }
+
+            if ($encounter->status === EncounterStatus::TRIAGED) {
+                $encounter = $this->startEncounter($encounter);
+            }
+
+            $encounter = $this->discharge(
+                $encounter,
+                DischargeDisposition::COMPLETED,
+                dischargedBy: $completedBy,
+            );
+
+            if (filled($notes)) {
+                $encounter->forceFill([
+                    'metadata' => array_merge($encounter->metadata ?? [], ['completion_notes' => $notes]),
+                ])->saveQuietly();
+            }
+
+            return $encounter->fresh();
+        });
+    }
+
     public function cancelEncounter(Encounter $encounter, ?string $reason = null): Encounter
     {
         if ($encounter->isCompleted()) {

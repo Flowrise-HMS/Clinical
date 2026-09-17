@@ -9,8 +9,10 @@ use Illuminate\Database\Eloquent\Factories\Factory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Modules\Clinical\Classes\Services\AdtService;
 use Modules\Clinical\Database\Factories\EncounterFactory;
+use Modules\Clinical\Enums\AdmissionRequestStatus;
 use Modules\Clinical\Enums\DischargeDisposition;
 use Modules\Clinical\Enums\EncounterPriority;
 use Modules\Clinical\Enums\EncounterStatus;
@@ -131,6 +133,36 @@ class Encounter extends BaseModel implements ProvidesClientIdentity
     public function bed(): BelongsTo
     {
         return $this->belongsTo(Location::class, 'bed_id');
+    }
+
+    public function admissionRequests(): HasMany
+    {
+        return $this->hasMany(AdmissionRequest::class)->latest('requested_at');
+    }
+
+    public function pendingAdmissionRequest(): HasOne
+    {
+        return $this->hasOne(AdmissionRequest::class)
+            ->where('status', AdmissionRequestStatus::Pending->value)
+            ->latestOfMany('requested_at');
+    }
+
+    /**
+     * The most recent request of any status, so a rejection can be surfaced
+     * to the clinician who asked for the admission.
+     */
+    public function latestAdmissionRequest(): HasOne
+    {
+        return $this->hasOne(AdmissionRequest::class)->latestOfMany('requested_at');
+    }
+
+    public function hasPendingAdmissionRequest(): bool
+    {
+        if ($this->relationLoaded('pendingAdmissionRequest')) {
+            return $this->pendingAdmissionRequest !== null;
+        }
+
+        return $this->pendingAdmissionRequest()->exists();
     }
 
     public function locationEvents(): HasMany

@@ -4,12 +4,14 @@ namespace Modules\Clinical\Classes\Services;
 
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Modules\Clinical\Enums\AdmissionRequestStatus;
 use Modules\Clinical\Enums\AdtDestinationType;
 use Modules\Clinical\Enums\AdtEventType;
 use Modules\Clinical\Enums\DischargeDisposition;
 use Modules\Clinical\Enums\EncounterPriority;
 use Modules\Clinical\Enums\EncounterStatus;
 use Modules\Clinical\Enums\EncounterType;
+use Modules\Clinical\Models\AdmissionRequest;
 use Modules\Clinical\Models\Encounter;
 use Modules\Clinical\Models\EncounterLocationEvent;
 use Modules\Core\Models\Branch;
@@ -275,6 +277,168 @@ class AdtService
             );
 
             return $encounter->fresh(['bed', 'location', 'department', 'patient']);
+        });
+    }
+
+    /**
+     * A clinician asks for the patient to be admitted to a ward. Nothing is
+     * occupied yet: ward staff accept (and confirm the bed) or reject it.
+     */
+    public function requestAdmission(
+        Encounter $encounter,
+        string $wardId,
+        ?string $bedId = null,
+        ?string $notes = null,
+        ?int $requestedBy = null,
+    ): AdmissionRequest {
+        return DB::transaction(function () use ($encounter, $wardId, $bedId, $notes, $requestedBy): AdmissionRequest {
+            $requestedBy ??= Auth::id();
+            $encounter = $encounter->fresh();
+
+            if ($encounter->isCompleted()) {
+                throw new \InvalidArgumentException(__('Cannot request admission for a completed encounter.'));
+            }
+
+            if (filled($encounter->bed_id)) {
+                throw new \InvalidArgumentException(__('Patient already occupies a bed. Use an internal transfer instead.'));
+            }
+
+            if ($encounter->pendingAdmissionRequest()->exists()) {
+                throw new \InvalidArgumentException(__('An admission request is already pending for this encounter.'));
+            }
+
+            $ward = Location::query()->find($wardId);
+
+            if ($ward === null || (string) $ward->branch_id !== (string) $encounter->branch_id) {
+                throw new \InvalidArgumentException(__('The selected ward does not belong to this encounter\'s branch.'));
+            }
+
+            if ($bedId !== null) {
+                $bed = Location::query()->find($bedId);
+
+                if ($bed === null || (string) $bed->parent_id !== (string) $ward->id) {
+                    throw new \InvalidArgumentException(__('The preferred bed is not in the selected ward.'));
+                }
+            }
+
+            $request = AdmissionRequest::query()->create([
+                'encounter_id' => $encounter->id,
+                'patient_id' => $encounter->patient_id,
+                'branch_id' => $encounter->branch_id,
+                'requested_ward_id' => $wardId,
+                'requested_bed_id' => $bedId,
+                'status' => AdmissionRequestStatus::Pending,
+                'notes' => $notes,
+                'requested_by' => $requestedBy,
+                'requested_at' => now(),
+            ]);
+
+            $this->logEvent(
+                encounter: $encounter,
+                type: AdtEventType::AdmissionRequested,
+                from: $this->snapshot($encounter),
+                actedBy: $requestedBy,
+                notes: $notes,
+                destinationType: AdtDestinationType::Branch,
+                destinationBranchId: $encounter->branch_id,
+                destinationLabel: $ward->name,
+            );
+
+            return $request->fresh(['encounter', 'requestedWard', 'requestedBed', 'requester']);
+        });
+    }
+
+    /**
+     * Ward staff accept the request and confirm the bed. The encounter becomes
+     * an inpatient stay and the bed is occupied from this point.
+     */
+    public function acceptAdmission(
+        AdmissionRequest $request,
+        string $bedId,
+        ?string $notes = null,
+        ?int $actedBy = null,
+    ): Encounter {
+        return DB::transaction(function () use ($request, $bedId, $notes, $actedBy): Encounter {
+            $actedBy ??= Auth::id();
+            $request = $request->fresh(['encounter']);
+
+            if (! $request->isPending()) {
+                throw new \InvalidArgumentException(__('This admission request has already been decided.'));
+            }
+
+            $encounter = $request->encounter;
+
+            if ($encounter->isCompleted()) {
+                throw new \InvalidArgumentException(__('Cannot admit a completed encounter.'));
+            }
+
+            $bed = Location::query()->find($bedId);
+
+            if ($bed === null || (string) $bed->parent_id !== (string) $request->requested_ward_id) {
+                throw new \InvalidArgumentException(__('The bed must be in the requested ward.'));
+            }
+
+            $this->assertBedAvailable($bedId, $encounter->id);
+
+            if ($encounter->type !== EncounterType::INPATIENT) {
+                $encounter->update([
+                    'type' => EncounterType::INPATIENT,
+                    'admitted_at' => $encounter->admitted_at ?? now(),
+                ]);
+            }
+
+            $encounter = $this->assignBed($encounter, $bedId, $actedBy, $notes);
+
+            $request->update([
+                'status' => AdmissionRequestStatus::Accepted,
+                'assigned_bed_id' => $bedId,
+                'decided_by' => $actedBy,
+                'decided_at' => now(),
+                'decision_notes' => $notes,
+            ]);
+
+            return $encounter->fresh(['bed', 'location', 'department', 'patient']);
+        });
+    }
+
+    /**
+     * Ward staff decline the request. The encounter keeps its current state
+     * so the clinician can request another ward or close the visit.
+     */
+    public function rejectAdmission(
+        AdmissionRequest $request,
+        string $reason,
+        ?int $actedBy = null,
+    ): AdmissionRequest {
+        return DB::transaction(function () use ($request, $reason, $actedBy): AdmissionRequest {
+            $actedBy ??= Auth::id();
+            $request = $request->fresh(['encounter']);
+
+            if (! $request->isPending()) {
+                throw new \InvalidArgumentException(__('This admission request has already been decided.'));
+            }
+
+            $request->update([
+                'status' => AdmissionRequestStatus::Rejected,
+                'decided_by' => $actedBy,
+                'decided_at' => now(),
+                'decision_notes' => $reason,
+            ]);
+
+            $encounter = $request->encounter;
+
+            $this->logEvent(
+                encounter: $encounter,
+                type: AdtEventType::AdmissionRejected,
+                from: $this->snapshot($encounter),
+                actedBy: $actedBy,
+                notes: $reason,
+                destinationType: AdtDestinationType::Branch,
+                destinationBranchId: $encounter->branch_id,
+                destinationLabel: $request->requestedWard?->name,
+            );
+
+            return $request->fresh(['encounter', 'requestedWard', 'decider']);
         });
     }
 

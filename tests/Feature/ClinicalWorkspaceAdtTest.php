@@ -90,7 +90,7 @@ class ClinicalWorkspaceAdtTest extends TestCase
         ]);
     }
 
-    public function test_admit_to_bed_updates_bed_and_creates_location_event(): void
+    public function test_admit_to_bed_requests_admission_and_accepting_assigns_the_bed(): void
     {
         $this->actingAs($this->nurse);
 
@@ -110,6 +110,25 @@ class ClinicalWorkspaceAdtTest extends TestCase
         ];
         $page->admitToBed();
 
+        // The doctor's request does not occupy a bed until the ward accepts it.
+        $encounter->refresh();
+        $this->assertNull($encounter->bed_id);
+        $this->assertSame(EncounterStatus::PLANNED, $encounter->status);
+        $this->assertTrue($encounter->hasPendingAdmissionRequest());
+        $this->assertTrue($page->canShowAdmissionDecisionOnAdt($encounter));
+        $this->assertFalse($page->canShowAdmitOnAdt($encounter));
+        $this->assertDatabaseHas('encounter_location_events', [
+            'encounter_id' => $encounter->id,
+            'event_type' => AdtEventType::AdmissionRequested->value,
+        ]);
+
+        $request = $encounter->pendingAdmissionRequest()->first();
+        $this->assertSame($this->ward->id, $request->requested_ward_id);
+        $this->assertSame($this->bedA->id, $request->requested_bed_id);
+        $this->assertSame('Assigned', $request->notes);
+
+        app(AdtService::class)->acceptAdmission($request, $this->bedA->id, actedBy: $this->nurse->id);
+
         $encounter->refresh();
         $this->assertSame($this->bedA->id, $encounter->bed_id);
         $this->assertSame(EncounterStatus::ARRIVED, $encounter->status);
@@ -118,6 +137,31 @@ class ClinicalWorkspaceAdtTest extends TestCase
             'event_type' => AdtEventType::Admitted->value,
             'to_bed_id' => $this->bedA->id,
         ]);
+    }
+
+    public function test_admit_to_bed_works_without_a_preferred_bed(): void
+    {
+        $this->actingAs($this->nurse);
+
+        $encounter = app(EncounterService::class)->createForPatient(
+            $this->patient,
+            EncounterType::OUTPATIENT,
+            chiefComplaint: 'Consult',
+            createdBy: $this->nurse->id,
+        );
+        $encounter->update(['status' => EncounterStatus::ARRIVED]);
+
+        $page = $this->makeWorkspacePage();
+        $page->selectPatient($this->patient->id);
+        $page->adtFormData = array_merge($page->adtFormData, [
+            'ward_id' => $this->ward->id,
+            'bed_id' => null,
+        ]);
+        $page->admitToBed();
+
+        $request = $encounter->refresh()->pendingAdmissionRequest()->first();
+        $this->assertNotNull($request);
+        $this->assertNull($request->requested_bed_id);
     }
 
     public function test_transfer_internal_updates_bed_via_workspace(): void

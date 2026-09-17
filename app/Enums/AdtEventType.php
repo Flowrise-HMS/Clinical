@@ -15,6 +15,8 @@ enum AdtEventType: string implements HasColor, HasLabel
     case Discharged = 'discharged';
     case BedAssigned = 'bed_assigned';
     case Cancelled = 'cancelled';
+    case AdmissionRequested = 'admission_requested';
+    case AdmissionRejected = 'admission_rejected';
 
     public function getLabel(): string|Htmlable|null
     {
@@ -26,6 +28,8 @@ enum AdtEventType: string implements HasColor, HasLabel
             self::Discharged => 'Discharged',
             self::BedAssigned => 'Bed assigned',
             self::Cancelled => 'Cancelled',
+            self::AdmissionRequested => 'Admission requested',
+            self::AdmissionRejected => 'Admission rejected',
         };
     }
 
@@ -36,7 +40,8 @@ enum AdtEventType: string implements HasColor, HasLabel
             self::TransferredInternal, self::BedAssigned => 'info',
             self::TransferredOut => 'warning',
             self::Discharged => 'gray',
-            self::Cancelled => 'danger',
+            self::Cancelled, self::AdmissionRejected => 'danger',
+            self::AdmissionRequested => 'warning',
         };
     }
 

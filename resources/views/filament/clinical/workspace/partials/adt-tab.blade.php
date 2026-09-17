@@ -6,6 +6,10 @@
     $canShowAdmit = $openEncounter ? $this->canShowAdmitOnAdt($openEncounter) : false;
     $canShowDischarge = $openEncounter ? $this->canShowDischargeOnAdt($openEncounter) : false;
     $canDischarge = $openEncounter ? $this->canDischargeEncounter($openEncounter) : false;
+    $canShowComplete = $openEncounter ? $this->canShowCompleteOnAdt($openEncounter) : false;
+    $canDecideAdmission = $openEncounter ? $this->canShowAdmissionDecisionOnAdt($openEncounter) : false;
+    $pendingAdmission = $openEncounter ? $this->getPendingAdmissionRequest() : null;
+    $decidedAdmission = $openEncounter ? $this->getLatestDecidedAdmissionRequest() : null;
     $hasBed = $openEncounter && filled($openEncounter->bed_id);
     $renderedSection = false;
 @endphp
@@ -33,6 +37,9 @@
                 @if ($chip['los'])
                     <x-filament::badge color="info">Admitted for {{ $chip['los'] }}</x-filament::badge>
                 @endif
+                @if ($chip['admission_pending'] ?? false)
+                    <x-filament::badge color="warning" icon="heroicon-m-clock">Admission pending</x-filament::badge>
+                @endif
             </div>
         @endif
     </div>
@@ -54,21 +61,72 @@
             </div>
         @endif
     @else
+        @if ($pendingAdmission)
+            @php $renderedSection = true; @endphp
+            <div class="space-y-3 rounded-xl border border-warning-300 dark:border-warning-700/60 bg-warning-50/50 dark:bg-warning-900/10 p-4">
+                <div class="flex flex-wrap items-start justify-between gap-2">
+                    <div>
+                        <h4 class="text-sm font-semibold text-gray-900 dark:text-white">Admission awaiting ward acceptance</h4>
+                        <p class="text-sm text-gray-600 dark:text-gray-300">
+                            Requested to <span class="font-medium">{{ $pendingAdmission->requestedWard?->name ?? 'ward' }}</span>
+                            @if ($pendingAdmission->requestedBed)
+                                (preferred bed {{ $pendingAdmission->requestedBed->name }})
+                            @endif
+                            by {{ $pendingAdmission->requester?->name ?? 'unknown' }}
+                            {{ $pendingAdmission->requested_at?->diffForHumans() }}.
+                        </p>
+                        @if (filled($pendingAdmission->notes))
+                            <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">{{ $pendingAdmission->notes }}</p>
+                        @endif
+                    </div>
+                    @if ($canDecideAdmission)
+                        <div class="flex items-center gap-2">
+                            {{ $this->acceptAdmissionAction }}
+                            {{ $this->rejectAdmissionAction }}
+                        </div>
+                    @endif
+                </div>
+                @unless ($canDecideAdmission)
+                    <p class="text-xs text-gray-500 dark:text-gray-400">
+                        Ward staff will accept the request and confirm the bed, or reject it with a reason.
+                    </p>
+                @endunless
+            </div>
+        @endif
+
+        @if ($decidedAdmission && $decidedAdmission->status === \Modules\Clinical\Enums\AdmissionRequestStatus::Rejected && ! $hasBed)
+            @php $renderedSection = true; @endphp
+            <div class="space-y-1 rounded-xl border border-danger-300 dark:border-danger-700/60 bg-danger-50/50 dark:bg-danger-900/10 p-4">
+                <h4 class="text-sm font-semibold text-gray-900 dark:text-white">Last admission request was rejected</h4>
+                <p class="text-sm text-gray-600 dark:text-gray-300">
+                    {{ $decidedAdmission->requestedWard?->name ?? 'Ward' }} declined
+                    {{ $decidedAdmission->decided_at?->diffForHumans() }}
+                    @if ($decidedAdmission->decider)
+                        by {{ $decidedAdmission->decider->name }}
+                    @endif
+                    @if (filled($decidedAdmission->decision_notes))
+                        &mdash; {{ $decidedAdmission->decision_notes }}
+                    @endif
+                </p>
+                <p class="text-xs text-gray-500 dark:text-gray-400">You can request admission to another ward below, or complete the visit.</p>
+            </div>
+        @endif
+
         @if ($canShowAdmit)
             @php $renderedSection = true; @endphp
             <div class="space-y-3 rounded-xl border border-gray-200 dark:border-gray-700 p-4">
-                <h4 class="text-sm font-semibold text-gray-900 dark:text-white">Admit / Assign bed</h4>
+                <h4 class="text-sm font-semibold text-gray-900 dark:text-white">Request admission</h4>
                 <p class="text-sm text-gray-500 dark:text-gray-400">
-                    Assign a ward and bed. Planned encounters are marked Arrived on assignment.
+                    Choose the ward (and optionally a preferred bed). Ward staff accept the request and confirm the bed, or reject it with a reason.
                 </p>
                 {{ $this->adtAdmitForm }}
                 <div class="flex justify-end">
                     <x-filament::button wire:click="admitToBed" color="success" icon="heroicon-m-arrow-right-start-on-rectangle">
-                        Admit / Assign bed
+                        Request admission
                     </x-filament::button>
                 </div>
             </div>
-        @elseif ($canUpdate && ! $hasBed)
+        @elseif ($canUpdate && ! $hasBed && ! $pendingAdmission)
             @php $renderedSection = true; @endphp
             <x-filament::badge color="info">
                 Admission is not available for this encounter in its current status.
@@ -103,6 +161,21 @@
                     <x-filament::button wire:click="transferOut" color="warning" icon="heroicon-m-building-office-2">
                         Transfer out
                     </x-filament::button>
+                </div>
+            </div>
+        @endif
+
+        @if ($canShowComplete)
+            @php $renderedSection = true; @endphp
+            <div class="space-y-3 rounded-xl border border-success-200 dark:border-success-900/40 p-4">
+                <div class="flex flex-wrap items-center justify-between gap-2">
+                    <div>
+                        <h4 class="text-sm font-semibold text-gray-900 dark:text-white">Complete visit</h4>
+                        <p class="text-sm text-gray-500 dark:text-gray-400">
+                            Close this encounter once the consultation is over. Pending charges are finalized for billing.
+                        </p>
+                    </div>
+                    {{ $this->completeEncounterAction }}
                 </div>
             </div>
         @endif
