@@ -248,6 +248,7 @@ class PatientProfile extends Page implements HasActions, HasForms, HasInfolists
         return [
             $actions->clinicalWorkspaceAction(),
             $actions->timelineAction(),
+            $actions->medicationCanvasAction(),
             $actions->patientActionGroups(),
             ...app(PageHeaderActionsRegistry::class)->for(static::class, $this),
         ];

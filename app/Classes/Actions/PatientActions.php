@@ -29,6 +29,7 @@ use Modules\Clinical\Filament\Clusters\Clinical\Resources\ServiceRequests\Schema
 use Modules\Clinical\Filament\Clusters\Clinical\Resources\VitalSigns\Schemas\VitalSignForm;
 use Modules\Clinical\Filament\Clusters\Workspace\Pages\CarePlanWorkspace;
 use Modules\Clinical\Filament\Clusters\Workspace\Pages\ClinicalWorkspace;
+use Modules\Clinical\Filament\Clusters\Workspace\Pages\MedicationCanvas;
 use Modules\Clinical\Filament\Clusters\Workspace\Pages\PatientProfile;
 use Modules\Clinical\Filament\Clusters\Workspace\Pages\Timeline;
 use Modules\Clinical\Filament\Support\MarRecordDoseFormSchema;
@@ -46,6 +47,7 @@ use Modules\Clinical\Policies\EncounterDiagnosisPolicy;
 use Modules\Clinical\Policies\EncounterPolicy;
 use Modules\Clinical\Policies\ServiceRequestPolicy;
 use Modules\Clinical\Policies\VitalSignPolicy;
+use Modules\Core\Support\ModuleAvailability;
 use Modules\Core\Support\OptionalClass;
 use Modules\Patient\Models\Patient;
 use Modules\Patient\Policies\PatientPolicy;
@@ -91,6 +93,7 @@ class PatientActions
 
         return [
             $this->timelineAction(),
+            $this->medicationCanvasAction(),
         ];
     }
 
@@ -112,14 +115,16 @@ class PatientActions
         return ActionGroup::make([
             $this->printHospitalCardAction(),
             $this->encounter(),
-            $this->completeEncounterAction(),
+            $this->dischargeAction(),
             $this->cancelEncounterAction(),
+            $this->completeEncounterAction(),
             $this->admitAction(),
             $this->acceptAdmissionAction(),
             $this->rejectAdmissionAction(),
             $this->triageAction(),
             $this->carePlanAction(),
             $this->medicationAdminAction(),
+            $this->medicationCanvasAction(),
             $this->fulfillServiceAction(),
             $this->note(),
             $this->order(),
@@ -277,6 +282,28 @@ class PatientActions
             ->record($this->patient)
             ->visible(fn ($record) => Auth::check() && app(PatientPolicy::class)->view(Auth::user(), $record))
             ->url(fn ($record) => Timeline::getUrl(['patient' => $record?->id]), shouldOpenInNewTab: true);
+    }
+
+    /**
+     * Only meaningful with an active encounter and the Pharmacy module, since
+     * the canvas draws dose schedules from Pharmacy's calculator.
+     */
+    public function medicationCanvasAction(): Action
+    {
+        $patient = $this->patient;
+
+        return Action::make('view_medication_canvas')
+            ->label('Medication Canvas')
+            ->icon('heroicon-m-beaker')
+            ->color('gray')
+            ->record($patient)
+            ->visible(fn (): bool => $patient !== null
+                && Auth::check()
+                && ModuleAvailability::pharmacyEnabled()
+                && MedicationCanvas::canAccess()
+                && app(PatientPolicy::class)->view(Auth::user(), $patient)
+                && $patient->activeEncounter()->exists())
+            ->url(fn (): string => MedicationCanvas::getUrl(['patient' => $patient?->id]), shouldOpenInNewTab: true);
     }
 
     public function carePlanAction(): Action
@@ -753,8 +780,8 @@ class PatientActions
             type: ($data['type']),
             chiefComplaint: $data['chief_complaint'] ?? null,
             priority: isset($data['priority'])
-                ? ($data['priority'])
-                : null,
+            ? ($data['priority'])
+            : null,
             locationId: $data['location_id'] ?? null,
             departmentId: $data['department_id'] ?? null,
             createdBy: $data['created_by'] ?? null,

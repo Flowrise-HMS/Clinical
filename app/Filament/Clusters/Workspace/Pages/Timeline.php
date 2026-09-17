@@ -4,13 +4,19 @@ namespace Modules\Clinical\Filament\Clusters\Workspace\Pages;
 
 use BezhanSalleh\FilamentShield\Traits\HasPageShield;
 use CodeWithDennis\FilamentLucideIcons\Enums\LucideIcon;
+use Filament\Notifications\Notification;
 use Filament\Pages\Page;
 use Filament\Support\Enums\Width;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Validation\ValidationException;
 use Livewire\Attributes\Url;
 use Modules\Clinical\Classes\Actions\PatientActions;
+use Modules\Clinical\Classes\Services\CanvasLayoutService;
+use Modules\Clinical\Classes\Services\ClinicalCanvasTreeBuilder;
 use Modules\Clinical\Classes\Services\ClinicalWorkspaceService;
 use Modules\Clinical\Filament\Clusters\Workspace\WorkspaceCluster;
+use Modules\Clinical\Models\CanvasLayout;
 use Modules\Core\Classes\Support\PageHeaderActionsRegistry;
 use Modules\Core\Classes\Support\PageWidgetsRegistry;
 
@@ -34,6 +40,26 @@ class Timeline extends Page
     #[Url(as: 'filter', except: 'all')]
     public string $activeFilter = 'all';
 
+    #[Url(as: 'view', except: 'list')]
+    public string $displayMode = 'list';
+
+    /**
+     * Root node of the patient hierarchy rendered by the canvas view.
+     *
+     * @var array<string, mixed>|null
+     */
+    public ?array $canvasTree = null;
+
+    /**
+     * @var array<string, mixed>
+     */
+    public array $canvasMeta = [];
+
+    /**
+     * @var array<string, mixed>|null
+     */
+    public ?array $savedLayout = null;
+
     public Collection|array|null $timelineEvents;
 
     public int $timelineLimit = 15;
@@ -50,8 +76,63 @@ class Timeline extends Page
     {
         $this->patientId = request()->route('patient') ?? $this->patientId;
         $this->activeFilter = $this->normalizeFilter($this->activeFilter);
+        $this->displayMode = $this->normalizeView($this->displayMode);
         $this->bootHasPatientContext();
         $this->loadTimelineData();
+    }
+
+    public function setView(string $view): void
+    {
+        $normalized = $this->normalizeView($view);
+
+        if ($this->displayMode === $normalized) {
+            return;
+        }
+
+        $this->displayMode = $normalized;
+        $this->loadTimelineData();
+    }
+
+    /**
+     * @param  array<string, mixed>  $layout
+     */
+    public function saveLayout(array $layout): void
+    {
+        $user = Auth::user();
+
+        if (! $user || ! $this->currentPatient) {
+            return;
+        }
+
+        try {
+            $saved = app(CanvasLayoutService::class)->save(
+                $user,
+                CanvasLayout::KEY_TIMELINE,
+                $this->currentPatient->id,
+                null,
+                $layout,
+            );
+
+            $this->savedLayout = $saved->layout;
+        } catch (ValidationException $e) {
+            Notification::make()
+                ->title('Canvas layout not saved')
+                ->body($e->validator->errors()->first())
+                ->danger()
+                ->send();
+        }
+    }
+
+    public function resetLayout(): void
+    {
+        $user = Auth::user();
+
+        if (! $user || ! $this->currentPatient) {
+            return;
+        }
+
+        app(CanvasLayoutService::class)->reset($user, CanvasLayout::KEY_TIMELINE, $this->currentPatient->id);
+        $this->savedLayout = null;
     }
 
     public function mount(): void
@@ -101,11 +182,33 @@ class Timeline extends Page
             ->clearEncounter();
 
         $type = $this->activeFilter === 'all' ? null : $this->activeFilter;
-        $this->timelineEvents = $this->workspaceService->getTimelineEvents($this->timelineLimit, $type);
-
         $counts = $this->workspaceService->getTimelineEventCounts();
         $targetCount = $type ? ($counts[$type] ?? 0) : ($counts['all'] ?? 0);
+
+        if ($this->displayMode === 'canvas') {
+            $this->timelineEvents = collect();
+            $this->hasMoreEvents = false;
+
+            $user = Auth::user();
+            ['root' => $this->canvasTree, 'meta' => $this->canvasMeta] = app(ClinicalCanvasTreeBuilder::class)
+                ->buildPatientTree($this->currentPatient, $user);
+
+            $this->savedLayout = $user
+                ? app(CanvasLayoutService::class)->get($user, CanvasLayout::KEY_TIMELINE, $this->currentPatient->id)
+                : null;
+
+            return;
+        }
+
+        $this->timelineEvents = $this->workspaceService->getTimelineEvents($this->timelineLimit, $type);
         $this->hasMoreEvents = $this->timelineEvents->count() < $targetCount;
+        $this->canvasTree = null;
+        $this->canvasMeta = [];
+    }
+
+    protected function normalizeView(?string $view): string
+    {
+        return $view === 'canvas' ? 'canvas' : 'list';
     }
 
     public function loadMoreEvents(): void

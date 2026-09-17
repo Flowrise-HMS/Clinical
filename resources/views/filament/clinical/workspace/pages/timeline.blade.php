@@ -13,8 +13,8 @@
                 ];
             @endphp
 
-            <div class="mb-8">
-                <x-filament::tabs>
+            <div class="mb-8 flex flex-wrap items-center justify-between gap-3">
+                <x-filament::tabs @class(['invisible' => $displayMode === 'canvas'])>
                     @foreach($filters as $filterKey => $filterLabel)
                         <x-filament::tabs.item
                             :active="$activeFilter === $filterKey"
@@ -26,9 +26,44 @@
                         </x-filament::tabs.item>
                     @endforeach
                 </x-filament::tabs>
+
+                <x-filament::tabs>
+                    <x-filament::tabs.item
+                        :active="$displayMode === 'list'"
+                        icon="heroicon-m-list-bullet"
+                        wire:click="setView('list')"
+                        wire:key="timeline-view-list"
+                    >
+                        {{ __('List') }}
+                    </x-filament::tabs.item>
+                    <x-filament::tabs.item
+                        :active="$displayMode === 'canvas'"
+                        icon="heroicon-m-squares-2x2"
+                        wire:click="setView('canvas')"
+                        wire:key="timeline-view-canvas"
+                    >
+                        {{ __('Canvas') }}
+                    </x-filament::tabs.item>
+                </x-filament::tabs>
             </div>
 
-            @if($this->getTimelineEvents()->isNotEmpty())
+            @if($displayMode === 'canvas')
+                @if(! empty($canvasMeta['truncated']))
+                    <div class="mb-3 rounded-lg border border-warning-200 bg-warning-50 px-3 py-2 text-xs text-warning-800 dark:border-warning-800 dark:bg-warning-950/40 dark:text-warning-200">
+                        Showing the {{ $canvasMeta['encounterLimit'] }} most recent of {{ $canvasMeta['encounterTotal'] }} encounters.
+                    </div>
+                @endif
+
+                @if($canvasTree)
+                    @include('clinical::clinical.workspace.partials.canvas', [
+                        'canvasKey' => \Modules\Clinical\Models\CanvasLayout::KEY_TIMELINE,
+                        'tree' => $canvasTree,
+                        'meta' => $canvasMeta,
+                        'layout' => $savedLayout,
+                        'readOnly' => false,
+                    ])
+                @endif
+            @elseif($this->getTimelineEvents()->isNotEmpty())
                 <div
                     class="mx-auto max-w-3xl px-4"
                     x-data="{

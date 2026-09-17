@@ -2,6 +2,8 @@
 
 namespace Modules\Clinical\Providers;
 
+use Filament\Support\Assets\AlpineComponent;
+use Filament\Support\Facades\FilamentAsset;
 use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Modules\Clinical\Classes\Services\DiagnosisSearch\CompositeDiagnosisCodeSearch;
@@ -78,6 +80,8 @@ class ClinicalServiceProvider extends ModuleServiceProvider
     public function boot(): void
     {
         parent::boot();
+
+        $this->registerFilamentAssets();
 
         Encounter::observe(EncounterObserver::class);
         RequestItem::observe(RequestItemObserver::class);
@@ -161,6 +165,17 @@ class ClinicalServiceProvider extends ModuleServiceProvider
                 );
             });
         }
+    }
+
+    /**
+     * The canvas engine is a plain ES module copied verbatim to public/ by
+     * `filament:assets` and lazy-loaded with `x-load` where a canvas renders.
+     */
+    protected function registerFilamentAssets(): void
+    {
+        FilamentAsset::register([
+            AlpineComponent::make('clinical-canvas', module_path($this->name, 'resources/assets/js/clinical-canvas.js')),
+        ], $this->nameLower);
     }
 
     protected function configureSchedules(Schedule $schedule): void
