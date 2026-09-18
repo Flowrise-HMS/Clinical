@@ -44,6 +44,22 @@ function expectedAdtFormDefaults(): array
 /**
  * @return array<string, mixed>
  */
+/**
+ * Mirrors every field of EncounterActions::dischargeSchema() so the Livewire
+ * entangle keys exist before the discharge form renders.
+ */
+function expectedDischargeDataDefaults(): array
+{
+    return [
+        'notes' => null,
+        'discharge_disposition' => DischargeDisposition::COMPLETED->value,
+        'transfer_destination' => null,
+        'override_reason' => null,
+        'follow_up_at' => null,
+        'follow_up_provider_id' => null,
+    ];
+}
+
 function expectedDiagnosisItemDefaults(): array
 {
     return [
@@ -90,11 +106,7 @@ it('defines nested form state keys for Livewire entangle', function (): void {
             'subject' => null,
             'content' => null,
         ])
-        ->and($defaults['dischargeData'])->toBe([
-            'discharge_notes' => null,
-            'discharge_disposition' => DischargeDisposition::COMPLETED->value,
-            'transfer_destination' => null,
-        ])
+        ->and($defaults['dischargeData'])->toBe(expectedDischargeDataDefaults())
         ->and($defaults['adtFormData'])->toBe(expectedAdtFormDefaults())
         ->and($defaults['encounterFormData'])->toBe([
             'type' => EncounterType::OUTPATIENT->value,
@@ -158,11 +170,7 @@ it('restores nested form state keys when form states are reset', function (): vo
             'subject' => null,
             'content' => null,
         ])
-        ->and($page->dischargeData)->toBe([
-            'discharge_notes' => null,
-            'discharge_disposition' => DischargeDisposition::COMPLETED->value,
-            'transfer_destination' => null,
-        ])
+        ->and($page->dischargeData)->toBe(expectedDischargeDataDefaults())
         ->and($page->adtFormData)->toBe(expectedAdtFormDefaults())
         ->and($page->consultationChiefComplaint)->toBe('')
         ->and($page->encounterFormData)->toBe([

@@ -239,7 +239,7 @@ class ClinicalWorkspaceService
         $service = app(MediaDocumentService::class);
         $encounterMorph = (new Encounter)->getMorphClass();
         $typeValue = $media->getCustomProperty('document_type');
-        $typeLabel = is_string($typeValue) ? (DocumentType::tryFrom($typeValue)?->getLabel() ?? Str::headline($typeValue)) : null;
+        $typeLabel = is_string($typeValue) ? (enum_try_from(DocumentType::class, $typeValue)?->getLabel() ?? Str::headline($typeValue)) : null;
 
         $encounterNumber = null;
         if ($media->model_type === $encounterMorph) {

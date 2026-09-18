@@ -45,7 +45,7 @@ it('surfaces admit via PatientActions for a planned outpatient encounter', funct
     $legacy = $actions->assignToWardAction();
 
     expect($admit->getName())->toBe('admit')
-        ->and($admit->getLabel())->toBe('Admit Patient')
+        ->and($admit->getLabel())->toBe('Request Admission')
         ->and($admit->isVisible())->toBeTrue()
         ->and($admit->isAuthorized())->toBeTrue()
         ->and($legacy->getName())->toBe('assign_to_ward')
@@ -118,8 +118,10 @@ it('uses the encounter passed to withEncounter instead of only the active encoun
         ->forPatient($this->patient->fresh())
         ->withEncounter($arrived);
 
+    // An admission *request* may be raised before triage; the ward cannot accept
+    // it until the emergency patient is triaged (enforced in AdtService).
     expect($actions->triageAction()->isVisible())->toBeTrue()
-        ->and($actions->admitAction()->isVisible())->toBeFalse();
+        ->and($actions->admitAction()->isVisible())->toBeTrue();
 
     $actionsForActive = PatientActions::make()
         ->forPatient($this->patient->fresh())

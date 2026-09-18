@@ -65,8 +65,9 @@ class EncounterActions
 
     /**
      * Discharge closes bedded care. Besides encounters that can finish right
-     * away, an inpatient or bed-occupying encounter that is still arrived or
-     * triaged is dischargeable too: the service starts it before finishing.
+     * away, an encounter that occupies a bed while still arrived or triaged is
+     * dischargeable too (the service starts it before finishing); an inpatient
+     * without a bed is an admission that has not been placed yet.
      */
     public static function isDischargeVisible(Model $encounter): bool
     {
@@ -74,8 +75,7 @@ class EncounterActions
             return true;
         }
 
-        return ($encounter->isInpatient() || filled($encounter->bed_id))
-            && (bool) $encounter->status?->isActive();
+        return filled($encounter->bed_id) && (bool) $encounter->status?->isActive();
     }
 
     public static function admit(Model $encounter): Action

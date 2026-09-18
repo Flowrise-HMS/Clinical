@@ -388,7 +388,7 @@ class WardBoard extends Page
                     return;
                 }
 
-                $this->guarded(fn () => app(BedStatusService::class)->transition($bed, BedStatus::from($data['status']), $data['reason'] ?? null, null, Auth::id()), __('Bed status updated'));
+                $this->guarded(fn () => app(BedStatusService::class)->transition($bed, enum_from(BedStatus::class, $data['status']), $data['reason'] ?? null, null, Auth::id()), __('Bed status updated'));
             });
     }
 

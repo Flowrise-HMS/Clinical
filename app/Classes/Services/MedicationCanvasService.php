@@ -179,7 +179,7 @@ class MedicationCanvasService
         $startedAt = Carbon::parse($administration->started_at);
         $status = $administration->status instanceof MedicationAdministrationStatus
             ? $administration->status
-            : MedicationAdministrationStatus::tryFrom((string) $administration->status);
+            : enum_try_from(MedicationAdministrationStatus::class, (string) $administration->status);
 
         return [
             'id' => $administration->id,
@@ -268,7 +268,7 @@ class MedicationCanvasService
 
         $label = OptionalClass::when(
             $enumClass,
-            fn (string $class): ?string => $class::tryFrom($raw)?->getLabel(),
+            fn (string $class): ?string => enum_try_from($class, $raw)?->getLabel(),
             'Pharmacy',
         );
 
