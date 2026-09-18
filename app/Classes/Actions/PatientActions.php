@@ -113,13 +113,20 @@ class PatientActions
         ];
     }
 
-    public function patientActionGroups()
+    /**
+     * The "More Actions" dropdown shared by every patient surface.
+     *
+     * @param  array<int, Action|ActionGroup>  $additional  host-page actions appended to the group
+     */
+    public function patientActionGroups(array $additional = [])
     {
         return ActionGroup::make([
             $this->printHospitalCardAction(),
             $this->uploadDocumentsAction(),
             $this->encounter(),
             $this->dischargeAction(),
+            $this->transferInternalAction(),
+            $this->transferOutAction(),
             $this->cancelEncounterAction(),
             $this->completeEncounterAction(),
             $this->admitAction(),
@@ -141,6 +148,7 @@ class PatientActions
             $this->diagnosis(),
             $this->vitals(),
             $this->allergy(),
+            ...$additional,
         ])
             ->label('More Actions')
             ->icon('heroicon-m-ellipsis-vertical')
