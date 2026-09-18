@@ -118,3 +118,48 @@ it('shows vitals history record actions for users with permission', function ():
         ->assertTableActionVisible('edit', $vital)
         ->assertTableActionVisible('delete', $vital);
 });
+
+it('renders the vital sign infolist in the vitals history view slide-over', function (): void {
+    Permission::findOrCreate('View VitalSign', 'web');
+    $this->user->givePermissionTo('View VitalSign');
+
+    $vital = VitalSign::factory()->forPatient($this->patient)->create([
+        'recorded_by' => $this->user->id,
+        'heart_rate' => 88,
+        'systolic_bp' => 121,
+        'diastolic_bp' => 79,
+        'branch_id' => $this->branch->id,
+    ]);
+
+    Livewire::actingAs($this->user)
+        ->test(PatientVitalsHistoryWidget::class, [
+            'patientId' => $this->patient->id,
+        ])
+        ->mountTableAction('view', $vital)
+        ->assertMountedActionModalSee(['88', '121/79']);
+});
+
+it('edits a vital sign from the vitals history slide-over', function (): void {
+    Permission::findOrCreate('Update VitalSign', 'web');
+    $this->user->givePermissionTo('Update VitalSign');
+
+    $vital = VitalSign::factory()->forPatient($this->patient)->create([
+        'recorded_by' => $this->user->id,
+        'heart_rate' => 88,
+        'branch_id' => $this->branch->id,
+    ]);
+
+    $component = Livewire::actingAs($this->user)
+        ->test(PatientVitalsHistoryWidget::class, [
+            'patientId' => $this->patient->id,
+        ])
+        ->mountTableAction('edit', $vital)
+        ->assertTableActionDataSet(['heart_rate' => 88])
+        ->unmountTableAction();
+
+    $component
+        ->callTableAction('edit', $vital, data: ['heart_rate' => 90])
+        ->assertHasNoTableActionErrors();
+
+    expect($vital->fresh()->heart_rate)->toBe(90);
+});

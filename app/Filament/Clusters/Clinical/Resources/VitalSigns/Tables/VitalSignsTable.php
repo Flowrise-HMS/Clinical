@@ -8,9 +8,13 @@ use Filament\Actions\DeleteAction;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
 use Filament\Actions\ViewAction;
+use Filament\Schemas\Schema;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
+use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\Auth;
+use Modules\Clinical\Filament\Clusters\Clinical\Resources\VitalSigns\Schemas\VitalSignForm;
+use Modules\Clinical\Filament\Clusters\Clinical\Resources\VitalSigns\Schemas\VitalSignInfolist;
 use Modules\Clinical\Filament\Clusters\Clinical\Resources\VitalSigns\VitalSignResource;
 use Modules\Clinical\Policies\VitalSignPolicy;
 use Modules\Core\Support\SuperAdmin;
@@ -41,10 +45,19 @@ class VitalSignsTable
      */
     public static function recordActions(bool $includeActivities = true): array
     {
+        // Schemas are attached explicitly: standalone table widgets (patient / MCH
+        // workspace vitals history) have no resource to resolve them from, and would
+        // otherwise open an empty slide-over. On the resource pages the actions still
+        // navigate to the dedicated view/edit pages.
         $actions = [
             ViewAction::make()
+                ->schema(fn (Schema $schema): Schema => VitalSignInfolist::configure($schema))
+                ->slideOver()
                 ->visible(fn ($record): bool => app(VitalSignPolicy::class)->view(Auth::user(), $record)),
             EditAction::make()
+                ->schema(fn (Schema $schema): Schema => $schema->components(VitalSignForm::quickElements()))
+                ->slideOver()
+                ->mutateDataUsing(fn (array $data): array => Arr::except($data, ['bp_warning', 'spo2_warning', 'calculated_bmi']))
                 ->visible(fn ($record): bool => app(VitalSignPolicy::class)->update(Auth::user(), $record)),
             DeleteAction::make()
                 ->visible(fn ($record): bool => app(VitalSignPolicy::class)->delete(Auth::user(), $record)),
