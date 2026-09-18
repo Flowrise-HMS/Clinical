@@ -788,7 +788,14 @@ class ClinicalWorkspace extends Page implements HasSchemas
         return 'clinician';
     }
 
-    protected function getHeaderWidgets(): array
+    /**
+     * The home dashboard is rendered as footer widgets (below the patient search
+     * and recent patients) so the search box always stays above the fold. Header
+     * widgets would be placed above the page content by Filament.
+     *
+     * @return array<class-string|\Filament\Widgets\WidgetConfiguration>
+     */
+    protected function getHomeDashboardWidgets(): array
     {
         if ($this->mode !== 'home') {
             return [];
@@ -852,6 +859,7 @@ class ClinicalWorkspace extends Page implements HasSchemas
         }
 
         return [
+            ...$this->getHomeDashboardWidgets(),
             ...$widgets,
             ...app(PageWidgetsRegistry::class)->for(static::class, 'footer', $this),
         ];

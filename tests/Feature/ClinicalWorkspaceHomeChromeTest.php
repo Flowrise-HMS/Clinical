@@ -6,6 +6,8 @@ use Livewire\Livewire;
 use Modules\Appointment\Enums\AppointmentStatus;
 use Modules\Appointment\Models\Appointment;
 use Modules\Clinical\Filament\Clusters\Workspace\Pages\ClinicalWorkspace;
+use Modules\Clinical\Filament\Widgets\CriticalPatientsWidget;
+use Modules\Clinical\Filament\Widgets\MyTasksWidget;
 use Modules\Clinical\Filament\Widgets\WorkspaceTodayAppointmentsWidget;
 use Modules\Core\Models\Branch;
 use Modules\Patient\Models\Patient;
@@ -217,4 +219,36 @@ it('offers check-in to a user with no assigned branch working in the session bra
         ->assertRedirect(ClinicalWorkspace::getUrl(['patientId' => $this->patient->id]));
 
     expect($appointment->refresh()->status)->toBe(AppointmentStatus::ARRIVED);
+});
+
+it('renders the patient search above the home dashboard widgets', function (): void {
+    $this->actingAs($this->user);
+
+    $page = Livewire::test(ClinicalWorkspace::class)->assertSet('mode', 'home');
+
+    // The dashboard lives in the footer so the search box stays above the fold.
+    expect($page->instance()->getVisibleHeaderWidgets())->toBe([]);
+
+    $footerWidgets = collect($page->instance()->getVisibleFooterWidgets())
+        ->map(fn ($widget) => is_string($widget) ? $widget : $widget->widget)
+        ->all();
+
+    // Widgets are lazy-loaded, so only their placeholders are in the first render;
+    // Filament always places footer widgets after the page content (the search).
+    expect($footerWidgets)->toContain(CriticalPatientsWidget::class, MyTasksWidget::class);
+
+    $page->assertSee('Search patients by name, MRN, or phone...');
+});
+
+it('does not render the home dashboard widgets once a patient is selected', function (): void {
+    $this->actingAs($this->user);
+
+    $footerWidgets = collect(
+        Livewire::test(ClinicalWorkspace::class, ['patientId' => $this->patient->id])
+            ->assertSet('mode', 'patient')
+            ->instance()
+            ->getVisibleFooterWidgets()
+    )->map(fn ($widget) => is_string($widget) ? $widget : $widget->widget)->all();
+
+    expect($footerWidgets)->not->toContain(CriticalPatientsWidget::class, MyTasksWidget::class);
 });
