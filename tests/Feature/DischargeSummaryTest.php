@@ -12,6 +12,7 @@ use Modules\Clinical\Enums\DiagnosisType;
 use Modules\Clinical\Enums\DischargeSummaryStatus;
 use Modules\Clinical\Enums\NoteType;
 use Modules\Clinical\Filament\Clusters\Workspace\Pages\ClinicalWorkspace;
+use Modules\Clinical\Filament\Widgets\LongStayPatientsWidget;
 use Modules\Clinical\Models\ClinicalNote;
 use Modules\Clinical\Models\Encounter;
 use Modules\Clinical\Models\EncounterDiagnosis;
@@ -183,7 +184,7 @@ class DischargeSummaryTest extends TestCase
         $this->assertSame(1, Encounter::query()->longStay()->count());
 
         Livewire::actingAs($this->doctor)
-            ->test(\Modules\Clinical\Filament\Widgets\LongStayPatientsWidget::class)
+            ->test(LongStayPatientsWidget::class)
             ->assertSee($this->patient->full_name);
     }
 }

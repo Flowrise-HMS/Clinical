@@ -288,15 +288,7 @@ class EncounterService
         }
 
         return DB::transaction(function () use ($encounter, $notes, $completedBy): Encounter {
-            $encounter = $encounter->fresh();
-
-            if ($encounter->status === EncounterStatus::ARRIVED) {
-                $encounter = $this->triage($encounter, $encounter->priority ?? EncounterPriority::default());
-            }
-
-            if ($encounter->status === EncounterStatus::TRIAGED) {
-                $encounter = $this->startEncounter($encounter);
-            }
+            $encounter = $this->ensureInProgress($encounter->fresh());
 
             $encounter = $this->discharge(
                 $encounter,
@@ -312,6 +304,29 @@ class EncounterService
 
             return $encounter->fresh();
         });
+    }
+
+    /**
+     * Walk an active encounter to IN_PROGRESS so it can be finished. Inpatients
+     * may start straight from ARRIVED; other visits are triaged first with their
+     * current (or default) priority. Encounters already in progress or on leave
+     * are returned untouched.
+     */
+    public function ensureInProgress(Encounter $encounter): Encounter
+    {
+        if (in_array($encounter->status, [EncounterStatus::IN_PROGRESS, EncounterStatus::ON_LEAVE], true)) {
+            return $encounter;
+        }
+
+        if (! $encounter->status->isActive()) {
+            throw new \InvalidArgumentException(__('Only an active encounter can be started.'));
+        }
+
+        if ($encounter->status === EncounterStatus::ARRIVED && ! $encounter->isInpatient()) {
+            $encounter = $this->triage($encounter, $encounter->priority ?? EncounterPriority::default());
+        }
+
+        return $this->startEncounter($encounter);
     }
 
     public function cancelEncounter(Encounter $encounter, ?string $reason = null): Encounter

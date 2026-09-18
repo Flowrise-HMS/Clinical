@@ -3,6 +3,7 @@
 namespace Modules\Clinical\Classes\Services;
 
 use Carbon\CarbonInterface;
+use Illuminate\Support\Carbon;
 use Modules\Clinical\Enums\EncounterStatus;
 use Modules\Clinical\Enums\ParticipantRole;
 use Modules\Clinical\Models\Encounter;
@@ -39,7 +40,7 @@ class WardBoardAlertResolver
         $due = 0;
 
         foreach ($nextDoseTimes as $iso) {
-            $dueAt = \Illuminate\Support\Carbon::parse($iso);
+            $dueAt = Carbon::parse($iso);
 
             if ($dueAt->lte($now->copy()->subMinutes($grace))) {
                 $overdue++;

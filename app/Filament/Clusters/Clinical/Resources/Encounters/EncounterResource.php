@@ -15,6 +15,7 @@ use Modules\Clinical\Filament\Clusters\Clinical\Resources\Encounters\Pages\ListE
 use Modules\Clinical\Filament\Clusters\Clinical\Resources\Encounters\Pages\ViewEncounter;
 use Modules\Clinical\Filament\Clusters\Clinical\Resources\Encounters\RelationManagers\ClinicalNotesRelationManager;
 use Modules\Clinical\Filament\Clusters\Clinical\Resources\Encounters\RelationManagers\DiagnosesRelationManager;
+use Modules\Clinical\Filament\Clusters\Clinical\Resources\Encounters\RelationManagers\EncounterDocumentsRelationManager;
 use Modules\Clinical\Filament\Clusters\Clinical\Resources\Encounters\RelationManagers\EncounterParticipantsRelationManager;
 use Modules\Clinical\Filament\Clusters\Clinical\Resources\Encounters\RelationManagers\ServiceRequestsRelationManager;
 use Modules\Clinical\Filament\Clusters\Clinical\Resources\Encounters\RelationManagers\VitalSignsRelationManager;
@@ -39,7 +40,7 @@ class EncounterResource extends Resource
 
     public static function getGloballySearchableAttributes(): array
     {
-        return ['encounter_number', 'patient.mrn', 'patient.first_name', 'patient.middle_name', 'patient.last_name'];
+        return ['encounter_number', 'patient.mrn', 'patient.old_hospital_number', 'patient.first_name', 'patient.middle_name', 'patient.last_name'];
     }
 
     public static function getGlobalSearchResultDetails(Model $record): array
@@ -80,6 +81,7 @@ class EncounterResource extends Resource
             ClinicalNotesRelationManager::class,
             ServiceRequestsRelationManager::class,
             DiagnosesRelationManager::class,
+            EncounterDocumentsRelationManager::class,
         ];
 
         $invoicesRelationManager = OptionalClass::resolve(

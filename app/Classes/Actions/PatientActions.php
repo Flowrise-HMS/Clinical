@@ -47,8 +47,11 @@ use Modules\Clinical\Policies\EncounterDiagnosisPolicy;
 use Modules\Clinical\Policies\EncounterPolicy;
 use Modules\Clinical\Policies\ServiceRequestPolicy;
 use Modules\Clinical\Policies\VitalSignPolicy;
+use Modules\Core\Classes\Services\MediaDocumentService;
+use Modules\Core\Filament\Support\DocumentUploadSchema;
 use Modules\Core\Support\ModuleAvailability;
 use Modules\Core\Support\OptionalClass;
+use Modules\Patient\Enums\DocumentType;
 use Modules\Patient\Models\Patient;
 use Modules\Patient\Policies\PatientPolicy;
 
@@ -114,6 +117,7 @@ class PatientActions
     {
         return ActionGroup::make([
             $this->printHospitalCardAction(),
+            $this->uploadDocumentsAction(),
             $this->encounter(),
             $this->dischargeAction(),
             $this->cancelEncounterAction(),
@@ -599,6 +603,43 @@ class PatientActions
             ->openUrlInNewTab()
             ->visible(fn (): bool => $this->patient !== null
                 && (Auth::user()?->can('print_hospital_card') ?? false));
+    }
+
+    /**
+     * Attach scanned documents from the workspace. Files land on the open
+     * encounter when there is one (so they show under that visit), otherwise on
+     * the patient; both surface on the patient's Documents tab and timeline.
+     */
+    public function uploadDocumentsAction(): Action
+    {
+        return Action::make('upload_documents')
+            ->label(__('Upload documents'))
+            ->icon('heroicon-m-arrow-up-tray')
+            ->modalHeading(__('Upload documents'))
+            ->modalDescription(fn (): string => ($encounter = $this->resolveEncounter()) && ! $encounter->isCompleted()
+                ? __('Files will be attached to encounter :number and to this patient\'s record.', ['number' => $encounter->encounter_number])
+                : __('Files will be attached to this patient\'s record.'))
+            ->modalWidth('lg')
+            ->visible(fn (): bool => $this->patient !== null
+                && Auth::check()
+                && app(PatientPolicy::class)->update(Auth::user(), $this->patient))
+            ->schema(DocumentUploadSchema::fields(DocumentType::class))
+            ->action(function (array $data): void {
+                $encounter = $this->resolveEncounter();
+                $owner = $encounter !== null && ! $encounter->isCompleted() ? $encounter : $this->patient;
+
+                $media = app(MediaDocumentService::class)->attach(
+                    $owner,
+                    $data['files'] ?? [],
+                    DocumentUploadSchema::meta($data),
+                    Auth::user(),
+                );
+
+                Notification::make()
+                    ->success()
+                    ->title($media->count() === 1 ? __('Document uploaded') : __(':count documents uploaded', ['count' => $media->count()]))
+                    ->send();
+            });
     }
 
     public function dischargeAction(): Action

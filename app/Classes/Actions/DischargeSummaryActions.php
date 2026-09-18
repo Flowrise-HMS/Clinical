@@ -17,7 +17,6 @@ use Modules\Clinical\Classes\Services\DischargeSummaryService;
 use Modules\Clinical\Enums\DischargeCondition;
 use Modules\Clinical\Enums\DischargeDisposition;
 use Modules\Clinical\Models\DischargeSummary;
-use Modules\Clinical\Models\Encounter;
 
 /**
  * Filament actions around the structured discharge summary. Static builders

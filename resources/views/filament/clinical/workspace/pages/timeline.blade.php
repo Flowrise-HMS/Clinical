@@ -10,6 +10,7 @@
                     'note' => 'Notes',
                     'order' => 'Orders',
                     'appointment' => 'Appointments',
+                    'document' => 'Documents',
                 ];
             @endphp
 
@@ -102,6 +103,7 @@
                             'note' => ['dot' => 'bg-amber-500', 'card' => 'border-l-amber-500', 'iconWrap' => 'bg-amber-100 dark:bg-amber-900/40', 'icon' => 'text-amber-600 dark:text-amber-400'],
                             'order' => ['dot' => 'bg-blue-500', 'card' => 'border-l-blue-500', 'iconWrap' => 'bg-blue-100 dark:bg-blue-900/40', 'icon' => 'text-blue-600 dark:text-blue-400'],
                             'appointment' => ['dot' => 'bg-indigo-500', 'card' => 'border-l-indigo-500', 'iconWrap' => 'bg-indigo-100 dark:bg-indigo-900/40', 'icon' => 'text-indigo-600 dark:text-indigo-400'],
+                            'document' => ['dot' => 'bg-teal-500', 'card' => 'border-l-teal-500', 'iconWrap' => 'bg-teal-100 dark:bg-teal-900/40', 'icon' => 'text-teal-600 dark:text-teal-400'],
                             'other' => ['dot' => 'bg-gray-500', 'card' => 'border-l-gray-500', 'iconWrap' => 'bg-gray-100 dark:bg-gray-800', 'icon' => 'text-gray-600 dark:text-gray-300'],
                         ];
 
@@ -166,6 +168,24 @@
                                                     <a href="{{ $event['url'] }}" class="text-xs font-medium text-primary-600 hover:text-primary-500 dark:text-primary-400">
                                                         {{ __('Open record') }}
                                                     </a>
+                                                </div>
+                                            @endif
+
+                                            @if(! empty($event['actions']))
+                                                <div class="mt-3 flex flex-wrap items-center gap-2">
+                                                    @foreach($event['actions'] as $eventAction)
+                                                        <x-filament::button
+                                                            tag="a"
+                                                            :href="$eventAction['url']"
+                                                            target="_blank"
+                                                            rel="noopener"
+                                                            size="xs"
+                                                            color="gray"
+                                                            :icon="$eventAction['icon'] ?? null"
+                                                        >
+                                                            {{ $eventAction['label'] }}
+                                                        </x-filament::button>
+                                                    @endforeach
                                                 </div>
                                             @endif
 

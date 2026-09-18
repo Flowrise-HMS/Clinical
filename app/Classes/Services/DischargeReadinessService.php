@@ -2,6 +2,7 @@
 
 namespace Modules\Clinical\Classes\Services;
 
+use Illuminate\Support\Collection;
 use Modules\Clinical\Enums\NoteStatus;
 use Modules\Clinical\Models\ClinicalNote;
 use Modules\Clinical\Models\Encounter;
@@ -118,9 +119,9 @@ class DischargeReadinessService
     }
 
     /**
-     * @param  \Illuminate\Support\Collection<int, RequestItem>  $items
+     * @param  Collection<int, RequestItem>  $items
      */
-    protected function names(\Illuminate\Support\Collection $items): ?string
+    protected function names(Collection $items): ?string
     {
         if ($items->isEmpty()) {
             return null;

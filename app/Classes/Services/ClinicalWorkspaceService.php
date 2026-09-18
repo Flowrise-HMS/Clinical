@@ -6,6 +6,7 @@ use Carbon\CarbonInterface;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Number;
 use Illuminate\Support\Str;
 use Modules\Clinical\Enums\TaskStatus;
 use Modules\Clinical\Models\ClinicalNote;
@@ -15,8 +16,11 @@ use Modules\Clinical\Models\Task;
 use Modules\Clinical\Models\VitalSign;
 use Modules\Clinical\Policies\ServiceRequestPolicy;
 use Modules\Clinical\Policies\TaskPolicy;
+use Modules\Core\Classes\Services\MediaDocumentService;
 use Modules\Core\Support\OptionalClass;
+use Modules\Patient\Enums\DocumentType;
 use Modules\Patient\Models\Patient;
+use Spatie\MediaLibrary\MediaCollections\Models\Media;
 
 class ClinicalWorkspaceService
 {
@@ -68,7 +72,7 @@ class ClinicalWorkspaceService
         $events = collect();
         $patientId = $this->currentPatient->id;
         $encounterId = $this->currentEncounter?->id;
-        $normalizedType = in_array($type, ['encounter', 'vitals', 'note', 'order', 'appointment'], true) ? $type : null;
+        $normalizedType = in_array($type, ['encounter', 'vitals', 'note', 'order', 'appointment', 'document'], true) ? $type : null;
         $safeLimit = max(1, $limit);
         $safeOffset = max(0, $offset);
         // Fetch enough from each source so merge+skip+take covers the requested page.
@@ -146,6 +150,12 @@ class ClinicalWorkspaceService
             }
         }
 
+        if (! $normalizedType || $normalizedType === 'document') {
+            foreach ($this->documentsQuery($patientId, $encounterId)->orderByDesc('created_at')->orderByDesc('id')->limit($fetchLimit)->get() as $media) {
+                $events->push($this->createDocumentEvent($media));
+            }
+        }
+
         return $events
             ->sortByDesc(fn (array $event): string => $this->timelineEventSortKey($event))
             ->values()
@@ -157,7 +167,7 @@ class ClinicalWorkspaceService
     {
         $patientId = $this->currentPatient?->id;
         if (! $patientId) {
-            return ['all' => 0, 'encounter' => 0, 'vitals' => 0, 'note' => 0, 'order' => 0, 'appointment' => 0];
+            return ['all' => 0, 'encounter' => 0, 'vitals' => 0, 'note' => 0, 'order' => 0, 'appointment' => 0, 'document' => 0];
         }
 
         $encounterId = $this->currentEncounter?->id;
@@ -175,7 +185,8 @@ class ClinicalWorkspaceService
                   + ServiceRequest::where('patient_id', $patientId)
                       ->when($encounterId, fn ($q) => $q->where('encounter_id', $encounterId))
                       ->count()
-                  + $this->countAppointmentsForPatient($patientId),
+                  + $this->countAppointmentsForPatient($patientId)
+                  + $this->documentsQuery($patientId, $encounterId)->count(),
             'encounter' => Encounter::where('patient_id', $patientId)
                 ->when($encounterId, fn ($q) => $q->where('id', $encounterId))
                 ->count(),
@@ -189,6 +200,77 @@ class ClinicalWorkspaceService
                 ->when($encounterId, fn ($q) => $q->where('encounter_id', $encounterId))
                 ->count(),
             'appointment' => $this->countAppointmentsForPatient($patientId),
+            'document' => $this->documentsQuery($patientId, $encounterId)->count(),
+        ];
+    }
+
+    /**
+     * Documents attached to the patient plus those on the patient's encounters
+     * (or only the current encounter's when the workspace is encounter-scoped).
+     *
+     * @return Builder<Media>
+     */
+    protected function documentsQuery(string $patientId, ?string $encounterId): Builder
+    {
+        $patientMorph = (new Patient)->getMorphClass();
+        $encounterMorph = (new Encounter)->getMorphClass();
+
+        return Media::query()
+            ->where('collection_name', MediaDocumentService::COLLECTION)
+            ->where(function (Builder $query) use ($patientId, $encounterId, $patientMorph, $encounterMorph): void {
+                if ($encounterId) {
+                    $query->where('model_type', $encounterMorph)->where('model_id', $encounterId);
+
+                    return;
+                }
+
+                $query->where(fn (Builder $own): Builder => $own->where('model_type', $patientMorph)->where('model_id', $patientId))
+                    ->orWhere(fn (Builder $viaEncounter): Builder => $viaEncounter
+                        ->where('model_type', $encounterMorph)
+                        ->whereIn('model_id', Encounter::query()->withoutGlobalScope('branch')->where('patient_id', $patientId)->select('id')));
+            });
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    protected function createDocumentEvent(Media $media): array
+    {
+        $service = app(MediaDocumentService::class);
+        $encounterMorph = (new Encounter)->getMorphClass();
+        $typeValue = $media->getCustomProperty('document_type');
+        $typeLabel = is_string($typeValue) ? (DocumentType::tryFrom($typeValue)?->getLabel() ?? Str::headline($typeValue)) : null;
+
+        $encounterNumber = null;
+        if ($media->model_type === $encounterMorph) {
+            $encounterNumber = Encounter::query()->withoutGlobalScope('branch')->whereKey($media->model_id)->value('encounter_number');
+        }
+
+        $actions = [
+            ['label' => __('Download'), 'icon' => 'heroicon-m-arrow-down-tray', 'url' => $service->downloadUrl($media)],
+        ];
+
+        if ($service->isPreviewable($media)) {
+            array_unshift($actions, ['label' => __('Preview'), 'icon' => 'heroicon-m-eye', 'url' => $service->downloadUrl($media, inline: true)]);
+        }
+
+        return [
+            'id' => 'document_'.$media->getKey(),
+            'type' => 'document',
+            'icon' => 'heroicon-o-paper-clip',
+            'title' => $media->name,
+            'description' => (string) ($media->getCustomProperty('description') ?: ($typeLabel ? __(':type attached', ['type' => $typeLabel]) : __('Document attached'))),
+            'occurred_at' => $media->created_at,
+            'creator' => $media->getCustomProperty('uploaded_by_name'),
+            'is_critical' => false,
+            'metadata' => array_filter([
+                'Type' => $typeLabel,
+                'Attached to' => $encounterNumber ?? __('Patient record'),
+                'File' => $media->file_name,
+                'Size' => $media->size ? Number::fileSize((int) $media->size) : null,
+            ]),
+            'is_editable' => false,
+            'actions' => $actions,
         ];
     }
 

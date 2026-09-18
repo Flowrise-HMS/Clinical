@@ -24,6 +24,7 @@
                                                     @case('order') border-warning-400 @break
                                                     @case('task') border-success-400 @break
                                                     @case('medication') border-purple-400 @break
+                                                    @case('document') border-teal-400 @break
                                                     @default border-gray-300
                                                 @endswitch
                                                 group-hover:scale-110 transition-transform cursor-pointer">
@@ -34,6 +35,7 @@
                                                 'order'      => 'text-warning-500',
                                                 'task'       => 'text-success-500',
                                                 'medication' => 'text-purple-500',
+                                                'document'   => 'text-teal-500',
                                                 default      => 'text-gray-500',
                                             }" />
                                     </div>
@@ -107,6 +109,20 @@
                                                     Edit
                                                 </x-filament::button>
                                             @endif
+                                            @foreach($event['actions'] ?? [] as $eventAction)
+                                                <x-filament::button
+                                                    tag="a"
+                                                    :href="$eventAction['url']"
+                                                    target="_blank"
+                                                    rel="noopener"
+                                                    size="xs"
+                                                    color="gray"
+                                                    :icon="$eventAction['icon'] ?? null"
+                                                    class="text-gray-600"
+                                                >
+                                                    {{ $eventAction['label'] }}
+                                                </x-filament::button>
+                                            @endforeach
                                             @if(($event['has_result'] ?? false) || ($event['type'] ?? '') === 'order')
                                                 <x-filament::button size="xs" color="info" icon="heroicon-m-arrow-down-circle" class="text-info-600">
                                                     View Result

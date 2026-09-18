@@ -2,6 +2,7 @@
 
 namespace Modules\Clinical\Classes\Services;
 
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Modules\Clinical\Enums\AdmissionRequestStatus;
@@ -259,6 +260,10 @@ class AdtService
 
             $override = $this->assertDischargeReady($encounter, $disposition, $overrideReason, $followUpAt, $actedBy);
 
+            // A bedded patient who was never explicitly "started" (arrived/triaged) must
+            // still be dischargeable; walk the encounter to IN_PROGRESS first.
+            $encounter = $this->encounterService->ensureInProgress($encounter);
+
             $encounter = $this->encounterService->discharge(
                 $encounter,
                 $disposition,
@@ -312,7 +317,7 @@ class AdtService
                 $this->dispatchAfterCommit(new PatientDischarged(
                     $encounter,
                     $event,
-                    $followUpAt ? \Illuminate\Support\Carbon::instance($followUpAt) : null,
+                    $followUpAt ? Carbon::instance($followUpAt) : null,
                     $followUpProviderId,
                 ));
             }

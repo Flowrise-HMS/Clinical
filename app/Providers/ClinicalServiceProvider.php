@@ -6,6 +6,7 @@ use Filament\Support\Assets\AlpineComponent;
 use Filament\Support\Facades\FilamentAsset;
 use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Modules\Clinical\Classes\Merge\ClinicalMergeHandler;
 use Modules\Clinical\Classes\Services\DiagnosisSearch\CompositeDiagnosisCodeSearch;
 use Modules\Clinical\Classes\Services\MedicationFulfillmentPolicy;
 use Modules\Clinical\Classes\Services\NullPrescriptionScheduleCalculator;
@@ -25,6 +26,7 @@ use Modules\Clinical\Models\Task;
 use Modules\Clinical\Models\VitalSign;
 use Modules\Clinical\Observers\EncounterObserver;
 use Modules\Clinical\Observers\RequestItemObserver;
+use Modules\Core\Classes\Support\PatientMergeHandlersRegistry;
 use Modules\Core\Support\ModuleAvailability;
 use Modules\Core\Support\OptionalClass;
 use Modules\Patient\Models\Patient;
@@ -86,6 +88,8 @@ class ClinicalServiceProvider extends ModuleServiceProvider
         parent::boot();
 
         $this->registerFilamentAssets();
+
+        $this->app->make(PatientMergeHandlersRegistry::class)->register(ClinicalMergeHandler::class);
 
         Encounter::observe(EncounterObserver::class);
         RequestItem::observe(RequestItemObserver::class);

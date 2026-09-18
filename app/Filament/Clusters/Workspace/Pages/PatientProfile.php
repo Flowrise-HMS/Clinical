@@ -23,6 +23,7 @@ use Modules\Clinical\Filament\Clusters\Workspace\WorkspaceCluster;
 use Modules\Clinical\Filament\Widgets\CarePlanPreviousTableWidget;
 use Modules\Clinical\Filament\Widgets\CarePlanRecentTableWidget;
 use Modules\Clinical\Filament\Widgets\PatientDiagnosesWidget;
+use Modules\Clinical\Filament\Widgets\PatientDocumentsWidget;
 use Modules\Clinical\Filament\Widgets\PatientNotesWidget;
 use Modules\Clinical\Filament\Widgets\PatientOrdersWidget;
 use Modules\Clinical\Filament\Widgets\PatientTimelineWidget;
@@ -92,6 +93,9 @@ class PatientProfile extends Page implements HasActions, HasForms, HasInfolists
                 'patientId' => $patientId,
             ]),
             PatientNotesWidget::make([
+                'patientId' => $patientId,
+            ]),
+            PatientDocumentsWidget::make([
                 'patientId' => $patientId,
             ]),
             PatientOrdersWidget::make([

@@ -9,6 +9,7 @@ use Modules\Clinical\Enums\NoteType;
 use Modules\Clinical\Filament\Clusters\Workspace\Pages\ClinicalWorkspace;
 use Modules\Clinical\Filament\Widgets\PatientDiagnosesWidget;
 use Modules\Clinical\Models\ClinicalNote;
+use Modules\Clinical\Models\DiagnosisCode;
 use Modules\Clinical\Models\Encounter;
 use Modules\Clinical\Models\EncounterDiagnosis;
 use Modules\Clinical\Policies\EncounterDiagnosisPolicy;
@@ -247,4 +248,96 @@ it('persists clinical note content html for the notes tab', function (): void {
     ]);
 
     expect($note->content_html)->toContain('Patient improving.');
+});
+
+it('saves a diagnosis chosen from ICD search even when only the selection key reaches the server', function (): void {
+    $doctor = diagnosisWorkspaceUser($this->branch, [
+        'Create EncounterDiagnosis',
+        'ViewAny EncounterDiagnosis',
+        'Create Encounter',
+        'Update Encounter',
+        'View Encounter',
+    ]);
+    $this->actingAs($doctor);
+
+    $encounter = Encounter::factory()
+        ->forPatient($this->patient)
+        ->active()
+        ->create(['branch_id' => $this->branch->id]);
+
+    $code = DiagnosisCode::factory()->create([
+        'code' => '1F40',
+        'description' => 'Malaria due to Plasmodium falciparum',
+        'source' => 'who',
+        'icd_entity_id' => 'falciparum-workspace-entity',
+        'icd_uri' => 'https://id.who.int/icd/entity/falciparum-workspace-entity',
+    ]);
+
+    $page = app(ClinicalWorkspace::class);
+    $page->boot();
+    $page->selectPatient($this->patient->id);
+    $page->diagnosisFormData = [
+        'diagnoses' => [
+            [
+                'code_search' => 'who:falciparum-workspace-entity',
+                'description' => null,
+                'diagnosis_code_id' => null,
+                'icd_entity_id' => null,
+                'type' => DiagnosisType::Primary->value,
+                'is_new_case' => '1',
+                'certainty' => DiagnosisCertainty::Confirmed->value,
+                'notes' => null,
+            ],
+        ],
+    ];
+    $page->saveDiagnoses();
+
+    $saved = EncounterDiagnosis::query()->where('encounter_id', $encounter->id)->where('is_active', true)->get();
+
+    expect($saved)->toHaveCount(1)
+        ->and($saved[0]->description)->toBe('Malaria due to Plasmodium falciparum')
+        ->and($saved[0]->diagnosis_code_id)->toBe($code->id)
+        ->and($saved[0]->icd_entity_id)->toBe('falciparum-workspace-entity')
+        ->and($saved[0]->icd_code)->toBe('1F40')
+        ->and($page->diagnosisFormData['diagnoses'][0]['code_search'])->toBe('local:'.$code->id);
+});
+
+it('keeps existing diagnoses when a selection cannot be resolved', function (): void {
+    $doctor = diagnosisWorkspaceUser($this->branch, [
+        'Create EncounterDiagnosis',
+        'ViewAny EncounterDiagnosis',
+        'Create Encounter',
+        'Update Encounter',
+        'View Encounter',
+    ]);
+    $this->actingAs($doctor);
+
+    $encounter = Encounter::factory()
+        ->forPatient($this->patient)
+        ->active()
+        ->create(['branch_id' => $this->branch->id]);
+
+    EncounterDiagnosis::create([
+        'encounter_id' => $encounter->id,
+        'patient_id' => $this->patient->id,
+        'description' => 'Typhoid',
+        'type' => DiagnosisType::Primary,
+        'is_new_case' => true,
+        'certainty' => DiagnosisCertainty::Confirmed,
+        'ordered_by' => $doctor->id,
+        'is_active' => true,
+    ]);
+
+    $page = app(ClinicalWorkspace::class);
+    $page->boot();
+    $page->selectPatient($this->patient->id);
+    $page->diagnosisFormData = [
+        'diagnoses' => [
+            ['code_search' => 'who:does-not-exist', 'description' => null, 'type' => DiagnosisType::Primary->value],
+        ],
+    ];
+    $page->saveDiagnoses();
+
+    expect(EncounterDiagnosis::query()->where('encounter_id', $encounter->id)->where('is_active', true)->pluck('description')->all())
+        ->toBe(['Typhoid']);
 });

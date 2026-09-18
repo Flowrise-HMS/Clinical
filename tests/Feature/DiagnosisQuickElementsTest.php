@@ -4,9 +4,11 @@ use Filament\Schemas\Concerns\InteractsWithSchemas;
 use Filament\Schemas\Contracts\HasSchemas;
 use Filament\Schemas\Schema;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
+use Illuminate\Support\Collection;
 use Livewire\Component;
 use Livewire\Livewire;
 use Modules\Clinical\Contracts\DiagnosisCodeSearchContract;
+use Modules\Clinical\Data\DiagnosisCodeSearchResult;
 use Modules\Clinical\Filament\Clusters\Clinical\Resources\EncounterDiagnoses\Schemas\EncounterDiagnosisForm;
 use Modules\Clinical\Models\DiagnosisCode;
 use Tests\TestCase;
@@ -140,6 +142,65 @@ it('resolves a persisted local selection to a friendly label on rehydration', fu
     $search->state('local:'.$vivax->id);
 
     expect($search->getOptionLabel())->toBe('B52 - Malaria (Plasmodium malariae)');
+});
+
+it('autofills the hidden code fields from the catalogue when a who selection arrives without the search cache', function (): void {
+    $cholera = DiagnosisCode::factory()->create([
+        'code' => '1A00',
+        'description' => 'Cholera',
+        'source' => 'who',
+        'icd_entity_id' => 'cholera-entity-no-cache',
+        'icd_uri' => 'https://id.who.int/icd/entity/cholera-entity-no-cache',
+    ]);
+
+    $livewire = Livewire::test(DiagnosisQuickElementHarness::class);
+
+    // Fresh request: nothing in the static cache, only the option key arrives.
+    $livewire->set('data.code_search', 'who:cholera-entity-no-cache');
+
+    $livewire->assertSet('data.diagnosis_code_id', $cholera->id)
+        ->assertSet('data.icd_entity_id', 'cholera-entity-no-cache')
+        ->assertSet('data.icd_uri', 'https://id.who.int/icd/entity/cholera-entity-no-cache')
+        ->assertSet('data.icd_code', '1A00')
+        ->assertSet('data.icd10_code', null)
+        ->assertSet('data.description', 'Cholera');
+});
+
+it('persists who search hits into the local catalogue and keys them locally', function (): void {
+    app()->bind(DiagnosisCodeSearchContract::class, fn () => new class implements DiagnosisCodeSearchContract
+    {
+        public function search(string $term, int $limit = 15): Collection
+        {
+            return collect([
+                new DiagnosisCodeSearchResult(
+                    localId: null,
+                    code: '1F40',
+                    label: 'Malaria due to Plasmodium falciparum',
+                    externalId: 'falciparum-entity',
+                    uri: 'https://id.who.int/icd/entity/falciparum-entity',
+                    source: 'who',
+                ),
+            ]);
+        }
+    });
+
+    $livewire = Livewire::test(DiagnosisQuickElementHarness::class);
+    $search = $livewire->instance()->getSchema('diagnosis')->getComponent('code_search');
+
+    $results = $search->getSearchResults('falci');
+
+    $persisted = DiagnosisCode::query()->where('icd_entity_id', 'falciparum-entity')->first();
+
+    expect($persisted)->not->toBeNull()
+        ->and($persisted->source)->toBe('who')
+        ->and($results)->toHaveKey('local:'.$persisted->id)
+        ->and($results['local:'.$persisted->id])->toBe('1F40 - Malaria due to Plasmodium falciparum');
+
+    resetDiagnosisSearchResultCache();
+    $livewire->set('data.code_search', 'local:'.$persisted->id);
+
+    $livewire->assertSet('data.description', 'Malaria due to Plasmodium falciparum')
+        ->assertSet('data.icd_entity_id', 'falciparum-entity');
 });
 
 class DiagnosisQuickElementHarness extends Component implements HasSchemas

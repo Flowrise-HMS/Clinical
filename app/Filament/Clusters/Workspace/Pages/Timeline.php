@@ -227,7 +227,7 @@ class Timeline extends Page
     {
         if (! $this->currentPatient) {
             return [
-                'all' => 0, 'encounter' => 0, 'vitals' => 0, 'note' => 0, 'order' => 0, 'appointment' => 0,
+                'all' => 0, 'encounter' => 0, 'vitals' => 0, 'note' => 0, 'order' => 0, 'appointment' => 0, 'document' => 0,
             ];
         }
 
@@ -244,7 +244,7 @@ class Timeline extends Page
 
     protected function normalizeFilter(?string $filter): string
     {
-        $allowed = ['all', 'encounter', 'vitals', 'note', 'order', 'appointment'];
+        $allowed = ['all', 'encounter', 'vitals', 'note', 'order', 'appointment', 'document'];
 
         return in_array($filter, $allowed, true) ? $filter : 'all';
     }

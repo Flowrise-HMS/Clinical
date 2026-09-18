@@ -4,6 +4,8 @@ namespace Modules\Clinical\Tests\Feature;
 
 use App\Models\User;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
+use Illuminate\Support\Str;
+use Modules\Clinical\Classes\Actions\EncounterActions;
 use Modules\Clinical\Classes\Services\AdtService;
 use Modules\Clinical\Classes\Services\BedAssignmentService;
 use Modules\Clinical\Classes\Services\EncounterService;
@@ -65,6 +67,59 @@ class InpatientLifecycleTest extends TestCase
         $this->bedB = Location::factory()->bed()->create(['branch_id' => $this->branch->id, 'parent_id' => $this->ward->id, 'is_active' => true]);
     }
 
+    /**
+     * Legacy data: an outpatient visit that was placed in a bed before the
+     * admission flow converted such encounters to inpatient. It is still
+     * "arrived", so it can neither be completed (bedded) nor, previously,
+     * discharged (only IN_PROGRESS could finish) - only cancelled.
+     */
+    public function test_bedded_arrived_encounter_is_dischargeable_and_frees_its_bed(): void
+    {
+        $encounter = Encounter::factory()->forPatient($this->patient)->create([
+            'branch_id' => $this->branch->id,
+            'type' => EncounterType::OUTPATIENT,
+            'status' => EncounterStatus::ARRIVED,
+            'bed_id' => $this->bedA->id,
+        ]);
+
+        $this->assertTrue(EncounterActions::isDischargeVisible($encounter));
+        $this->assertFalse(EncounterActions::isCompleteVisible($encounter));
+
+        $discharged = $this->adt->discharge($encounter, actedBy: $this->doctor->id);
+
+        $this->assertSame(EncounterStatus::FINISHED, $discharged->status);
+        $this->assertNull($discharged->bed_id);
+        $this->assertNotNull($discharged->discharged_at);
+    }
+
+    public function test_arrived_inpatient_without_explicit_start_is_dischargeable(): void
+    {
+        $encounter = Encounter::factory()->forPatient($this->patient)->create([
+            'branch_id' => $this->branch->id,
+            'type' => EncounterType::INPATIENT,
+            'status' => EncounterStatus::ARRIVED,
+            'bed_id' => $this->bedA->id,
+        ]);
+
+        $this->assertTrue(EncounterActions::isDischargeVisible($encounter));
+
+        $discharged = $this->adt->discharge($encounter, actedBy: $this->doctor->id);
+
+        $this->assertSame(EncounterStatus::FINISHED, $discharged->status);
+    }
+
+    public function test_planned_encounter_is_not_dischargeable(): void
+    {
+        $encounter = Encounter::factory()->forPatient($this->patient)->create([
+            'branch_id' => $this->branch->id,
+            'type' => EncounterType::INPATIENT,
+            'status' => EncounterStatus::PLANNED,
+            'bed_id' => null,
+        ]);
+
+        $this->assertFalse(EncounterActions::isDischargeVisible($encounter));
+    }
+
     public function test_admitted_inpatient_can_be_discharged_without_manual_status_changes(): void
     {
         $encounter = $this->adt->admit($this->patient, $this->bedA->id);
@@ -95,7 +150,7 @@ class InpatientLifecycleTest extends TestCase
         $blocked = Location::factory()->bed()->withStatus(BedStatus::BLOCKED)->create(['branch_id' => $this->branch->id, 'parent_id' => $this->ward->id]);
         $otherBranchBed = Location::factory()->bed()->create(['branch_id' => Branch::factory()->create()->id, 'parent_id' => $this->ward->id]);
 
-        foreach ([$inactive->id, $this->ward->id, $blocked->id, $otherBranchBed->id, (string) \Illuminate\Support\Str::uuid()] as $bedId) {
+        foreach ([$inactive->id, $this->ward->id, $blocked->id, $otherBranchBed->id, (string) Str::uuid()] as $bedId) {
             try {
                 $this->adt->admit($this->patient, $bedId);
                 $this->fail("Bed {$bedId} should have been rejected");

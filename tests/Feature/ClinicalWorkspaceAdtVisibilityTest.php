@@ -1,10 +1,15 @@
 <?php
 
 use App\Models\User;
+use Livewire\Livewire;
+use Modules\Clinical\Classes\Services\AdtService;
+use Modules\Clinical\Enums\AdmissionRequestStatus;
 use Modules\Clinical\Enums\EncounterStatus;
 use Modules\Clinical\Filament\Clusters\Workspace\Pages\ClinicalWorkspace;
 use Modules\Clinical\Models\Encounter;
+use Modules\Core\Enums\BedStatus;
 use Modules\Core\Models\Branch;
+use Modules\Core\Models\Location;
 use Modules\Patient\Models\Patient;
 use Spatie\Permission\Models\Permission;
 use Spatie\Permission\Models\Role;
@@ -222,10 +227,10 @@ it('shows discharge on adt after a real admission without touching the status', 
     ], 'doctor');
     $this->actingAs($doctor);
 
-    $ward = \Modules\Core\Models\Location::factory()->room()->create(['branch_id' => $this->branch->id, 'is_active' => true]);
-    $bed = \Modules\Core\Models\Location::factory()->bed()->create(['branch_id' => $this->branch->id, 'parent_id' => $ward->id, 'is_active' => true]);
+    $ward = Location::factory()->room()->create(['branch_id' => $this->branch->id, 'is_active' => true]);
+    $bed = Location::factory()->bed()->create(['branch_id' => $this->branch->id, 'parent_id' => $ward->id, 'is_active' => true]);
 
-    app(\Modules\Clinical\Classes\Services\AdtService::class)->admit($this->patient, $bed->id);
+    app(AdtService::class)->admit($this->patient, $bed->id);
 
     $page = makeWorkspacePage();
     $page->selectPatient($this->patient->id);
@@ -234,7 +239,7 @@ it('shows discharge on adt after a real admission without touching the status', 
         ->and($page->canShowPassOnAdt())->toBeTrue()
         ->and($page->getEncounterStatusChip()['on_pass'])->toBeFalse();
 
-    app(\Modules\Clinical\Classes\Services\AdtService::class)->sendOnPass($page->getOpenEncounter(), 'Weekend');
+    app(AdtService::class)->sendOnPass($page->getOpenEncounter(), 'Weekend');
     $page->selectPatient($this->patient->id);
 
     expect($page->getEncounterStatusChip()['on_pass'])->toBeTrue()
@@ -246,8 +251,8 @@ it('lets the requester withdraw a pending admission request from the adt tab', f
     $doctor = makeWorkspaceUser($this->branch, ['Create Encounter', 'Update Encounter', 'View Encounter', 'View ClinicalWorkspace', 'ViewAny Patient', 'View Patient'], 'doctor');
     $this->actingAs($doctor);
 
-    $ward = \Modules\Core\Models\Location::factory()->room()->create(['branch_id' => $this->branch->id, 'is_active' => true]);
-    $bed = \Modules\Core\Models\Location::factory()->bed()->create(['branch_id' => $this->branch->id, 'parent_id' => $ward->id, 'is_active' => true]);
+    $ward = Location::factory()->room()->create(['branch_id' => $this->branch->id, 'is_active' => true]);
+    $bed = Location::factory()->bed()->create(['branch_id' => $this->branch->id, 'parent_id' => $ward->id, 'is_active' => true]);
 
     $encounter = Encounter::factory()->forPatient($this->patient)->outpatient()->create([
         'branch_id' => $this->branch->id,
@@ -255,14 +260,14 @@ it('lets the requester withdraw a pending admission request from the adt tab', f
         'created_by' => $doctor->id,
     ]);
 
-    $request = app(\Modules\Clinical\Classes\Services\AdtService::class)
+    $request = app(AdtService::class)
         ->requestAdmission($encounter, $ward->id, bedId: $bed->id, requestedBy: $doctor->id);
 
-    \Livewire\Livewire::test(ClinicalWorkspace::class, ['patientId' => $this->patient->id])
+    Livewire::test(ClinicalWorkspace::class, ['patientId' => $this->patient->id])
         ->assertActionVisible('cancel_admission_request')
         ->callAction('cancel_admission_request', data: ['reason' => 'No longer needed'])
         ->assertNotified('Admission request withdrawn');
 
-    expect($request->fresh()->status)->toBe(\Modules\Clinical\Enums\AdmissionRequestStatus::Cancelled)
-        ->and($bed->fresh()->bedStatus())->toBe(\Modules\Core\Enums\BedStatus::AVAILABLE);
+    expect($request->fresh()->status)->toBe(AdmissionRequestStatus::Cancelled)
+        ->and($bed->fresh()->bedStatus())->toBe(BedStatus::AVAILABLE);
 });

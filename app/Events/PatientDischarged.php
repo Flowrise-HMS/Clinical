@@ -4,6 +4,7 @@ namespace Modules\Clinical\Events;
 
 use Illuminate\Foundation\Events\Dispatchable;
 use Illuminate\Queue\SerializesModels;
+use Illuminate\Support\Carbon;
 use Modules\Clinical\Models\Encounter;
 use Modules\Clinical\Models\EncounterLocationEvent;
 
@@ -14,5 +15,5 @@ class PatientDischarged
 {
     use Dispatchable, SerializesModels;
 
-    public function __construct(public Encounter $encounter, public EncounterLocationEvent $locationEvent, public ?\Illuminate\Support\Carbon $followUpAt = null, public ?string $followUpProviderId = null) {}
+    public function __construct(public Encounter $encounter, public EncounterLocationEvent $locationEvent, public ?Carbon $followUpAt = null, public ?string $followUpProviderId = null) {}
 }

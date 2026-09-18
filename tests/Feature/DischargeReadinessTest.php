@@ -17,6 +17,7 @@ use Modules\Clinical\Models\Encounter;
 use Modules\Clinical\Models\EncounterDiagnosis;
 use Modules\Clinical\Models\RequestItem;
 use Modules\Clinical\Models\ServiceRequest;
+use Modules\Core\Classes\Services\BedStatusService;
 use Modules\Core\Enums\ServiceCategoryCode;
 use Modules\Core\Models\Branch;
 use Modules\Core\Models\Location;
@@ -158,7 +159,7 @@ class DischargeReadinessTest extends TestCase
         $this->assertSame(EncounterStatus::FINISHED, $out->status);
         $this->assertStringContainsString('Exempt', $out->metadata['discharge_override']['reason']);
 
-        app(\Modules\Core\Classes\Services\BedStatusService::class)->markAvailable($this->bed->fresh());
+        app(BedStatusService::class)->markAvailable($this->bed->fresh());
         $second = app(AdtService::class)->admit($this->patient, $this->bed->id);
         $transferred = app(AdtService::class)->discharge($second, DischargeDisposition::TRANSFERRED, 'Korle Bu');
         $this->assertSame(EncounterStatus::FINISHED, $transferred->status);

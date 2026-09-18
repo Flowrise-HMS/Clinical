@@ -9,23 +9,24 @@ use Filament\Forms\Components\RichEditor;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
+use Filament\Forms\Components\ViewField;
+use Filament\Notifications\Notification;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Auth;
 use Modules\Clinical\Classes\Services\AdtService;
 use Modules\Clinical\Classes\Services\BedAssignmentService;
+use Modules\Clinical\Classes\Services\DischargeReadinessService;
 use Modules\Clinical\Classes\Services\EncounterService;
 use Modules\Clinical\Enums\AdtDestinationType;
 use Modules\Clinical\Enums\DischargeDisposition;
 use Modules\Clinical\Enums\EncounterPriority;
 use Modules\Clinical\Enums\EncounterStatus;
 use Modules\Clinical\Enums\EncounterType;
-use Modules\Core\Models\Branch;
-use Modules\Core\Support\OptionalClass;
-use Modules\Core\Support\ModuleAvailability;
 use Modules\Clinical\Exceptions\DischargeBlockedException;
-use Modules\Clinical\Classes\Services\DischargeReadinessService;
-use Filament\Notifications\Notification;
-use Filament\Forms\Components\ViewField;
+use Modules\Core\Models\Branch;
+use Modules\Core\Support\ModuleAvailability;
+use Modules\Core\Support\OptionalClass;
 
 class EncounterActions
 {
@@ -62,9 +63,19 @@ class EncounterActions
             && blank($encounter->bed_id);
     }
 
+    /**
+     * Discharge closes bedded care. Besides encounters that can finish right
+     * away, an inpatient or bed-occupying encounter that is still arrived or
+     * triaged is dischargeable too: the service starts it before finishing.
+     */
     public static function isDischargeVisible(Model $encounter): bool
     {
-        return $encounter->canTransitionTo(EncounterStatus::FINISHED);
+        if ($encounter->canTransitionTo(EncounterStatus::FINISHED)) {
+            return true;
+        }
+
+        return ($encounter->isInpatient() || filled($encounter->bed_id))
+            && (bool) $encounter->status?->isActive();
     }
 
     public static function admit(Model $encounter): Action
@@ -296,7 +307,7 @@ class EncounterActions
             ->action(fn (array $data) => app(AdtService::class)->sendOnPass(
                 $encounter,
                 $data['reason'] ?? null,
-                filled($data['expected_return_at'] ?? null) ? \Illuminate\Support\Carbon::parse($data['expected_return_at']) : null,
+                filled($data['expected_return_at'] ?? null) ? Carbon::parse($data['expected_return_at']) : null,
             ));
     }
 
@@ -329,7 +340,7 @@ class EncounterActions
             ])
             ->action(fn (array $data) => app(AdtService::class)->setExpectedDischarge(
                 $encounter,
-                filled($data['expected_discharge_at'] ?? null) ? \Illuminate\Support\Carbon::parse($data['expected_discharge_at']) : null,
+                filled($data['expected_discharge_at'] ?? null) ? Carbon::parse($data['expected_discharge_at']) : null,
                 Auth::id(),
                 $data['reason'] ?? null,
             ));
@@ -564,7 +575,7 @@ class EncounterActions
             $data['transfer_destination'] ?? null,
             notes: $data['notes'] ?? $data['discharge_notes'] ?? null,
             overrideReason: $data['override_reason'] ?? null,
-            followUpAt: filled($data['follow_up_at'] ?? null) ? \Illuminate\Support\Carbon::parse($data['follow_up_at']) : null,
+            followUpAt: filled($data['follow_up_at'] ?? null) ? Carbon::parse($data['follow_up_at']) : null,
             followUpProviderId: filled($data['follow_up_provider_id'] ?? null) ? (string) $data['follow_up_provider_id'] : null,
         );
     }

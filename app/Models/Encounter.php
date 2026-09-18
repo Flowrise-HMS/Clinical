@@ -10,6 +10,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
+use Illuminate\Support\Carbon;
 use Modules\Clinical\Classes\Services\AdtService;
 use Modules\Clinical\Database\Factories\EncounterFactory;
 use Modules\Clinical\Enums\AdmissionRequestStatus;
@@ -27,21 +28,23 @@ use Modules\Core\Models\Department;
 use Modules\Core\Models\Location;
 use Modules\Core\Support\ClientIdentity;
 use Modules\Core\Support\ClientIdentityResolver;
+use Modules\Core\Traits\HasDocumentMedia;
 use Modules\Patient\Models\Patient;
+use Spatie\MediaLibrary\HasMedia;
 
 /**
  * @property string|null $patient_id
  * @property string|null $guest_name
  * @property string|null $guest_phone
  * @property string|null $guest_email
- * @property ?\Illuminate\Support\Carbon $admitted_at
- * @property ?\Illuminate\Support\Carbon $discharged_at
- * @property ?\Illuminate\Support\Carbon $expected_discharge_at
+ * @property ?Carbon $admitted_at
+ * @property ?Carbon $discharged_at
+ * @property ?Carbon $expected_discharge_at
  */
-class Encounter extends BaseModel implements ProvidesClientIdentity
+class Encounter extends BaseModel implements HasMedia, ProvidesClientIdentity
 {
     /** @use HasFactory<EncounterFactory> */
-    use HasFactory, HasUuids;
+    use HasDocumentMedia, HasFactory, HasUuids;
 
     protected $keyType = 'string';
 

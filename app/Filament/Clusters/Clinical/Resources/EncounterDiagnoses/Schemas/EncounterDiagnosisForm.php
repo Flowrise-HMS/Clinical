@@ -58,16 +58,28 @@ class EncounterDiagnosisForm
                 ->searchable()
                 ->getSearchResultsUsing(function (string $search): array {
                     $results = app(DiagnosisCodeSearchContract::class)->search($search, limit: 15);
+                    $catalogue = app(IcdCatalogueService::class);
+                    $options = [];
 
                     foreach ($results as $result) {
-                        self::$searchResultCache[$result->optionKey()] = $result;
+                        // WHO hits are persisted into the local catalogue right away so the
+                        // selection can be resolved from the database on the next request;
+                        // a static cache does not survive between Livewire round-trips.
+                        $key = $result->optionKey();
+
+                        if (blank($result->localId) && $result->source === 'who') {
+                            $localId = $catalogue->localId($result);
+
+                            if (filled($localId)) {
+                                $key = 'local:'.$localId;
+                            }
+                        }
+
+                        self::$searchResultCache[$key] = $result;
+                        $options[$key] = $result->optionLabel();
                     }
 
-                    return $results
-                        ->mapWithKeys(fn (DiagnosisCodeSearchResult $result): array => [
-                            $result->optionKey() => $result->optionLabel(),
-                        ])
-                        ->all();
+                    return $options;
                 })
                 ->getOptionLabelUsing(function (?string $value): ?string {
                     if (blank($value)) {
@@ -78,63 +90,40 @@ class EncounterDiagnosisForm
                         return self::$searchResultCache[$value]->optionLabel();
                     }
 
-                    if (str_starts_with($value, 'local:')) {
-                        $code = DiagnosisCode::find(substr($value, 6));
+                    $code = self::resolveSelection($value);
 
-                        return $code ? $code->code.' - '.$code->description : null;
-                    }
-
-                    if (str_starts_with($value, 'who:')) {
-                        $code = DiagnosisCode::where('icd_entity_id', substr($value, 4))->first();
-
-                        return $code ? $code->code.' - '.$code->description : $value;
-                    }
-
-                    return $value;
+                    return $code ? $code->code.' - '.$code->description : $value;
                 })
                 ->nullable()
                 ->live()
                 ->afterStateUpdated(function (?string $state, Set $set): void {
                     if (blank($state)) {
-                        $set('diagnosis_code_id', null);
-                        $set('icd_entity_id', null);
-                        $set('icd_uri', null);
+                        self::applyCode($set, null);
 
                         return;
                     }
 
+                    $code = self::resolveSelection($state);
+
+                    if ($code instanceof DiagnosisCode) {
+                        self::applyCode($set, $code);
+
+                        return;
+                    }
+
+                    // Last resort for results that could not be persisted (no code, uri or entity id).
                     $cached = self::$searchResultCache[$state] ?? null;
 
                     if ($cached instanceof DiagnosisCodeSearchResult) {
-                        $isWhoSource = $cached->source === 'who';
-                        $localId = $isWhoSource
-                            ? app(IcdCatalogueService::class)->localId($cached)
-                            : $cached->localId;
-
-                        $set('diagnosis_code_id', $localId);
+                        $set('diagnosis_code_id', $cached->localId);
                         $set('icd_entity_id', $cached->externalId);
                         $set('icd_uri', $cached->uri);
                         $set('icd_code', $cached->code);
-                        $set('icd10_code', $isWhoSource ? null : $cached->code);
+                        $set('icd10_code', $cached->source === 'who' ? null : $cached->code);
                         $set('description', $cached->label);
-
-                        return;
-                    }
-
-                    if (str_starts_with($state, 'local:')) {
-                        $id = substr($state, 6);
-                        $code = DiagnosisCode::find($id);
-                        $set('diagnosis_code_id', $id);
-                        $set('icd_entity_id', null);
-                        $set('icd_uri', null);
-                        $set('icd_code', $code?->code);
-                        $set('icd10_code', $code?->code);
-                        if ($code) {
-                            $set('description', $code->description);
-                        }
                     }
                 })
-                ->helperText('Search by diagnosis name or ICD code — or leave empty and type your own below.'),
+                ->helperText('Search by diagnosis name or ICD code - or leave empty and type your own below.'),
 
             TextInput::make('description')
                 ->label('Diagnosis Name')
@@ -177,5 +166,38 @@ class EncounterDiagnosisForm
             TextInput::make('icd_code')->hidden()->dehydrated(),
             TextInput::make('icd10_code')->hidden()->dehydrated(),
         ];
+    }
+
+    /**
+     * Resolve a `local:<id>` or `who:<entity id>` option key to a catalogue row.
+     */
+    public static function resolveSelection(?string $key): ?DiagnosisCode
+    {
+        if (blank($key)) {
+            return null;
+        }
+
+        if (str_starts_with($key, 'local:')) {
+            return DiagnosisCode::query()->find(substr($key, 6));
+        }
+
+        if (str_starts_with($key, 'who:')) {
+            return DiagnosisCode::query()->where('icd_entity_id', substr($key, 4))->first();
+        }
+
+        return null;
+    }
+
+    protected static function applyCode(Set $set, ?DiagnosisCode $code): void
+    {
+        $set('diagnosis_code_id', $code?->id);
+        $set('icd_entity_id', $code?->icd_entity_id);
+        $set('icd_uri', $code?->icd_uri);
+        $set('icd_code', $code?->code);
+        $set('icd10_code', $code !== null && $code->source !== 'who' ? $code->code : null);
+
+        if ($code !== null) {
+            $set('description', $code->description);
+        }
     }
 }

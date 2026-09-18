@@ -3,6 +3,7 @@
 namespace Modules\Clinical\Classes\Services;
 
 use Carbon\CarbonInterface;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 use Modules\Clinical\Enums\AdtEventType;
 use Modules\Clinical\Enums\EncounterStatus;
@@ -212,7 +213,7 @@ class WardBoardService
                 continue;
             }
 
-            $times[$encounterId][] = \Illuminate\Support\Carbon::parse($nextDose)->toIso8601String();
+            $times[$encounterId][] = Carbon::parse($nextDose)->toIso8601String();
         }
 
         return $times;
