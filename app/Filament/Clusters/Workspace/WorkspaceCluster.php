@@ -6,6 +6,7 @@ use BackedEnum;
 use CodeWithDennis\FilamentLucideIcons\Enums\LucideIcon;
 use Filament\Clusters\Cluster;
 use Filament\Pages\Enums\SubNavigationPosition;
+use Modules\Core\Enums\SidebarGroup;
 
 class WorkspaceCluster extends Cluster
 {
@@ -16,6 +17,10 @@ class WorkspaceCluster extends Cluster
     protected static ?string $navigationLabel = 'Clinical Workspace';
 
     protected static string|BackedEnum|null $navigationIcon = LucideIcon::HeartPulse;
+
+    protected static string|\UnitEnum|null $navigationGroup = SidebarGroup::Workspaces;
+
+    protected static ?int $navigationSort = 10;
 
     protected static ?SubNavigationPosition $subNavigationPosition = SubNavigationPosition::Top;
 

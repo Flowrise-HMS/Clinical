@@ -6,6 +6,7 @@ use BezhanSalleh\FilamentShield\Traits\HasPageShield;
 use Filament\Actions\Action;
 use Filament\Pages\Page;
 use Modules\Clinical\Filament\Clusters\Workspace\Concerns\ManagesCarePlan;
+use Modules\Core\Enums\SidebarGroup;
 
 class CarePlanWorkspace extends Page
 {
@@ -28,7 +29,9 @@ class CarePlanWorkspace extends Page
 
     protected static string|\BackedEnum|null $navigationIcon = 'heroicon-m-clipboard-document-check';
 
-    protected static ?int $navigationSort = 2;
+    protected static string|\UnitEnum|null $navigationGroup = SidebarGroup::Workspaces;
+
+    protected static ?int $navigationSort = 30;
 
     protected string $view = 'clinical::clinical.workspace.care-plan-workspace';
 
