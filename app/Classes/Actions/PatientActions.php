@@ -4,12 +4,12 @@ namespace Modules\Clinical\Classes\Actions;
 
 use Filament\Actions\Action;
 use Filament\Actions\ActionGroup;
-use Filament\Forms\Components\DateTimePicker;
-use Filament\Forms\Components\FileUpload;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
 use Filament\Notifications\Notification;
 use Filament\Schemas\Components\Fieldset;
+use Filament\Schemas\Components\Group;
+use Filament\Schemas\Components\Utilities\Get;
 use Illuminate\Support\Facades\Auth;
 use Modules\Clinical\Classes\Services\AllergyService;
 use Modules\Clinical\Classes\Services\ClinicalNoteService;
@@ -524,7 +524,7 @@ class PatientActions
                     ->whereIn('status', ['pending', 'in_progress'])
                     ->whereHas('serviceRequest', fn ($q) => $q->where('patient_id', $this->patient?->id))
                     ->whereDoesntHave('prescriptionDetail')
-                    ->with(['service', 'serviceRequest.orderedBy', 'service.category'])
+                    ->with(['service'])
                     ->get();
 
                 if ($items->isEmpty()) {
@@ -533,30 +533,39 @@ class PatientActions
 
                 $options = $items->pluck('service.name', 'id')->toArray();
 
-                $schema = [
+                /*
+                 * The result form depends on the chosen item (structured fields for a lab test,
+                 * findings + files for imaging, a generic repeater otherwise), so it is rebuilt
+                 * from FulfillmentService each time the selection changes.
+                 */
+                return [
                     Select::make('request_item_id')
                         ->label('Service')
                         ->options($options)
                         ->required()
                         ->searchable()
                         ->live()
-                        ->afterStateUpdated(fn ($state, callable $set) => $this->updateFulfillmentForm($state, $set)),
+                        ->afterStateUpdated(fn (Select $component) => $component
+                            ->getContainer()
+                            ->getComponent('fulfillmentFields')
+                            ->getChildSchema()
+                            ->fill()),
+                    Group::make()
+                        ->key('fulfillmentFields')
+                        ->schema(function (Get $get): array {
+                            $itemId = $get('request_item_id');
+
+                            if (blank($itemId)) {
+                                return [];
+                            }
+
+                            $item = RequestItem::query()
+                                ->with(['service.category', 'serviceRequest.orderedBy', 'prescriptionDetail'])
+                                ->find($itemId);
+
+                            return $item ? $this->fulfillmentService->getFormSchema($item) : [];
+                        }),
                 ];
-
-                $schema[] = DateTimePicker::make('started_at')->label('Started At')->default(now());
-                $schema[] = DateTimePicker::make('ended_at')->label('Ended At')->default(now());
-                $schema[] = FileUpload::make('result_files')
-                    ->label('Result Files (PDF, Images)')
-                    ->multiple()
-                    ->disk(config('diagnostics.result_files.disk', config('filament.default_filesystem_disk')))
-                    ->directory(config('diagnostics.result_files.directory', 'diagnostics/results'))
-                    ->visibility('private')
-                    ->storeFileNamesIn('result_files_names')
-                    ->acceptedFileTypes(['application/pdf', 'image/*'])
-                    ->maxSize(10240);
-                $schema[] = Textarea::make('notes')->label('Notes')->rows(2);
-
-                return $schema;
             })
             ->action(function (array $data): void {
                 $item = RequestItem::find($data['request_item_id']);
@@ -582,22 +591,6 @@ class PatientActions
                         ->send();
                 }
             });
-    }
-
-    protected function updateFulfillmentForm(string $itemId, callable $set): void
-    {
-        $item = RequestItem::with(['service.category', 'serviceRequest.orderedBy'])
-            ->find($itemId);
-
-        if (! $item) {
-            return;
-        }
-
-        $type = $this->fulfillmentService->getType($item);
-        $context = $this->fulfillmentService->getContextInfo($item);
-        $contextHtml = view('clinical::clinical.fulfillment-context', $context)->render();
-
-        $set('context', $contextHtml);
     }
 
     public function printHospitalCardAction(): Action

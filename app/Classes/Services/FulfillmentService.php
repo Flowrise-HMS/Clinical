@@ -20,6 +20,15 @@ use Modules\Core\Support\OptionalClass;
 
 class FulfillmentService
 {
+    /**
+     * Service category codes that are fulfilled by the Diagnostics module even before a
+     * diagnostic profile exists. Mirrors DiagnosticCatalogService::DIAGNOSTIC_CATEGORY_CODES
+     * so Clinical keeps no hard dependency on Diagnostics.
+     *
+     * @var list<string>
+     */
+    protected const DIAGNOSTIC_CATEGORY_CODES = ['LAB', 'RAD', 'PAT', 'DIA'];
+
     public function __construct(
         protected MedicationAdministrationService $medicationService,
         protected MedicationFulfillmentPolicy $policy,
@@ -48,11 +57,36 @@ class FulfillmentService
             return 'medication';
         }
 
-        if ($this->diagnosticService && $this->diagnosticService->getProfile($item) !== null) {
+        if ($this->diagnosticService === null) {
+            return 'generic';
+        }
+
+        if ($this->diagnosticService->getProfile($item) !== null) {
+            return 'diagnostic';
+        }
+
+        if ($this->isDiagnosticCategory($item)) {
             return 'diagnostic';
         }
 
         return 'generic';
+    }
+
+    /**
+     * The category code is read raw because the enum cast returns null for codes
+     * outside ServiceCategoryCode (the pathology category is `PAT`).
+     */
+    protected function isDiagnosticCategory(RequestItem $item): bool
+    {
+        $category = $item->service?->category;
+
+        if ($category === null) {
+            return false;
+        }
+
+        $code = $category->getRawOriginal('code') ?? $category->getAttributes()['code'] ?? null;
+
+        return is_string($code) && in_array(strtoupper($code), self::DIAGNOSTIC_CATEGORY_CODES, true);
     }
 
     public function getContextInfo(RequestItem $item): array
