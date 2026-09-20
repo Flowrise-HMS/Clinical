@@ -682,8 +682,8 @@ class ClinicalWorkspace extends Page implements HasSchemas
 
         $this->encounterFormData = [
             ...$this->defaultEncounterFormData(),
-            'type' => $openEncounter->type?->value ?? EncounterType::OUTPATIENT->value,
-            'coverage_type' => $openEncounter->coverage_type?->value ?? $openEncounter->coverage_type,
+            'type' => enum_value($openEncounter->type) ?? EncounterType::OUTPATIENT->value,
+            'coverage_type' => enum_value($openEncounter->coverage_type),
             'claim_check_code' => $openEncounter->claim_check_code,
             'chief_complaint' => $openEncounter->chief_complaint,
         ];
@@ -814,7 +814,9 @@ class ClinicalWorkspace extends Page implements HasSchemas
     protected function getHeaderActions(): array
     {
         if (! $this->currentPatient) {
-            return [];
+            // Workspace home: only cross-module actions such as the quick
+            // "Add appointment" registered by the Appointment module.
+            return app(PageHeaderActionsRegistry::class)->for(static::class, $this);
         }
 
         $actions = PatientActions::make()
@@ -1504,6 +1506,42 @@ class ClinicalWorkspace extends Page implements HasSchemas
                     Notification::make()->title('Reject failed')->body($e->getMessage())->danger()->send();
                 }
             });
+    }
+
+    public function arriveEncounterAction(): Action
+    {
+        $encounter = $this->getOpenEncounter();
+
+        if ($encounter === null) {
+            return Action::make('arrive_encounter')->hidden();
+        }
+
+        return EncounterActions::arrive($encounter)
+            ->name('arrive_encounter')
+            ->button()
+            ->authorize(fn (): bool => $this->canUpdateEncounter($encounter))
+            ->action(function () use ($encounter): void {
+                $this->authorizeEncounterUpdate($encounter);
+
+                try {
+                    $this->encounterService->arrive($encounter);
+                    $this->currentPatient?->unsetRelation('activeEncounter');
+                    $this->loadPatientContext();
+                    $this->recacheHeaderActions();
+                    Notification::make()->title('Patient marked as arrived')->success()->send();
+                } catch (\Throwable $e) {
+                    Notification::make()->title('Arrive failed')->body($e->getMessage())->danger()->send();
+                }
+            });
+    }
+
+    public function canShowArriveOnAdt(?Encounter $encounter = null): bool
+    {
+        $encounter ??= $this->getOpenEncounter();
+
+        return $encounter !== null
+            && $this->canUpdateEncounter($encounter)
+            && EncounterActions::isArriveVisible($encounter);
     }
 
     public function completeEncounterAction(): Action

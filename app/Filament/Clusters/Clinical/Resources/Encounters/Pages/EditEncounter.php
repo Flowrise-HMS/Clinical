@@ -79,6 +79,16 @@ class EditEncounter extends EditRecord
                         ->send();
                 }),
 
+            EncounterActions::arrive($record)
+                ->action(function () use ($record) {
+                    app(EncounterService::class)->arrive($record);
+                    $this->refreshFormData(['status', 'admitted_at']);
+                    Notification::make()
+                        ->title('Patient marked as arrived')
+                        ->success()
+                        ->send();
+                }),
+
             EncounterActions::complete($record)
                 ->action(function (array $data) use ($record) {
                     app(EncounterService::class)->completeEncounter($record, notes: $data['notes'] ?? null);

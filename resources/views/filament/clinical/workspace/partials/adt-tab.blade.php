@@ -7,6 +7,7 @@
     $canShowDischarge = $openEncounter ? $this->canShowDischargeOnAdt($openEncounter) : false;
     $canDischarge = $openEncounter ? $this->canDischargeEncounter($openEncounter) : false;
     $canShowComplete = $openEncounter ? $this->canShowCompleteOnAdt($openEncounter) : false;
+    $canShowArrive = $openEncounter ? $this->canShowArriveOnAdt($openEncounter) : false;
     $canDecideAdmission = $openEncounter ? $this->canShowAdmissionDecisionOnAdt($openEncounter) : false;
     $pendingAdmission = $openEncounter ? $this->getPendingAdmissionRequest() : null;
     $decidedAdmission = $openEncounter ? $this->getLatestDecidedAdmissionRequest() : null;
@@ -201,6 +202,21 @@
                     <x-filament::button wire:click="transferOut" color="warning" icon="heroicon-m-building-office-2">
                         Transfer out
                     </x-filament::button>
+                </div>
+            </div>
+        @endif
+
+        @if ($canShowArrive)
+            @php $renderedSection = true; @endphp
+            <div class="space-y-3 rounded-xl border border-primary-200 dark:border-primary-900/40 p-4">
+                <div class="flex flex-wrap items-center justify-between gap-2">
+                    <div>
+                        <h4 class="text-sm font-semibold text-gray-900 dark:text-white">Planned visit</h4>
+                        <p class="text-sm text-gray-500 dark:text-gray-400">
+                            Mark the patient as arrived to start the visit. Only active encounters can be triaged or completed.
+                        </p>
+                    </div>
+                    {{ $this->arriveEncounterAction }}
                 </div>
             </div>
         @endif

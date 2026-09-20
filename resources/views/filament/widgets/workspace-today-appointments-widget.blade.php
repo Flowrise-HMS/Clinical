@@ -1,5 +1,5 @@
 <x-filament-widgets::widget>
-    <x-filament::section heading="{{ __('Todays appointments') }} ({{ $appointments->count() }})" icon="heroicon-m-calendar-days">
+    <x-filament::section :heading="__('Today\'s appointments') . ' (' . $appointments->count() . ')'" icon="heroicon-m-calendar-days">
         <div>
             @if($appointments->isEmpty())
                 <div class="flex flex-col items-center justify-center py-6 text-center text-sm text-gray-600 dark:text-gray-400">

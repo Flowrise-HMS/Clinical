@@ -2,6 +2,7 @@
 
 namespace Modules\Clinical\Filament\Clusters\Clinical\Resources\Encounters\Schemas;
 
+use Closure;
 use Filament\Forms\Components\RichEditor;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
@@ -14,10 +15,45 @@ use Modules\Clinical\Enums\EncounterPriority;
 use Modules\Clinical\Enums\EncounterStatus;
 use Modules\Clinical\Enums\EncounterType;
 use Modules\Clinical\Filament\Schemas\EncounterCoverageSchema;
+use Modules\Clinical\Models\Encounter;
 use Modules\Core\Classes\Services\BranchService;
 
 class EncounterForm
 {
+    /**
+     * Only the current status and the transitions the encounter allows from it
+     * are offered, so the raw select cannot skip lifecycle steps.
+     *
+     * @return array<string, string>
+     */
+    public static function statusOptions(?Encounter $record): array
+    {
+        if ($record === null || $record->status === null) {
+            // New visits start planned, or arrived for walk-ins.
+            return collect([EncounterStatus::PLANNED, EncounterStatus::ARRIVED])
+                ->mapWithKeys(fn (EncounterStatus $status): array => [$status->value => $status->getLabel()])
+                ->all();
+        }
+
+        return collect(EncounterStatus::cases())
+            ->filter(fn (EncounterStatus $status): bool => $status === $record->status || $record->canTransitionTo($status))
+            ->mapWithKeys(fn (EncounterStatus $status): array => [$status->value => $status->getLabel()])
+            ->all();
+    }
+
+    /**
+     * Default status for a new encounter from the Clinical settings, limited
+     * to the statuses a new visit may start in.
+     */
+    public static function defaultStatus(): EncounterStatus
+    {
+        $configured = enum_try_from(EncounterStatus::class, app_settings()->clinicalValue('default_encounter_status', 'planned'));
+
+        return in_array($configured, [EncounterStatus::PLANNED, EncounterStatus::ARRIVED], true)
+            ? $configured
+            : EncounterStatus::PLANNED;
+    }
+
     public static function configure(Schema $schema): Schema
     {
         return $schema
@@ -66,21 +102,35 @@ class EncounterForm
                         ->schema([
                             Select::make('type')
                                 ->options(EncounterType::class)
-                                ->default('outpatient')
+                                ->default(fn (): string => (string) app_settings()->clinicalValue('default_encounter_type', 'outpatient'))
                                 ->required()
                                 ->live()
                                 ->label('Encounter Type'),
 
                             Select::make('priority')
                                 ->options(EncounterPriority::class)
-                                ->default('routine')
+                                ->default(fn (): string => (string) app_settings()->clinicalValue('default_encounter_class', 'routine'))
                                 ->required()
                                 ->label('Priority'),
 
                             Select::make('status')
-                                ->options(EncounterStatus::class)
-                                ->default('planned')
+                                ->options(fn (?Encounter $record): array => self::statusOptions($record))
+                                ->default(fn (): string => self::defaultStatus()->value)
                                 ->required()
+                                ->rule(fn (?Encounter $record): Closure => function (string $attribute, mixed $value, Closure $fail) use ($record): void {
+                                    $target = enum_try_from(EncounterStatus::class, $value);
+
+                                    if ($record === null || $target === null || $target === $record->status) {
+                                        return;
+                                    }
+
+                                    if (! $record->canTransitionTo($target)) {
+                                        $fail(__('An encounter cannot move from :from to :to.', [
+                                            'from' => $record->status?->getLabel() ?? $record->status?->value,
+                                            'to' => $target->getLabel(),
+                                        ]));
+                                    }
+                                })
                                 ->label('Status'),
 
                             EncounterCoverageSchema::coverageField(),

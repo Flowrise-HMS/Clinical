@@ -12,7 +12,10 @@ use Filament\Widgets\Widget;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Auth;
 use Livewire\Attributes\On;
+use Modules\Clinical\Classes\Services\EncounterService;
+use Modules\Clinical\Enums\EncounterStatus;
 use Modules\Clinical\Filament\Clusters\Workspace\Pages\ClinicalWorkspace;
+use Modules\Clinical\Models\Encounter;
 use Modules\Core\Classes\Services\BranchService;
 use Modules\Core\Support\OptionalClass;
 
@@ -141,9 +144,11 @@ class WorkspaceTodayAppointmentsWidget extends Widget implements HasActions, Has
                 }
 
                 $appointment = app($schedulingServiceClass)->checkIn($appointment);
+                $arrived = $this->arrivePlannedEncounter($appointment);
 
                 Notification::make()
                     ->title(__('Patient checked in'))
+                    ->body($arrived ? __('Encounter :number marked as arrived.', ['number' => $arrived->encounter_number]) : null)
                     ->success()
                     ->send();
 
@@ -157,6 +162,30 @@ class WorkspaceTodayAppointmentsWidget extends Widget implements HasActions, Has
                     'patientId' => (string) $appointment->patient_id,
                 ]));
             });
+    }
+
+    /**
+     * A planned visit for the same patient and branch becomes arrived when the
+     * appointment is checked in, so the clinician can triage and complete it.
+     */
+    protected function arrivePlannedEncounter(object $appointment): ?Encounter
+    {
+        if (! $appointment->patient_id) {
+            return null;
+        }
+
+        $encounter = Encounter::query()
+            ->where('patient_id', $appointment->patient_id)
+            ->where('branch_id', $appointment->branch_id)
+            ->where('status', EncounterStatus::PLANNED)
+            ->latest('created_at')
+            ->first();
+
+        if ($encounter === null) {
+            return null;
+        }
+
+        return app(EncounterService::class)->arrive($encounter);
     }
 
     protected function findAppointment(?string $id): ?object

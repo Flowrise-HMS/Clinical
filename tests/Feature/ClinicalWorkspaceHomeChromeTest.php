@@ -64,7 +64,7 @@ it('lists todays branch appointments on the workspace home widget', function ():
     Livewire::test(WorkspaceTodayAppointmentsWidget::class)
         ->assertOk()
         ->assertSee($this->patient->full_name)
-        ->assertSee('Todays appointments (1)');
+        ->assertSee("Today's appointments (1)");
 });
 
 it('uses the session branch when the user has no default branch_id', function (): void {
@@ -82,7 +82,7 @@ it('uses the session branch when the user has no default branch_id', function ()
 
     Livewire::test(WorkspaceTodayAppointmentsWidget::class)
         ->assertOk()
-        ->assertSee('Todays appointments (1)');
+        ->assertSee("Today's appointments (1)");
 });
 
 it('shows header actions after picking a patient without a full page reload', function (): void {
@@ -90,7 +90,11 @@ it('shows header actions after picking a patient without a full page reload', fu
 
     $page = Livewire::test(ClinicalWorkspace::class);
 
-    expect($page->instance()->getCachedHeaderActions())->toBeEmpty();
+    $homeActionKeys = collect($page->instance()->getCachedHeaderActions())
+        ->map(fn ($action) => $action instanceof Action ? $action->getName() : 'group:'.$action->getLabel())
+        ->all();
+
+    expect($homeActionKeys)->not->toContain('view_timeline', 'view_profile');
 
     $page->call('selectPatient', $this->patient->id)
         ->assertSet('mode', 'patient');
@@ -251,4 +255,36 @@ it('does not render the home dashboard widgets once a patient is selected', func
     )->map(fn ($widget) => is_string($widget) ? $widget : $widget->widget)->all();
 
     expect($footerWidgets)->not->toContain(CriticalPatientsWidget::class, MyTasksWidget::class);
+});
+
+it('offers the quick add-appointment action on the workspace home', function (): void {
+    Permission::findOrCreate('Create Appointment', 'web');
+    $this->user->givePermissionTo('Create Appointment');
+    $this->actingAs($this->user);
+
+    $actions = Livewire::test(ClinicalWorkspace::class)
+        ->assertSet('mode', 'home')
+        ->instance()
+        ->getCachedHeaderActions();
+
+    $quickCreate = collect($actions)->first(fn ($action) => $action instanceof Action && $action->getName() === 'appointment.quick_create');
+
+    expect($quickCreate)->not->toBeNull()
+        ->and($quickCreate->isVisible())->toBeTrue();
+});
+
+it('hides the quick add-appointment action once a patient is selected', function (): void {
+    Permission::findOrCreate('Create Appointment', 'web');
+    $this->user->givePermissionTo('Create Appointment');
+    $this->actingAs($this->user);
+
+    $actions = collect(Livewire::test(ClinicalWorkspace::class, ['patientId' => $this->patient->id])
+        ->assertSet('mode', 'patient')
+        ->instance()
+        ->getCachedHeaderActions())
+        ->filter(fn ($action) => $action instanceof Action)
+        ->keyBy(fn (Action $action) => $action->getName());
+
+    expect($actions->get('appointment.schedule')?->isVisible())->toBeTrue()
+        ->and($actions->get('appointment.quick_create')?->isVisible())->toBeFalse();
 });

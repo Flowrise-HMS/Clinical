@@ -37,7 +37,7 @@ class EncounterService
                 'branch_id' => $patient?->branch_id ?? $this->branchService->getDefaultBranchId(),
                 'type' => $type,
                 'status' => EncounterStatus::PLANNED,
-                'priority' => $priority ?? EncounterPriority::default(),
+                'priority' => $priority ?? $this->defaultPriority(),
                 'chief_complaint' => $chiefComplaint,
                 'location_id' => $locationId,
                 'department_id' => $departmentId,
@@ -60,12 +60,42 @@ class EncounterService
             'branch_id' => $branchId ?? $this->branchService->getDefaultBranchId(),
             'type' => $type,
             'status' => EncounterStatus::PLANNED,
-            'priority' => $priority ?? EncounterPriority::default(),
+            'priority' => $priority ?? $this->defaultPriority(),
             'guest_name' => $guestName,
             'guest_phone' => $guestPhone,
             'guest_email' => $guestEmail,
             'created_by' => $createdBy ?? auth()->id(),
         ]);
+    }
+
+    /**
+     * Priority for new encounters from the Clinical "default encounter class"
+     * setting, falling back to the enum default.
+     */
+    protected function defaultPriority(): EncounterPriority
+    {
+        return enum_try_from(EncounterPriority::class, app_settings()->clinicalValue('default_encounter_class', 'routine'))
+            ?? EncounterPriority::default();
+    }
+
+    /**
+     * Mark a planned visit as arrived (front-desk check-in). This is the only
+     * way out of PLANNED besides cancellation; everything that follows
+     * (triage, start, complete) requires an active status.
+     */
+    public function arrive(Encounter $encounter, ?int $arrivedBy = null): Encounter
+    {
+        if (! $encounter->canTransitionTo(EncounterStatus::ARRIVED)) {
+            throw new \InvalidArgumentException('Cannot mark this encounter as arrived in its current status');
+        }
+
+        $encounter->update([
+            'status' => EncounterStatus::ARRIVED,
+            'admitted_by' => $arrivedBy ?? auth()->id(),
+            'admitted_at' => now(),
+        ]);
+
+        return $encounter->fresh();
     }
 
     public function admitPatient(
@@ -77,17 +107,11 @@ class EncounterService
             throw new \InvalidArgumentException('Cannot admit patient in current status');
         }
 
-        $updateData = [
-            'status' => EncounterStatus::ARRIVED,
-            'admitted_by' => $admittedBy ?? auth()->id(),
-            'admitted_at' => now(),
-        ];
+        $encounter = $this->arrive($encounter, $admittedBy);
 
         if ($bedId && $encounter->type === EncounterType::INPATIENT) {
-            $updateData['bed_id'] = $bedId;
+            $encounter->update(['bed_id' => $bedId]);
         }
-
-        $encounter->update($updateData);
 
         return $encounter->fresh();
     }

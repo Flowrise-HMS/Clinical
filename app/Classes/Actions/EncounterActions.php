@@ -233,6 +233,28 @@ class EncounterActions
         return implode(' · ', $parts);
     }
 
+    public static function isArriveVisible(Model $encounter): bool
+    {
+        return $encounter->status === EncounterStatus::PLANNED;
+    }
+
+    /**
+     * Front-desk check-in for a planned visit: PLANNED -> ARRIVED.
+     */
+    public static function arrive(Model $encounter): Action
+    {
+        return Action::make('arrive')
+            ->label('Mark Arrived')
+            ->icon('heroicon-m-arrow-right-end-on-rectangle')
+            ->color('primary')
+            ->visible(fn () => self::isArriveVisible($encounter))
+            ->requiresConfirmation()
+            ->modalHeading(__('Mark patient as arrived'))
+            ->modalDescription(__('The planned visit becomes an active encounter that can be triaged, started and completed.'))
+            ->modalSubmitActionLabel(__('Mark arrived'))
+            ->action(fn () => app(EncounterService::class)->arrive($encounter));
+    }
+
     public static function complete(Model $encounter): Action
     {
         return Action::make('complete')
