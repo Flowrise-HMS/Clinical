@@ -1,280 +1,75 @@
-# Patient Module Implementation Plan
+# Clinical Module Implementation Record
 
-**Document Status:** Draft
-**Last Updated:** April 2026
-**Module:** FlowRise HMS Patient Module
+**Document Status:** Implemented (verified against code 2026-09-20)
+**Module:** FlowRise HMS Clinical Module (`Modules/Clinical`)
 
----
-
-## 1. Executive Summary
-
-This document outlines the implementation roadmap for the Patient module of FlowRise HMS. It consolidates all design decisions and technical implementation details.
-
-### Business Context
-
-The Patient module is the **core foundation** of the entire HMS. Every clinical, billing, and operational action links back to a patient.
-
-### Core Entities
-
-| Entity | Purpose |
-|--------|--------|
-| **Patient** | Core entity with demographics, contact, address |
-| **PatientIdentifier** | MRN, NHIS, Passport, etc. |
-| **EmergencyContact** | Next of kin, emergency contacts |
-| **PatientSchool** | School-based health records |
+Until 2026-09-20 this file was an accidental copy of the Patient module plan. It now describes the Clinical module as built. Staff-facing instructions: [docs/user-guide/clinical-workflows.md](../../../docs/user-guide/clinical-workflows.md). Inpatient internals: [docs/developer-guide/adt-bed-management.md](../../../docs/developer-guide/adt-bed-management.md).
 
 ---
 
-## 2. Database Architecture
+## 1. Scope
 
-### 2.1 Tables
-
-```
-patients
-├── patient_identifiers (MRN, NHIS, Passport, etc.)
-├── emergency_contacts (next of kin)
-└── patient_schools (school-based records)
-```
-
-### 2.2 Encrypted Fields
-
-The following fields are encrypted:
-- `date_of_birth`
-- `phone`
-- `email`
+Encounters and their lifecycle (planned → arrived → triaged → in_progress → finished / cancelled, with on_leave for passes), encounter participants, encounter diagnoses (ICD-10/ICD-11 with a local `diagnosis_codes` catalogue and the WHO ICD-11 API), vital signs, clinical notes, allergies, service requests / request items / tasks (the generic order model that Diagnostics and Pharmacy fulfil), medication administration records (MAR) with dose scheduling and reminders, admission requests and ADT location events, discharge readiness and discharge summaries, nursing care plans, the clinical workspace pages, and the FHIR transformers for Encounter, Condition, AllergyIntolerance, CarePlan and Goal.
 
 ---
 
-## 3. Module Structure
+## 2. Database (42 migrations)
 
-### 3.1 Models
+| Table(s) | Purpose |
+|----------|---------|
+| `encounters` | Visit record: `encounter_number` (`ENC-<date>-<seq>` via Core `DocumentNumberGenerator`), patient, branch, type (`EncounterType`), status (`EncounterStatus`), priority, class, coverage type + NHIS claim check code, chief complaint, department/location/bed, admitted/discharged timestamps, expected discharge, discharge disposition/condition, primary provider, soft deletes |
+| `encounter_participants` | Care team members per encounter (`ParticipantRole`, `ParticipantStatus`) |
+| `encounter_location_events` | ADT audit trail (`AdtEventType`: admitted, transferred_internal/in/out, discharged, bed_assigned, cancelled, admission_requested/rejected/cancelled/expired, on_pass, returned_from_pass) |
+| `admission_requests` | Ward admission requests (`AdmissionRequestStatus`: pending, accepted, rejected, cancelled, expired; requested ward/bed, decided by, reason) |
+| `discharge_summaries` | Draft / signed / amended summaries with structured sections and JSON diagnoses |
+| `encounter_diagnoses`, `diagnosis_codes` | Coded diagnoses (`DiagnosisType` primary/secondary/complication, `DiagnosisCertainty`) and the seeded code catalogue |
+| `vital_signs` | Measurements with `VitalSignType` context and `recorded_by` (NOT NULL) |
+| `clinical_notes` | `NoteType` (12 types), `NoteStatus` draft/signed/amended, rich text content |
+| `allergies` | `AllergenType`, `AllergySeverity`, `AllergyVerificationStatus`, onset |
+| `service_requests`, `request_items`, `tasks` | Orders (`SRQ-<date>-<seq>`), line items (`RequestItemStatus`), fulfilment tasks (`TaskStatus`, `TaskOutcome`); medication items carry prescription details used by Pharmacy and MAR |
+| `medication_administrations`, `medication_dose_reminder_logs` | Dose records (`MedicationAdministrationStatus` given/omitted/refused, witness flag, PRN reason) and reminder de-duplication |
+| `clinical_canvas_layouts` | Saved layouts for the medication canvas |
+| `care_plans` + `care_plan_problems`, `care_plan_problem_strengths`, `care_plan_objectives`, `care_plan_interventions`, `care_plan_evaluations`, `care_plan_routine_cares`, `care_plan_diagnoses`, `care_plan_medical_diagnoses`, `care_plan_orders`, `nursing_diagnosis_catalogue` | Nursing care plans (`CarePlanStatus`, `CarePlanCategory`, goal lifecycle/achievement, evaluation outcome and next action, `RoutineCareItem`) |
 
-| Model | File |
-|-------|------|
-| Patient | `Modules/Patient/app/Models/Patient.php` |
-| PatientIdentifier | `Modules/Patient/app/Models/PatientIdentifier.php` |
-| EmergencyContact | `Modules/Patient/app/Models/EmergencyContact.php` |
-| PatientSchool | `Modules/Patient/app/Models/PatientSchool.php` |
-
-### 3.2 Services
-
-| Service | File | Methods |
-|---------|------|--------|
-| PatientService | `Classes/Services/PatientService.php` | all, getActive, find, findByMrn, create, update, delete |
-| PatientIdentifierService | `Classes/Services/PatientIdentifierService.php` | generateMrn, generateUuid, validateIdentifier |
-| EmergencyContactService | `Classes/Services/EmergencyContactService.php` | addContact, updateContact, removeContact |
-| PatientSearchService | `Classes/Services/PatientSearchService.php` | search, getSearchableFields |
-| PatientSchoolService | `Classes/Services/PatientSchoolService.php` | enroll, updateEnrollment, withdraw |
-
-### 3.3 Enums
-
-| Enum | Purpose |
-|------|---------|
-| Gender | male, female, other |
-| BloodType | A+, A-, B+, B-, AB+, AB-, O+, O- |
-| MaritalStatus | single, married, divorced, widowed |
-| IdentifierType | MRN, NHIS, PASSPORT, DRIVERS_LICENSE |
-| RelationshipType | SPOUSE, PARENT, SIBLING, CHILD |
-| EducationLevel | NONE, PRIMARY, SECONDARY, TERTIARY |
-| SchoolType | PRIMARY, JHS, SHS |
-| DocumentType | NHIS, VOTERS_ID, PASSPORT, DRIVERS_LICENSE |
+`ward`/`bed` attributes live on Core `locations` (capacity, gender policy, bed class, bed status).
 
 ---
 
-## 4. Filament Resources
+## 3. Code structure (`app/`)
 
-### 4.1 PatientResource
-
-**Cluster:** Patient Cluster
-**File:** `Filament/Clusters/Patient/Resources/Patients/PatientResource.php`
-
-**Pages:**
-- ListPatients - List all patients with search/filters
-- CreatePatient - Register new patient (wizard form)
-- EditPatient - Update patient profile
-- ViewPatient - View full patient details
-- ListPatientActivities - Patient activity log
-
-### 4.2 Form Schema
-
-**File:** `Schemas/PatientForm.php`
-
-**Wizard Steps:**
-1. Demographics - Name, DOB, gender, blood type
-2. Contact - Phone, email
-3. Address - Full address
-4. Identifiers - MRN, NHIS, etc.
-5. Emergency Contact - Next of kin
-6. School (optional) - School-based records
-
-### 4.3 Infolist Schema
-
-**File:** `Schemas/PatientInfolist.php`
-
-Displays:
-- Demographics card
-- Identifiers card
-- Contact card
-- Emergency contacts card
+| Area | Contents |
+|------|----------|
+| `Models/` (26) | See table above plus `Encounter` helpers (`generateEncounterNumber`, `isLongStay`, `isCompleted`) |
+| `Enums/` | EncounterType, EncounterStatus, EncounterPriority, AdmissionRequestStatus, AdtEventType, AdtDestinationType, DischargeDisposition, DischargeCondition, DischargeSummaryStatus, RequestStatus, RequestItemStatus, RequestPriority, TaskStatus, TaskOutcome, NoteType, NoteStatus, MedicationAdministrationStatus, MedicationSlotStatus, CarePlan*, Goal*, NursingProblemStatus, RoutineCareItem, AllergenType, AllergySeverity, AllergyVerificationStatus, OnsetType, DiagnosisType, DiagnosisCertainty, ParticipantRole, ParticipantStatus, VitalSignType, PatientPosition, SpO2Label, SpO2Parameter |
+| `Classes/Services/` (34) | `EncounterService` (create, triage, complete, cancel), `AdtService` (request/accept/reject/withdraw admission, transfer internal/out, pass/return, discharge, expected discharge), `BedAssignmentService`, `BedStatusBackfillService`, `WardBoardService` + `WardBoardAlertResolver`, `DischargeReadinessService` (readiness items and blocking levels from config), `DischargeSummaryService`, `VitalSignService`, `ClinicalNoteService`, `DiagnosisService`, `DiagnosisCodeService`, `IcdCatalogueService` (WHO ICD-11 API), `DiagnosisSearch`, `AllergyService`, `ServiceRequestService`, `TaskService`, `FulfillmentService` (workspace fulfilment forms by diagnostic category), `MedicationAdministrationService`, `MedicationDoseScheduleService`, `MedicationFulfillmentPolicy` (payment-before-MAR, emergency exemption, controlled-substance witness), `MedicationSlotStatusResolver`, `MedicationCanvasService`, `CanvasLayoutService`, `ClinicalCanvasTreeBuilder`, `CarePlanService`, `CarePlanProblemService`, `CarePlanObjectiveService`, `CarePlanOrderService`, `NursingDiagnosisService`, `NhisClaimCodeGateway` (delegates to Insurance OTAC when present), `NullPrescriptionScheduleCalculator` (fallback when Pharmacy is absent), `ClinicalWorkspaceService`, `Pdf` |
+| `Classes/Actions/` | `PatientActions` (header actions + "More Actions" group reused across Patient, MCH and workspace pages), `EncounterActions` (Request/Accept/Reject Admission, Complete, Triage, Send on pass, Return from pass, Set expected discharge, Withdraw request, Transfer (internal), Transfer out, Discharge, Cancel), `DischargeSummaryActions` (Discharge summary, Sign, Print) |
+| `Classes/Fhir/` | Encounter, Condition, AllergyIntolerance, CarePlan, Goal transformers (read/search through the FHIR module) |
+| `Events/`, `Listeners/`, `Notifications/` | Admission requested / accepted / rejected / cancelled, PatientAdmitted, PatientTransferred, PatientDischarged, EncounterFinished, EncounterCancelled, RequestItemCreated / Updated / Cancelled; listeners notify the ward (roles from `config('clinical.wards.notify_roles')`), the requester and the patient (channels per Core `NotificationSettings`) |
+| `Console/` | `SendMarDoseRemindersCommand` (`clinical:mar-dose-reminders`, every 5 min when Pharmacy is enabled and reminders are on), `ExpireAdmissionRequestsCommand` (`clinical:expire-admission-requests`, hourly), `BackfillBedStatusCommand` (`clinical:backfill-bed-status`) |
+| `Http/` | `CarePlanPdfController`, `DischargeSummaryPdfController` (auth routes). `routes/web.php` also still registers a scaffold `Route::resource('clinicals')` with placeholder views |
+| `Filament/Clusters/Workspace/` | `WorkspaceCluster` (sidebar Workspaces → Clinical Workspace); pages `ClinicalWorkspace` (search/register, role-based tabs, header actions; `Concerns/ManagesWorkspacePatient`, `ManagesCarePlan`), `WardBoard`, `Timeline`, `PatientProfile`, `MedicationCanvas`, `PatientWorkspace` (legacy, hidden), `CarePlanWorkspace` (registered as a top-level Workspaces page) |
+| `Filament/Clusters/Clinical/` | `ClinicalCluster` (Patient Care → Clinical); resources Encounters (with participants, vitals, notes, service requests, diagnoses, documents, invoices relation managers), ServiceRequests (request items), Tasks, ClinicalNotes, VitalSigns, CarePlans (view/print, hidden from nav), Allergies (hidden), EncounterDiagnoses (hidden); pages `MedicationAdministrationBoard`, `IcdBrowserPage`, `ManageClinicalSettings` |
+| `Filament/RelationManagers/Patient/` | Allergies, Diagnoses, Encounters, Medication administrations, Tasks tabs for the patient record |
+| `Filament/Widgets/` (23) | Workspace home: CriticalPatients, LongStayPatients, MyTasks, PendingAdmissions, PendingFulfillments, WorkspaceTodayAppointments; profile: PatientVitalsHistory/Chart/Overview, PatientDiagnoses, PatientDocuments, PatientNotes, PatientOrders, PatientTimeline, RecentPatients, CarePlanRecent/Previous; care plan workspace: CarePlanWard/Problems/RoutineCare/Diagnoses/Interventions/Objectives tables |
+| `Filament/Exports/` | `EncounterExporter` (super-admin export) |
+| `Settings/ClinicalSettings.php` | Spatie settings edited on the Clinical settings page (only `mar_require_payment_before`, `mar_emergency_exempt`, `mar_reminders_enabled` are read at runtime; the rest are stored only) |
+| `config/config.php` | `admissions.request_expiry_hours` (24), `admissions.long_stay_days` (7), `beds.cleaning_on_discharge`, `beds.reserve_on_request`, `wards.notify_roles`, `adt_notifications.channels`, `discharge.enforce_readiness`, `discharge.require_signed_summary`, `discharge.readiness.*` (blocking / warning / info per item), `mar_payment`, `mar_allergy`, `mar_schedule`, `mar_default_times`, `mar_reminders`, `icd.*` (WHO API client id/secret, release, linearization), custom permissions |
+| `Policies/` | Allergy, CarePlan (+ evaluate), ClinicalNote, DischargeSummary, EncounterDiagnosis, Encounter, ServiceRequest, Task, VitalSign |
+| `database/` | 26 factories; seeders `ClinicalDatabaseSeeder`, `ClinicalCustomPermissionSeeder` (manage_bed_status → super_admin/nurse/admissions_staff; sign_discharge_summary → super_admin/doctor; print_discharge_summary → super_admin/doctor/nurse), `DiagnosisCodeSeeder`, `NursingDiagnosisCatalogueSeeder` |
 
 ---
 
-## 5. Key Features Implemented
+## 4. Key behaviours
 
-### 5.1 Patient Registration
-
-- Multi-step wizard form
-- Auto-generated MRN (format: FR-YYYYMMDD-XXXXX)
-- Global UUID for interoperability
-- Encrypted PII (phone, email, DOB)
-- Soft deletes
-
-### 5.2 Patient Identifiers
-
-- MRN (Medical Record Number) - primary
-- NHIS Number
-- Passport
-- Driver's License
-- Custom identifier types
-
-### 5.3 Search
-
-- Global search across name, MRN, phone, email
-- Searchable via PatientSearchService
-
-### 5.4 Relationships
-
-| Relationship | Model |
-|--------------|-------|
-| User account | User (optional) |
-| Identifiers | PatientIdentifier |
-| Emergency contacts | EmergencyContact |
-| Clinical data | Encounter, VitalSign, ClinicalNote |
-| Allergies | Allergy |
+- **Encounter numbers** `ENC-<YYYYMMDD>-<00001>` and service request numbers `SRQ-...` come from Core's `DocumentNumberGenerator` with fixed prefixes.
+- **Admission flow**: `AdtService::requestAdmission()` creates an `AdmissionRequest` (optionally reserving the preferred bed); `acceptAdmission()` assigns the bed, sets the encounter to inpatient and fires `PatientAdmitted`; `rejectAdmission()` needs a reason; pending requests expire after `admissions.request_expiry_hours`.
+- **Discharge**: `DischargeReadinessService` evaluates pending medication doses, undispensed take-home meds, pending diagnostics, financial hold (Billing), unsigned notes, discharge diagnosis, signed discharge summary and follow-up booked, each classified blocking / warning / info by config; blocking items prevent discharge when `discharge.enforce_readiness` is true. Discharge frees the bed (status cleaning when configured), fires `PatientDischarged` (Billing finalises invoices, Appointment books a follow-up).
+- **MAR**: doses are scheduled by Pharmacy's `PrescriptionScheduleCalculator` (default times in config); `MedicationAdministrationService::record()` enforces `administer_medication`, PRN reason, omission/refusal reason and witness attestation for controlled medications; `MedicationFulfillmentPolicy` enforces payment-before-MAR with emergency exemption; reminders are sent by the scheduled command and de-duplicated in `medication_dose_reminder_logs`.
+- **Workspace tabs** are role-based (`ClinicalWorkspace::getUserRoleKey()`: doctor/clinical_officer/consultant/physician/specialist → clinician; nurse/registered_nurse/practice_nurse → nurse; laboratory_technician/lab_technician/radiographer → lab) and permission-filtered (notes, diagnosis, ADT).
+- **Cross-module hooks**: header actions, widgets and relation managers are pulled from Core registries so Appointment, Billing, Diagnostics and MCH can extend the pages without hard dependencies (`OptionalClass::when(...)`).
 
 ---
 
-## 6. Implementation Checklist
+## 5. Tests
 
-### 6.1 What's Done ✅
-
-| Item | Notes |
-|------|-------|
-| Database migrations | patients, patient_identifiers, emergency_contacts, patient_schools |
-| Patient model | With HasUuids, HasAddress, HasContact, SoftDeletes |
-| PatientIdentifier model | Unique constraint on (patient_id, type, value) |
-| EmergencyContact model | Full relationship tracking |
-| PatientSchool model | School enrollment tracking |
-| Enums | Gender, BloodType, MaritalStatus, IdentifierType, etc. |
-| PatientService | Full CRUD + search + pagination |
-| PatientIdentifierService | MRN auto-generation |
-| EmergencyContactService | Full relationship CRUD |
-| PatientSearchService | Global search |
-| PatientSchoolService | School enrollment |
-| PatientResource | Full Filament resource |
-| PatientForm | Multi-step wizard |
-| PatientInfolist | Display cards |
-| PatientsTable | Column configuration |
-| Policies | PatientPolicy |
-| Events | PatientRegistered, PatientUpdated, PatientDeactivated, PatientDeceased |
-| Observers | PatientObserver |
-| Factories | All models have factories |
-
-### 6.2 What's Pending ⏳
-
-| Item | Priority | Notes |
-|------|----------|-------|
-| Media uploads for patient photo | MEDIUM | Spatie Media Library |
-| Patient merge/deduplication | LOW | Merge duplicate patients |
-| Bulk import | LOW | CSV import |
-| Export to FHIR | LOW | FHIR Patient resource |
-
----
-
-## 7. Key Design Decisions
-
-### 7.1 MRN Generation
-
-Format: `FR-YYYYMMDD-XXXXX`
-
-- FR prefix (FlowRise)
-- Date of registration
-- Sequential number
-
-### 7.2 Global UUID
-
-Each patient gets a global UUID for interoperability with other systems (FHIR compliance).
-
-### 7.3 Encrypted Fields
-
-PII fields encrypted at rest:
-- `date_of_birth`
-- `phone`
-- `email`
-
-### 7.4 Soft Deletes
-
-Patients are soft-deleted (can be restored), maintaining historical data integrity.
-
----
-
-## 8. File Structure
-
-```
-Modules/Patient/
-├── app/
-│   ├── Classes/Services/
-│   │   ├── PatientService.php
-│   │   ├── PatientIdentifierService.php
-│   │   ├── EmergencyContactService.php
-│   │   ├── PatientSearchService.php
-│   │   └── PatientSchoolService.php
-│   ├── Models/
-│   │   ├── Patient.php
-│   │   ├── PatientIdentifier.php
-│   │   ├── EmergencyContact.php
-│   │   └── PatientSchool.php
-│   ├── Enums/
-│   │   ├── Gender.php
-│   │   ├── BloodType.php
-│   │   ├── MaritalStatus.php
-│   │   ├── IdentifierType.php
-│   │   ├── RelationshipType.php
-│   │   └── ...
-│   ├── Filament/
-│   │   └── Clusters/Patient/
-│   │       └── Resources/Patients/
-│   │           ├── PatientResource.php
-│   │           ├── Schemas/
-│   │           │   ├── PatientForm.php
-│   │           │   └── PatientInfolist.php
-│   │           ├── Tables/
-│   │           │   └── PatientsTable.php
-│   │           └── Pages/
-│   │               ├── ListPatients.php
-│   │               ├── CreatePatient.php
-│   │               ├── EditPatient.php
-│   │               └── ViewPatient.php
-│   └── Policies/
-│       └── PatientPolicy.php
-���── database/
-│   ├── migrations/
-│   └── factories/
-└── composer.json
-```
-
----
-
-## 9. Next Steps
-
-1. **Short-term:** None (module is feature-complete)
-2. **Medium-term:** Add patient photo uploads via Spatie Media Library
-3. **Long-term:** FHIR Patient resource export
-
----
-
-## 10. References
-
-- FHIR Patient Resource
-- FlowRise HMS Executive Summary
-- User Guide: Patient Management
+93 test files under `tests/` (feature tests for encounters, ADT, ward board, discharge summaries, MAR, care plans, diagnoses, workspace, widgets, FHIR transformers, commands; two Playwright browser tests). Run with `php artisan test --compact Modules/Clinical/tests`.
