@@ -24,6 +24,7 @@ use Modules\Clinical\Models\ClinicalNote;
 use Modules\Clinical\Models\Encounter;
 use Modules\Clinical\Models\EncounterParticipant;
 use Modules\Clinical\Models\Task;
+use Modules\Core\Settings\NumberingSettings;
 use Tests\TestCase;
 
 class EdgeCaseTest extends TestCase
@@ -224,6 +225,13 @@ class EdgeCaseTest extends TestCase
         $encounter = Encounter::factory()->create();
         $this->assertNotNull($encounter->encounter_number);
         $this->assertStringStartsWith('ENC-', $encounter->encounter_number);
+    }
+
+    public function test_encounter_number_uses_the_configured_prefix(): void
+    {
+        NumberingSettings::fake(['encounter_prefix' => 'VIS']);
+
+        $this->assertStringStartsWith('VIS-', Encounter::generateEncounterNumber());
     }
 
     public function test_encounter_casts_status_as_enum(): void

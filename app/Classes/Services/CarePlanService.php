@@ -465,7 +465,11 @@ class CarePlanService
                 continue;
             }
 
-            $item = enum_from(RoutineCareItem::class, $rawItem);
+            $item = enum_try_from(RoutineCareItem::class, $rawItem);
+
+            if ($item === null) {
+                continue;
+            }
 
             $plan->routineCares()->updateOrCreate(
                 ['item' => $item],

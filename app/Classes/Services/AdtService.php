@@ -872,7 +872,7 @@ class AdtService
             return null;
         }
 
-        return is_object($gender) && isset($gender->value) ? (string) $gender->value : (string) $gender;
+        return (string) enum_value($gender);
     }
 
     protected function resolveEncounterForAdmission(

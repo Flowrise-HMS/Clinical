@@ -169,7 +169,7 @@
                                     <span class="muted">
                                         — {{ $intervention->performedBy?->name ?? __('Unknown') }}
                                         @if ($intervention->performed_at)
-                                            ({{ $intervention->performed_at->format('Y-m-d H:i') }})
+                                            ({{ pdf_date($intervention->performed_at) }})
                                         @endif
                                     </span>
                                     @if ($intervention->notes)
@@ -209,7 +209,7 @@
                                     @if ($latest)
                                         {{ $latest->outcome?->getLabel() ?? $latest->outcome }}
                                         — {{ $latest->evaluatedBy?->name ?? __('Unknown') }}
-                                        ({{ $latest->evaluated_at?->format('Y-m-d H:i') }})
+                                        ({{ pdf_date($latest->evaluated_at) }})
                                         @if ($latest->findings)
                                             <div>{{ $latest->findings }}</div>
                                         @endif
@@ -231,7 +231,10 @@
     @endforelse
 
     <div class="footer">
-        {{ __('Generated on') }} {{ now()->format('Y-m-d H:i') }}
+        {{ __('Generated on') }} {{ pdf_date(now()) }}
+        @if ($footerText = app_settings()->pdfFooterText())
+            <br>{{ $footerText }}
+        @endif
         · {{ __('Care plan ID') }}: {{ $carePlan->id }}
     </div>
 </body>

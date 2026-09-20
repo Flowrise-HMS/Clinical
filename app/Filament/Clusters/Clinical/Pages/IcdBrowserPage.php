@@ -23,11 +23,7 @@ class IcdBrowserPage extends Page
 
     public static function shouldRegisterNavigation(): bool
     {
-        try {
-            return app(FeatureSettings::class)->icd_browser_enabled;
-        } catch (\Throwable) {
-            return true;
-        }
+        return app(FeatureSettings::class)->icd_browser_enabled;
     }
 
     protected string $view = 'clinical::filament.pages.icd-browser';

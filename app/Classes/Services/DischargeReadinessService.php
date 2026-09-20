@@ -53,7 +53,7 @@ class DischargeReadinessService
 
         $diagnostics = $pendingItems->filter(function (RequestItem $item): bool {
             $code = $item->service?->category?->code;
-            $code = is_object($code) && isset($code->value) ? $code->value : $code;
+            $code = enum_value($code);
 
             return in_array($code, [ServiceCategoryCode::LAB->value, ServiceCategoryCode::RAD->value], true);
         });
@@ -115,7 +115,7 @@ class DischargeReadinessService
 
         $value = $detail->administration_context;
 
-        return is_object($value) && isset($value->value) ? (string) $value->value : ($value === null ? null : (string) $value);
+        return enum_string($value);
     }
 
     /**

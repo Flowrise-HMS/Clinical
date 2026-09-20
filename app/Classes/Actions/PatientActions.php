@@ -49,6 +49,7 @@ use Modules\Clinical\Policies\ServiceRequestPolicy;
 use Modules\Clinical\Policies\VitalSignPolicy;
 use Modules\Core\Classes\Services\MediaDocumentService;
 use Modules\Core\Filament\Support\DocumentUploadSchema;
+use Modules\Core\Settings\FeatureSettings;
 use Modules\Core\Support\ModuleAvailability;
 use Modules\Core\Support\OptionalClass;
 use Modules\Patient\Enums\DocumentType;
@@ -603,6 +604,7 @@ class PatientActions
                 : '#')
             ->openUrlInNewTab()
             ->visible(fn (): bool => $this->patient !== null
+                && app(FeatureSettings::class)->patient_hospital_card_enabled
                 && (Auth::user()?->can('print_hospital_card') ?? false));
     }
 

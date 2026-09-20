@@ -516,7 +516,7 @@ class ClinicalCanvasTreeBuilder
             return null;
         }
 
-        return is_object($value) && isset($value->value) ? (string) $value->value : (string) $value;
+        return (string) enum_value($value);
     }
 
     protected function enumLabel(mixed $value): ?string

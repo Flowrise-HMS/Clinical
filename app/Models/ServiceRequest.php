@@ -76,7 +76,7 @@ class ServiceRequest extends BaseModel implements ProvidesClientIdentity
     {
         return app(DocumentNumberGenerator::class)->next(
             documentKey: 'service_request',
-            prefix: 'SRQ',
+            prefix: document_prefix('service_request'),
         );
     }
 

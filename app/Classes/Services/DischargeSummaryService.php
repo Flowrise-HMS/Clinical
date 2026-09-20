@@ -215,6 +215,6 @@ class DischargeSummaryService
             return null;
         }
 
-        return is_object($enumOrString) && isset($enumOrString->value) ? (string) $enumOrString->value : (string) $enumOrString;
+        return (string) enum_value($enumOrString);
     }
 }

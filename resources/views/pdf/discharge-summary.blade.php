@@ -34,7 +34,7 @@
     <p class="muted">
         {{ $summary->status?->getLabel() }}
         @if ($summary->signed_at)
-            · {{ __('signed :time by :name', ['time' => $summary->signed_at->format('d M Y H:i'), 'name' => $summary->signer?->name ?? '—']) }}
+            · {{ __('signed :time by :name', ['time' => pdf_date($summary->signed_at), 'name' => $summary->signer?->name ?? '—']) }}
         @endif
     </p>
 
@@ -53,8 +53,8 @@
             <td><strong>{{ __('Attending') }}:</strong> {{ $encounter?->admittedBy?->name ?? '—' }}</td>
         </tr>
         <tr>
-            <td><strong>{{ __('Admitted') }}:</strong> {{ $encounter?->admitted_at?->format('d M Y H:i') ?? '—' }}</td>
-            <td><strong>{{ __('Discharged') }}:</strong> {{ $encounter?->discharged_at?->format('d M Y H:i') ?? __('pending') }}</td>
+            <td><strong>{{ __('Admitted') }}:</strong> {{ $encounter?->admitted_at ? pdf_date($encounter->admitted_at) : '—' }}</td>
+            <td><strong>{{ __('Discharged') }}:</strong> {{ $encounter?->discharged_at ? pdf_date($encounter->discharged_at) : __('pending') }}</td>
             <td><strong>{{ __('Length of stay') }}:</strong> {{ $encounter?->duration ?? '—' }}</td>
         </tr>
         <tr>
@@ -128,7 +128,7 @@
             <td><strong>{{ __('Activity') }}:</strong> {{ $summary->activity ?: '—' }}</td>
         </tr>
         <tr>
-            <td><strong>{{ __('Follow-up') }}:</strong> {{ $summary->follow_up_at?->format('d M Y H:i') ?? __('not scheduled') }}</td>
+            <td><strong>{{ __('Follow-up') }}:</strong> {{ $summary->follow_up_at ? pdf_date($summary->follow_up_at) : __('not scheduled') }}</td>
             <td><strong>{{ __('Notes') }}:</strong> {{ $summary->follow_up_notes ?: '—' }}</td>
         </tr>
     </table>
@@ -140,6 +140,6 @@
         </tr>
     </table>
 
-    <p class="footer">{{ __('Generated :time', ['time' => now()->format('d M Y H:i')]) }} · {{ config('app.name') }}</p>
+    <p class="footer">{{ __('Generated :time', ['time' => pdf_date(now())]) }} · {{ config('app.name') }}@if ($footerText = app_settings()->pdfFooterText()) · {{ $footerText }}@endif</p>
 </body>
 </html>

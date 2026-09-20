@@ -114,7 +114,7 @@ class Encounter extends BaseModel implements HasMedia, ProvidesClientIdentity
     {
         return app(DocumentNumberGenerator::class)->next(
             documentKey: 'encounter',
-            prefix: 'ENC',
+            prefix: document_prefix('encounter'),
         );
     }
 

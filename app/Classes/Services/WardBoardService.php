@@ -176,7 +176,7 @@ class WardBoardService
                 'mrn' => $patient->mrn,
                 'name' => $patient->full_name,
                 'age' => $patient->age,
-                'gender' => is_object($patient->gender) && isset($patient->gender->value) ? $patient->gender->value : $patient->gender,
+                'gender' => enum_value($patient->gender),
             ] : null,
             'attending' => $attending?->user ? ['id' => $attending->user->id, 'name' => $attending->user->name] : null,
             'nurse' => $nurse?->user ? ['id' => $nurse->user->id, 'name' => $nurse->user->name] : null,

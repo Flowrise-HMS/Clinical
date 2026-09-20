@@ -151,7 +151,7 @@ class MedicationCanvasService
             'frequency' => $frequency,
             'frequencyLabel' => $this->enumLabel('Modules\\Pharmacy\\Enums\\MedicationFrequency', $detail?->frequency),
             'prn' => $isPrn,
-            'status' => $item->status?->value ?? (string) $item->status,
+            'status' => enum_string($item->status) ?? '',
             'statusLabel' => $item->status?->getLabel() ?? (string) $item->status,
             'isTerminal' => $item->isTerminal(),
             'isControlled' => $this->policy->isControlledMedication($item),
@@ -183,7 +183,7 @@ class MedicationCanvasService
 
         return [
             'id' => $administration->id,
-            'status' => $status?->value ?? MedicationSlotStatus::GIVEN->value,
+            'status' => enum_value($status) ?? MedicationSlotStatus::GIVEN->value,
             'statusLabel' => $status?->getLabel() ?? 'Given',
             'startedAt' => $startedAt->toIso8601String(),
             'startedAtLabel' => $startedAt->format('H:i'),
@@ -247,7 +247,7 @@ class MedicationCanvasService
             return null;
         }
 
-        return is_object($value) && isset($value->value) ? (string) $value->value : (string) $value;
+        return (string) enum_value($value);
     }
 
     /**
