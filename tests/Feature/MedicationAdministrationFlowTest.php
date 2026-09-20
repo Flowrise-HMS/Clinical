@@ -13,9 +13,11 @@ use Modules\Clinical\Classes\Services\MedicationAdministrationService;
 use Modules\Clinical\Enums\EncounterStatus;
 use Modules\Clinical\Enums\EncounterType;
 use Modules\Clinical\Enums\MedicationAdministrationStatus;
+use Modules\Clinical\Models\Allergy;
 use Modules\Clinical\Models\Encounter;
 use Modules\Clinical\Models\RequestItem;
 use Modules\Clinical\Models\ServiceRequest;
+use Modules\Clinical\Settings\ClinicalSettings;
 use Modules\Core\Models\Branch;
 use Modules\Core\Models\Service;
 use Modules\Patient\Models\Patient;
@@ -186,6 +188,56 @@ class MedicationAdministrationFlowTest extends TestCase
             'request_item_id' => $item->id,
             'witness_confirmed' => true,
         ]);
+    }
+
+    public function test_witness_is_not_required_when_the_clinical_setting_is_off(): void
+    {
+        ClinicalSettings::fake(['controlled_substances_witness_required' => false]);
+        [$item, $nurse, , $medication] = $this->seedInFacilityMarOrder(MedicationFrequency::STAT, 1);
+        $medication->update(['controlled_schedule' => ControlledSchedule::SCHEDULE_2]);
+
+        app(MedicationAdministrationService::class)->administer($item->fresh(), [
+            'status' => MedicationAdministrationStatus::GIVEN->value,
+            'witness_confirmed' => false,
+        ], null, $nurse);
+
+        $this->assertDatabaseHas('medication_administrations', ['request_item_id' => $item->id]);
+    }
+
+    public function test_allergy_match_blocks_administration_when_the_setting_is_on(): void
+    {
+        ClinicalSettings::fake(['mar_allergy_block_on_match' => true]);
+        [$item, $nurse] = $this->seedInFacilityMarOrder(MedicationFrequency::STAT, 1);
+        $item->service()->update(['name' => 'Amoxicillin 500mg']);
+        Allergy::factory()->create([
+            'patient_id' => $item->serviceRequest->patient_id,
+            'allergen' => 'Amoxicillin',
+            'is_active' => true,
+        ]);
+
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('documented allergy');
+        app(MedicationAdministrationService::class)->administer($item->fresh(), [
+            'status' => MedicationAdministrationStatus::GIVEN->value,
+        ], null, $nurse);
+    }
+
+    public function test_allergy_match_is_ignored_when_the_setting_is_off(): void
+    {
+        ClinicalSettings::fake(['mar_allergy_block_on_match' => false]);
+        [$item, $nurse] = $this->seedInFacilityMarOrder(MedicationFrequency::STAT, 1);
+        $item->service()->update(['name' => 'Amoxicillin 500mg']);
+        Allergy::factory()->create([
+            'patient_id' => $item->serviceRequest->patient_id,
+            'allergen' => 'Amoxicillin',
+            'is_active' => true,
+        ]);
+
+        app(MedicationAdministrationService::class)->administer($item->fresh(), [
+            'status' => MedicationAdministrationStatus::GIVEN->value,
+        ], null, $nurse);
+
+        $this->assertDatabaseHas('medication_administrations', ['request_item_id' => $item->id]);
     }
 
     public function test_omitted_dose_does_not_count_toward_completion(): void

@@ -91,7 +91,7 @@ class MedicationDoseScheduleService
         }
 
         $adminTime = Carbon::parse($administration->started_at);
-        $graceMinutes = (int) config('clinical.mar_schedule.grace_minutes', 30);
+        $graceMinutes = (int) app_settings()->clinicalValue('mar_schedule_grace_minutes', config('clinical.mar_schedule.grace_minutes', 30));
         $bestSlot = null;
         $bestDiff = PHP_INT_MAX;
 
@@ -149,7 +149,7 @@ class MedicationDoseScheduleService
             return [];
         }
 
-        $graceMinutes = (int) config('clinical.mar_reminders.grace_minutes', 30);
+        $graceMinutes = (int) app_settings()->clinicalValue('mar_reminders_grace_minutes', config('clinical.mar_reminders.grace_minutes', 30));
         $now = now();
         $results = [];
 
@@ -185,11 +185,11 @@ class MedicationDoseScheduleService
      */
     public function getDueSoonSlots(?Branch $branch = null): array
     {
-        if ($this->calculator === null || ! config('clinical.mar_reminders.enabled', true)) {
+        if ($this->calculator === null || ! app_settings()->clinicalValue('mar_reminders_enabled', config('clinical.mar_reminders.enabled', true))) {
             return [];
         }
 
-        $leadMinutes = (int) config('clinical.mar_reminders.lead_minutes', 15);
+        $leadMinutes = (int) app_settings()->clinicalValue('mar_reminders_lead_minutes', config('clinical.mar_reminders.lead_minutes', 15));
         $graceMinutes = (int) config('clinical.mar_reminders.grace_minutes', 30);
         $now = now();
         $results = [];

@@ -117,6 +117,12 @@ class MedicationAdministrationService
             throw new \InvalidArgumentException("{$item->service?->name}: omission/refusal reason is required.");
         }
 
+        if ($status === MedicationAdministrationStatus::GIVEN
+            && app_settings()->clinicalValue('mar_allergy_block_on_match', false)
+            && ($allergy = $this->matchingAllergyFor($item)) !== null) {
+            throw new \InvalidArgumentException("{$item->service?->name}: patient has a documented allergy to {$allergy->allergen}; administration is blocked by policy.");
+        }
+
         if ($this->policy->requiresWitness($detail, $item) && $status === MedicationAdministrationStatus::GIVEN) {
             if (! filter_var($data['witness_confirmed'] ?? false, FILTER_VALIDATE_BOOLEAN)) {
                 throw new \InvalidArgumentException("{$item->service?->name}: witness attestation is required for controlled medications.");
@@ -207,7 +213,7 @@ class MedicationAdministrationService
 
         $detail = $item->prescriptionDetail;
         $context = $detail?->administration_context;
-        $contextValue = is_object($context) && isset($context->value) ? $context->value : $context;
+        $contextValue = enum_value($context);
         if ($detail === null || $contextValue !== 'in_facility') {
             return;
         }
@@ -257,7 +263,7 @@ class MedicationAdministrationService
     {
         $detail = $item->prescriptionDetail;
         $context = $detail?->administration_context;
-        $contextValue = is_object($context) && isset($context->value) ? $context->value : $context;
+        $contextValue = enum_value($context);
         if (! $detail || $contextValue !== 'in_facility') {
             throw new \InvalidArgumentException('Only in-facility orders can be converted to take-home.');
         }
@@ -303,6 +309,40 @@ class MedicationAdministrationService
         $given = $this->policy->countGivenDoses($item);
 
         return max(0, $detail->total_administrations - $given);
+    }
+
+    /**
+     * First active patient allergy whose allergen matches the ordered
+     * medication (service name or linked Pharmacy medication name).
+     */
+    public function matchingAllergyFor(RequestItem $item): ?Allergy
+    {
+        $names = array_filter([
+            $item->service?->name,
+            $this->policy->medicationForService((string) $item->service_id)?->name,
+        ]);
+
+        if ($names === []) {
+            return null;
+        }
+
+        return $this->getPatientAllergiesForMar($item)->first(function (Allergy $allergy) use ($names): bool {
+            $allergen = mb_strtolower(trim((string) $allergy->allergen));
+
+            if ($allergen === '') {
+                return false;
+            }
+
+            foreach ($names as $name) {
+                $candidate = mb_strtolower(trim((string) $name));
+
+                if ($candidate !== '' && (str_contains($candidate, $allergen) || str_contains($allergen, $candidate))) {
+                    return true;
+                }
+            }
+
+            return false;
+        });
     }
 
     /**

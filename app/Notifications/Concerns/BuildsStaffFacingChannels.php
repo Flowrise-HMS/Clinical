@@ -9,7 +9,7 @@ trait BuildsStaffFacingChannels
      */
     protected function staffChannelsFor(object $notifiable, ?array $configured = null): array
     {
-        $configured ??= config('clinical.mar_reminders.channels', ['database']);
+        $configured ??= app_settings()->clinicalValue('mar_reminders_channels', config('clinical.mar_reminders.channels', ['database']));
         $channels = [];
 
         if (in_array('database', $configured, true)) {

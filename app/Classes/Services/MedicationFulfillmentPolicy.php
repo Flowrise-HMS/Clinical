@@ -234,11 +234,17 @@ class MedicationFulfillmentPolicy
         return $item->medicationAdministrations()->count();
     }
 
+    /**
+     * Controlled medications need a witness only while the Clinical setting
+     * "Witness required for controlled substances on MAR" is on.
+     */
     public function requiresWitness(PrescriptionDetail $detail, RequestItem $item): bool
     {
-        $medication = $this->medicationForService((string) $item->service_id);
+        if (! app_settings()->clinicalValue('controlled_substances_witness_required', true)) {
+            return false;
+        }
 
-        return $medication?->controlled_schedule !== null;
+        return $this->isControlledMedication($item);
     }
 
     public function isControlledMedication(RequestItem $item): bool
@@ -253,7 +259,7 @@ class MedicationFulfillmentPolicy
         return $item->loadMissing('prescriptionDetail')->prescriptionDetail;
     }
 
-    protected function medicationForService(string $serviceId): ?Medication
+    public function medicationForService(string $serviceId): ?Medication
     {
         if (! array_key_exists($serviceId, $this->medicationByServiceId)) {
             $this->medicationByServiceId[$serviceId] = Medication::query()

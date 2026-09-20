@@ -86,7 +86,7 @@ class MedicationAdministrationBoard extends Page implements HasTable
                         if ($next->isPast()) {
                             return 'overdue';
                         }
-                        if ($next->lte(now()->addMinutes((int) config('clinical.mar_reminders.lead_minutes', 15)))) {
+                        if ($next->lte(now()->addMinutes((int) app_settings()->clinicalValue('mar_reminders_lead_minutes', config('clinical.mar_reminders.lead_minutes', 15))))) {
                             return 'due_soon';
                         }
 
