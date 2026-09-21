@@ -222,6 +222,36 @@ class MedicationAdministrationFlowTest extends TestCase
         ], null, $nurse);
     }
 
+    public function test_allergy_match_uses_synonyms_and_brand_names(): void
+    {
+        ClinicalSettings::fake(['mar_allergy_block_on_match' => true]);
+        [$item, $nurse, , $medication] = $this->seedInFacilityMarOrder(MedicationFrequency::STAT, 1);
+        $medication->update(['generic_name' => 'acetaminophen', 'brand_name' => 'Panadol', 'strength' => '500 MG']);
+        $item->service()->update(['name' => 'acetaminophen 500 MG Oral Tablet [Panadol]']);
+        Allergy::factory()->create([
+            'patient_id' => $item->serviceRequest->patient_id,
+            'allergen' => 'Paracetamol',
+            'is_active' => true,
+        ]);
+
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('documented allergy');
+        app(MedicationAdministrationService::class)->administer($item->fresh(), [
+            'status' => MedicationAdministrationStatus::GIVEN->value,
+        ], null, $nurse);
+    }
+
+    public function test_allergen_terms_expand_synonyms(): void
+    {
+        $terms = MedicationAdministrationService::allergenTerms('Paracetamol');
+
+        $this->assertContains('paracetamol', $terms);
+        $this->assertContains('acetaminophen', $terms);
+        $this->assertContains('panadol', $terms);
+        $this->assertSame(['ceftriaxone'], MedicationAdministrationService::allergenTerms(' Ceftriaxone '));
+        $this->assertSame([], MedicationAdministrationService::allergenTerms('egg'));
+    }
+
     public function test_allergy_match_is_ignored_when_the_setting_is_off(): void
     {
         ClinicalSettings::fake(['mar_allergy_block_on_match' => false]);

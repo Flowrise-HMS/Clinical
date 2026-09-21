@@ -44,7 +44,7 @@ class AllergyForm
                                 ->required()
                                 ->label('Allergen Type'),
 
-                            TextInput::make('allergen_name')
+                            TextInput::make('allergen')
                                 ->required()
                                 ->maxLength(255)
                                 ->label('Allergen Name'),

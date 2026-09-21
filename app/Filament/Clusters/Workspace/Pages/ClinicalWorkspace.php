@@ -180,7 +180,7 @@ class ClinicalWorkspace extends Page implements HasSchemas
      */
     public array $allergyData = [
         'allergen_type' => null,
-        'allergen_name' => null,
+        'allergen' => null,
         'onset_age' => null,
         'severity' => AllergySeverity::MILD->value,
         'verification_status' => AllergyVerificationStatus::VERIFIED->value,
@@ -582,7 +582,7 @@ class ClinicalWorkspace extends Page implements HasSchemas
     {
         return [
             'allergen_type' => null,
-            'allergen_name' => null,
+            'allergen' => null,
             'onset_age' => null,
             'severity' => AllergySeverity::MILD->value,
             'verification_status' => AllergyVerificationStatus::VERIFIED->value,

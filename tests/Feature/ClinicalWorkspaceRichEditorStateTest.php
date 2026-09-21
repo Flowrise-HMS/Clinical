@@ -127,7 +127,7 @@ it('defines nested form state keys for Livewire entangle', function (): void {
         ])
         ->and($defaults['allergyData'])->toMatchArray([
             'allergen_type' => null,
-            'allergen_name' => null,
+            'allergen' => null,
             'severity' => AllergySeverity::MILD->value,
             'verification_status' => AllergyVerificationStatus::VERIFIED->value,
             'onset_type' => OnsetType::ACUTE->value,
@@ -180,7 +180,7 @@ it('restores nested form state keys when form states are reset', function (): vo
             'chief_complaint' => null,
         ])
         ->and($page->vitalsData)->toHaveKey('systolic_bp')
-        ->and($page->allergyData)->toHaveKey('allergen_name')
+        ->and($page->allergyData)->toHaveKey('allergen')
         ->and($page->serviceRequestData)->toHaveKey('priority')
         ->and($page->diagnosisFormData['diagnoses'][0])->toHaveKey('description')
         ->and($page->medicationData['items'][0])->toHaveKey('service_id')

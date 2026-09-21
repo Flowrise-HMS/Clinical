@@ -60,6 +60,27 @@ return [
 
     'mar_allergy' => [
         'block_on_match' => false,
+
+        /*
+         * Names that refer to the same substance. Each group is matched as a
+         * whole, so an allergy recorded as "paracetamol" blocks an order for
+         * "acetaminophen 500 MG [Panadol]". Extend per facility formulary.
+         */
+        'synonyms' => [
+            ['paracetamol', 'acetaminophen', 'panadol', 'tylenol'],
+            ['adrenaline', 'epinephrine'],
+            ['salbutamol', 'albuterol'],
+            ['glibenclamide', 'glyburide'],
+            ['frusemide', 'furosemide', 'lasix'],
+            ['pethidine', 'meperidine'],
+            ['lignocaine', 'lidocaine'],
+            ['amoxicillin', 'amoxycillin', 'augmentin', 'co-amoxiclav'],
+            ['penicillin', 'benzylpenicillin', 'phenoxymethylpenicillin', 'ampicillin', 'amoxicillin', 'amoxycillin', 'flucloxacillin', 'cloxacillin', 'piperacillin'],
+            ['sulphonamide', 'sulfonamide', 'sulfamethoxazole', 'sulphamethoxazole', 'co-trimoxazole', 'cotrimoxazole', 'septrin'],
+            ['aspirin', 'acetylsalicylic acid'],
+            ['ibuprofen', 'brufen'],
+            ['diclofenac', 'voltaren'],
+        ],
     ],
 
     'mar_schedule' => [

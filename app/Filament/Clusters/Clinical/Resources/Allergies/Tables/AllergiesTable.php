@@ -25,7 +25,7 @@ class AllergiesTable
                 TextColumn::make('allergen_type')
                     ->badge()
                     ->sortable(),
-                TextColumn::make('allergen_name')
+                TextColumn::make('allergen')
                     ->searchable(),
                 TextColumn::make('severity')
                     ->badge()

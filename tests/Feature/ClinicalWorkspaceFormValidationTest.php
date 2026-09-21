@@ -74,7 +74,7 @@ class ClinicalWorkspaceFormValidationTest extends TestCase
             $page->saveAllergy();
             $this->fail('An empty allergy should not be accepted.');
         } catch (ValidationException $exception) {
-            $this->assertArrayHasKey('allergyData.allergen_name', $exception->errors());
+            $this->assertArrayHasKey('allergyData.allergen', $exception->errors());
         }
 
         $this->assertSame(0, Allergy::query()->where('patient_id', $this->patient->id)->count());
@@ -88,7 +88,7 @@ class ClinicalWorkspaceFormValidationTest extends TestCase
         $page->selectPatient($this->patient->id);
         $page->allergyData = [
             'allergen_type' => AllergenType::MEDICATION->value,
-            'allergen_name' => 'Penicillin',
+            'allergen' => 'Penicillin',
             'severity' => AllergySeverity::SEVERE->value,
             'verification_status' => AllergyVerificationStatus::VERIFIED->value,
             'onset_type' => OnsetType::ACUTE->value,

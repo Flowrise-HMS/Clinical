@@ -267,7 +267,7 @@ it('offers the quick add-appointment action on the workspace home', function ():
         ->instance()
         ->getCachedHeaderActions();
 
-    $quickCreate = collect($actions)->first(fn ($action) => $action instanceof Action && $action->getName() === 'appointment.quick_create');
+    $quickCreate = collect($actions)->first(fn ($action) => $action instanceof Action && $action->getName() === 'appointment_quick_create');
 
     expect($quickCreate)->not->toBeNull()
         ->and($quickCreate->isVisible())->toBeTrue();
@@ -285,6 +285,30 @@ it('hides the quick add-appointment action once a patient is selected', function
         ->filter(fn ($action) => $action instanceof Action)
         ->keyBy(fn (Action $action) => $action->getName());
 
-    expect($actions->get('appointment.schedule')?->isVisible())->toBeTrue()
-        ->and($actions->get('appointment.quick_create')?->isVisible())->toBeFalse();
+    expect($actions->get('appointment_schedule')?->isVisible())->toBeTrue()
+        ->and($actions->get('appointment_quick_create')?->isVisible())->toBeFalse();
+});
+
+it('books an appointment from the quick add-appointment action on the workspace home', function (): void {
+    Permission::findOrCreate('Create Appointment', 'web');
+    $this->user->givePermissionTo('Create Appointment');
+    $this->actingAs($this->user);
+    $this->patient->forceFill(['mrn' => 'FR-QA-00001'])->save();
+
+    Livewire::test(ClinicalWorkspace::class)
+        ->assertSet('mode', 'home')
+        ->callAction('appointment_quick_create', data: [
+            'patient_id' => $this->patient->id,
+            'branch_id' => $this->branch->id,
+            'status' => AppointmentStatus::BOOKED->value,
+            'appointment_type' => 'outpatient',
+            'priority' => 5,
+            'start_at' => now()->addDay()->setTime(9, 0),
+            'end_at' => now()->addDay()->setTime(9, 30),
+            'reason_text' => 'UI QA quick booking',
+        ])
+        ->assertHasNoActionErrors()
+        ->assertNotified('Appointment scheduled');
+
+    expect(Appointment::query()->where('patient_id', $this->patient->id)->where('reason_text', 'UI QA quick booking')->exists())->toBeTrue();
 });

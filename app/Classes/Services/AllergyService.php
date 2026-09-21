@@ -15,7 +15,9 @@ class AllergyService
         return DB::transaction(function () use ($patient, $data) {
             return Allergy::create([
                 'patient_id' => $patient->id,
-                'allergen' => $data['allergen_name'],
+                // The resource form posts `allergen` (the column); older workspace
+                // state used `allergen_name`. Accept both.
+                'allergen' => $data['allergen'] ?? $data['allergen_name'] ?? null,
                 'allergen_type' => isset($data['allergen_type'])
                     ? ($data['allergen_type'])
                     : null,

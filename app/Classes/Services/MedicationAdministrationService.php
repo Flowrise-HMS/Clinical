@@ -317,32 +317,66 @@ class MedicationAdministrationService
      */
     public function matchingAllergyFor(RequestItem $item): ?Allergy
     {
-        $names = array_filter([
-            $item->service?->name,
-            $this->policy->medicationForService((string) $item->service_id)?->name,
-        ]);
+        $medication = $this->policy->medicationForService((string) $item->service_id);
 
-        if ($names === []) {
+        $names = collect([
+            $item->service?->name,
+            $medication?->generic_name,
+            $medication?->brand_name,
+            $medication?->displayName(),
+        ])
+            ->map(fn (mixed $name): string => mb_strtolower(trim((string) $name)))
+            ->filter()
+            ->unique()
+            ->values();
+
+        if ($names->isEmpty()) {
             return null;
         }
 
         return $this->getPatientAllergiesForMar($item)->first(function (Allergy $allergy) use ($names): bool {
-            $allergen = mb_strtolower(trim((string) $allergy->allergen));
-
-            if ($allergen === '') {
-                return false;
-            }
-
-            foreach ($names as $name) {
-                $candidate = mb_strtolower(trim((string) $name));
-
-                if ($candidate !== '' && (str_contains($candidate, $allergen) || str_contains($allergen, $candidate))) {
-                    return true;
+            foreach (self::allergenTerms((string) $allergy->allergen) as $term) {
+                foreach ($names as $name) {
+                    if (str_contains($name, $term) || str_contains($term, $name)) {
+                        return true;
+                    }
                 }
             }
 
             return false;
         });
+    }
+
+    /**
+     * The recorded allergen plus every synonym it belongs to (see
+     * config clinical.mar_allergy.synonyms), lowercase, ignoring very short
+     * fragments that would match almost anything.
+     *
+     * @return list<string>
+     */
+    public static function allergenTerms(string $allergen): array
+    {
+        $allergen = mb_strtolower(trim($allergen));
+
+        if ($allergen === '') {
+            return [];
+        }
+
+        $terms = [$allergen];
+
+        foreach ((array) config('clinical.mar_allergy.synonyms', []) as $group) {
+            $group = array_map(fn (string $name): string => mb_strtolower(trim($name)), (array) $group);
+
+            foreach ($group as $name) {
+                if ($name === $allergen || str_contains($allergen, $name)) {
+                    $terms = [...$terms, ...$group];
+
+                    break;
+                }
+            }
+        }
+
+        return array_values(array_filter(array_unique($terms), fn (string $term): bool => mb_strlen($term) >= 4));
     }
 
     /**

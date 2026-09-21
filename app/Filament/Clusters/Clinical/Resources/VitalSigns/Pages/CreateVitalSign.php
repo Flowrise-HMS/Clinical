@@ -8,4 +8,16 @@ use Modules\Clinical\Filament\Clusters\Clinical\Resources\VitalSigns\VitalSignRe
 class CreateVitalSign extends CreateRecord
 {
     protected static string $resource = VitalSignResource::class;
+
+    /**
+     * @param  array<string, mixed>  $data
+     * @return array<string, mixed>
+     */
+    protected function mutateFormDataBeforeCreate(array $data): array
+    {
+        $data['recorded_by'] ??= auth()->id();
+        $data['recorded_at'] ??= now();
+
+        return $data;
+    }
 }

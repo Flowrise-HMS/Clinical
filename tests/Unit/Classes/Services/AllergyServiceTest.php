@@ -31,7 +31,7 @@ class AllergyServiceTest extends TestCase
         $patient = Patient::factory()->create();
 
         $allergy = $this->service->record($patient, [
-            'allergen_name' => 'Penicillin',
+            'allergen' => 'Penicillin',
             'allergen_type' => AllergenType::MEDICATION->value,
             'reaction' => 'Rash',
             'severity' => AllergySeverity::MODERATE->value,
@@ -49,7 +49,7 @@ class AllergyServiceTest extends TestCase
         $patient = Patient::factory()->create();
 
         $this->service->record($patient, [
-            'allergen_name' => 'Peanuts',
+            'allergen' => 'Peanuts',
             'allergen_type' => AllergenType::FOOD->value,
             'reaction' => 'Hives',
             'severity' => AllergySeverity::MILD->value,
@@ -57,7 +57,7 @@ class AllergyServiceTest extends TestCase
         ]);
 
         $inactive = $this->service->record($patient, [
-            'allergen_name' => 'Latex',
+            'allergen' => 'Latex',
             'allergen_type' => AllergenType::ENVIRONMENTAL->value,
             'reaction' => 'Itching',
             'severity' => AllergySeverity::MILD->value,

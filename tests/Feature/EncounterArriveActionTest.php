@@ -11,6 +11,7 @@ use Modules\Appointment\Models\Appointment;
 use Modules\Clinical\Classes\Actions\EncounterActions;
 use Modules\Clinical\Classes\Services\EncounterService;
 use Modules\Clinical\Enums\EncounterStatus;
+use Modules\Clinical\Filament\Clusters\Clinical\Resources\Encounters\Pages\CreateEncounter;
 use Modules\Clinical\Filament\Clusters\Clinical\Resources\Encounters\Pages\EditEncounter;
 use Modules\Clinical\Filament\Clusters\Clinical\Resources\Encounters\Schemas\EncounterForm;
 use Modules\Clinical\Filament\Widgets\WorkspaceTodayAppointmentsWidget;
@@ -100,6 +101,27 @@ class EncounterArriveActionTest extends TestCase
 
         $this->assertSame(AppointmentStatus::ARRIVED, $appointment->fresh()->status);
         $this->assertSame(EncounterStatus::ARRIVED, $encounter->fresh()->status);
+    }
+
+    public function test_encounters_list_create_page_stamps_the_creator(): void
+    {
+        Livewire::test(CreateEncounter::class)
+            ->fillForm([
+                'patient_id' => $this->patient->id,
+                'branch_id' => $this->branch->id,
+                'type' => 'outpatient',
+                'priority' => 'routine',
+                'status' => EncounterStatus::PLANNED->value,
+                'coverage_type' => 'none',
+            ])
+            ->call('create')
+            ->assertHasNoFormErrors();
+
+        $encounter = Encounter::query()->where('patient_id', $this->patient->id)->latest('created_at')->first();
+
+        $this->assertNotNull($encounter);
+        $this->assertSame($this->user->id, $encounter->created_by);
+        $this->assertSame(EncounterStatus::PLANNED, $encounter->status);
     }
 
     public function test_arrive_refuses_encounters_that_are_not_planned(): void
