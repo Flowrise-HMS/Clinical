@@ -5,39 +5,16 @@ namespace Modules\Clinical\Notifications\Concerns;
 use Modules\Clinical\Enums\ParticipantRole;
 use Modules\Clinical\Enums\ParticipantStatus;
 use Modules\Clinical\Models\Encounter;
-use Modules\Core\Notifications\Concerns\RespectsNotificationSettings;
-use Modules\Core\Support\AppSettings;
+use Modules\Core\Notifications\Concerns\ResolvesNotificationChannels;
 
 /**
  * Shared plumbing for the patient-facing admission/transfer/discharge/visit
- * messages: channel resolution against the notification settings and a few
- * encounter presenters.
+ * messages: channel resolution (Core's ResolvesNotificationChannels against the
+ * notification settings) and a few encounter presenters.
  */
 trait PatientFacingAdtNotification
 {
-    use BuildsPatientFacingChannels, RespectsNotificationSettings;
-
-    /**
-     * @return array<int, string>
-     */
-    protected function settingsChannels(object $notifiable, string $mailKey, string $smsKey): array
-    {
-        $channels = $this->channelsFor($notifiable);
-
-        try {
-            $settings = app(AppSettings::class)->notifications();
-            $billing = app(AppSettings::class)->billing();
-
-            return $this->applyNotificationSettings(
-                $channels,
-                (bool) ($settings->{$mailKey} ?? true),
-                (bool) ($settings->{$smsKey} ?? true),
-                (bool) $billing->sms_enabled,
-            );
-        } catch (\Throwable) {
-            return $channels;
-        }
-    }
+    use ResolvesNotificationChannels;
 
     protected function branchName(Encounter $encounter): string
     {

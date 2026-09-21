@@ -4,18 +4,22 @@ namespace Modules\Clinical\Notifications\Concerns;
 
 use Filament\Actions\Action;
 use Filament\Notifications\Notification as FilamentNotification;
+use Modules\Core\Notifications\Concerns\ResolvesNotificationChannels;
 
 /**
- * Staff-facing ADT notifications use the ADT channel list (not the MAR one)
+ * Staff-facing ADT notifications use the ADT channel setting (not the MAR one)
  * and render in the Filament bell through a Filament database payload.
  */
 trait StaffFacingAdtNotification
 {
-    use BuildsStaffFacingChannels;
+    use ResolvesNotificationChannels;
 
     public function via(object $notifiable): array
     {
-        return $this->staffChannelsFor($notifiable, (array) config('clinical.adt_notifications.channels', ['database', 'mail']));
+        return $this->configuredChannelsFor(
+            $notifiable,
+            (array) app_settings()->clinicalValue('adt_notifications_channels', config('clinical.adt_notifications.channels', ['database', 'mail'])),
+        );
     }
 
     /**

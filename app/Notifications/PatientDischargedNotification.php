@@ -2,6 +2,8 @@
 
 namespace Modules\Clinical\Notifications;
 
+use Illuminate\Bus\Queueable;
+use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Notifications\Notification;
 use Illuminate\Support\Carbon;
@@ -15,9 +17,9 @@ use Modules\Patient\Models\Patient;
  * disposition never messages the patient and reaches emergency contacts by
  * mail only, with wording that asks them to contact the facility.
  */
-class PatientDischargedNotification extends Notification
+class PatientDischargedNotification extends Notification implements ShouldQueue
 {
-    use PatientFacingAdtNotification;
+    use PatientFacingAdtNotification, Queueable;
 
     public function __construct(protected Encounter $encounter) {}
 

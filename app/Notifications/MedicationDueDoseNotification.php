@@ -8,11 +8,11 @@ use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Notifications\Notification;
 use Modules\Clinical\Models\RequestItem;
-use Modules\Clinical\Notifications\Concerns\BuildsStaffFacingChannels;
+use Modules\Core\Notifications\Concerns\ResolvesNotificationChannels;
 
 class MedicationDueDoseNotification extends Notification implements ShouldQueue
 {
-    use BuildsStaffFacingChannels, Queueable;
+    use Queueable, ResolvesNotificationChannels;
 
     public function __construct(
         protected RequestItem $requestItem,
@@ -23,7 +23,10 @@ class MedicationDueDoseNotification extends Notification implements ShouldQueue
 
     public function via(object $notifiable): array
     {
-        return $this->staffChannelsFor($notifiable);
+        return $this->configuredChannelsFor(
+            $notifiable,
+            (array) app_settings()->clinicalValue('mar_reminders_channels', config('clinical.mar_reminders.channels', ['database'])),
+        );
     }
 
     public function toMail(object $notifiable): MailMessage

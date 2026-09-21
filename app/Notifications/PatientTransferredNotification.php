@@ -2,6 +2,8 @@
 
 namespace Modules\Clinical\Notifications;
 
+use Illuminate\Bus\Queueable;
+use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Notifications\Notification;
 use Modules\Clinical\Models\Encounter;
@@ -11,9 +13,9 @@ use Modules\Clinical\Notifications\Concerns\PatientFacingAdtNotification;
 /**
  * Sent when an inpatient is moved to another ward or bed within the facility.
  */
-class PatientTransferredNotification extends Notification
+class PatientTransferredNotification extends Notification implements ShouldQueue
 {
-    use PatientFacingAdtNotification;
+    use PatientFacingAdtNotification, Queueable;
 
     public function __construct(protected Encounter $encounter, protected ?EncounterLocationEvent $event = null) {}
 

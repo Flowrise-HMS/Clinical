@@ -2,6 +2,8 @@
 
 namespace Modules\Clinical\Notifications;
 
+use Illuminate\Bus\Queueable;
+use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Notifications\Notification;
 use Modules\Clinical\Models\Encounter;
@@ -10,9 +12,9 @@ use Modules\Clinical\Notifications\Concerns\PatientFacingAdtNotification;
 /**
  * Sent when an outpatient (non-admission) visit starts.
  */
-class VisitStartedNotification extends Notification
+class VisitStartedNotification extends Notification implements ShouldQueue
 {
-    use PatientFacingAdtNotification;
+    use PatientFacingAdtNotification, Queueable;
 
     public function __construct(protected Encounter $encounter) {}
 

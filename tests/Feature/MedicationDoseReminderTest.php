@@ -14,6 +14,7 @@ use Modules\Clinical\Models\MedicationDoseReminderLog;
 use Modules\Clinical\Models\RequestItem;
 use Modules\Clinical\Models\ServiceRequest;
 use Modules\Clinical\Notifications\MedicationDueDoseNotification;
+use Modules\Clinical\Settings\ClinicalSettings;
 use Modules\Core\Models\Branch;
 use Modules\Core\Models\Service;
 use Modules\Patient\Models\Patient;
@@ -96,6 +97,21 @@ class MedicationDoseReminderTest extends TestCase
         $this->assertSame(1, MedicationDoseReminderLog::query()
             ->where('request_item_id', $item->id)
             ->count());
+    }
+
+    public function test_reminder_channels_come_from_the_clinical_setting(): void
+    {
+        $nurse = User::factory()->create(['email' => 'nurse@example.com']);
+        $notification = new MedicationDueDoseNotification(new RequestItem, 1, now(), 'due');
+
+        ClinicalSettings::fake(['mar_reminders_channels' => ['database', 'mail']]);
+        $this->assertSame(['database', 'mail'], $notification->via($nurse));
+
+        ClinicalSettings::fake(['mar_reminders_channels' => ['database', 'sms']]);
+        $this->assertSame(['database'], $notification->via($nurse));
+
+        ClinicalSettings::fake(['mar_reminders_channels' => ['mail']]);
+        $this->assertSame(['mail'], $notification->via($nurse));
     }
 
     protected function makePrescriptionDetail(MedicationFrequency $frequency, int $days): PrescriptionDetail

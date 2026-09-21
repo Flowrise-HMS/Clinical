@@ -58,6 +58,19 @@ class ManageClinicalSettings extends SettingsPage
                             ->options([
                                 'database' => __('In-app'),
                                 'mail' => __('Email'),
+                                'sms' => __('SMS'),
+                            ])
+                            ->columnSpanFull(),
+                    ]),
+                Section::make(__('Admission, transfer & discharge alerts'))
+                    ->description(__('How ward staff are told about admission requests, decisions and ward transfers.'))
+                    ->schema([
+                        CheckboxList::make('adt_notifications_channels')
+                            ->label(__('Staff alert channels'))
+                            ->options([
+                                'database' => __('In-app'),
+                                'mail' => __('Email'),
+                                'sms' => __('SMS'),
                             ])
                             ->columnSpanFull(),
                     ]),

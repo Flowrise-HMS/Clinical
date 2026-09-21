@@ -3,6 +3,7 @@
 namespace Modules\Clinical\Tests\Feature;
 
 use App\Models\User;
+use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Illuminate\Support\Facades\Notification;
 use Modules\Clinical\Classes\Services\AdtService;
@@ -12,7 +13,9 @@ use Modules\Clinical\Enums\EncounterPriority;
 use Modules\Clinical\Enums\EncounterStatus;
 use Modules\Clinical\Enums\EncounterType;
 use Modules\Clinical\Notifications\PatientAdmittedNotification;
+use Modules\Clinical\Notifications\PatientDischargedNotification;
 use Modules\Clinical\Notifications\PatientTransferredNotification;
+use Modules\Clinical\Notifications\VisitCompletedNotification;
 use Modules\Clinical\Notifications\VisitStartedNotification;
 use Modules\Core\Models\Branch;
 use Modules\Core\Models\Location;
@@ -166,5 +169,16 @@ class PatientAdmissionNotificationTest extends TestCase
         Notification::assertNotSentTo($this->contact, PatientAdmittedNotification::class);
 
         $this->assertSame([], (new PatientAdmittedNotification($this->patient->activeEncounter()->first()))->via($this->patient));
+    }
+
+    public function test_patient_facing_adt_notifications_are_queued(): void
+    {
+        app(AdtService::class)->admit($this->patient, $this->bedA->id);
+        $encounter = $this->patient->activeEncounter()->firstOrFail();
+
+        $this->assertInstanceOf(ShouldQueue::class, new PatientAdmittedNotification($encounter));
+        $this->assertInstanceOf(ShouldQueue::class, new PatientDischargedNotification($encounter));
+        $this->assertInstanceOf(ShouldQueue::class, new VisitStartedNotification($encounter));
+        $this->assertInstanceOf(ShouldQueue::class, new VisitCompletedNotification($encounter));
     }
 }

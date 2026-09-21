@@ -35,6 +35,13 @@ class ClinicalSettings extends Settings
     /** @var array<int, string> */
     public array $mar_reminders_channels = ['database', 'mail'];
 
+    /**
+     * Channels for staff-facing admission request / decision / ward transfer alerts.
+     *
+     * @var array<int, string>
+     */
+    public array $adt_notifications_channels = ['database', 'mail'];
+
     public string $default_encounter_type = 'outpatient';
 
     public string $default_encounter_class = 'routine';

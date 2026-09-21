@@ -2,6 +2,8 @@
 
 namespace Modules\Clinical\Notifications;
 
+use Illuminate\Bus\Queueable;
+use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Notifications\Notification;
 use Modules\Clinical\Models\Encounter;
@@ -11,9 +13,9 @@ use Modules\Clinical\Notifications\Concerns\PatientFacingAdtNotification;
  * Sent to the patient and their emergency contacts when the patient is
  * admitted to a ward bed (direct admission, accepted request, or transfer in).
  */
-class PatientAdmittedNotification extends Notification
+class PatientAdmittedNotification extends Notification implements ShouldQueue
 {
-    use PatientFacingAdtNotification;
+    use PatientFacingAdtNotification, Queueable;
 
     public function __construct(protected Encounter $encounter) {}
 
