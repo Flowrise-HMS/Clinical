@@ -11,6 +11,7 @@ use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\ViewField;
 use Filament\Notifications\Notification;
+use Filament\Support\Enums\Width;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Auth;
@@ -18,12 +19,13 @@ use Modules\Clinical\Classes\Services\AdtService;
 use Modules\Clinical\Classes\Services\BedAssignmentService;
 use Modules\Clinical\Classes\Services\DischargeReadinessService;
 use Modules\Clinical\Classes\Services\EncounterService;
+use Modules\Clinical\Classes\Services\TriageService;
 use Modules\Clinical\Enums\AdtDestinationType;
 use Modules\Clinical\Enums\DischargeDisposition;
-use Modules\Clinical\Enums\EncounterPriority;
 use Modules\Clinical\Enums\EncounterStatus;
 use Modules\Clinical\Enums\EncounterType;
 use Modules\Clinical\Exceptions\DischargeBlockedException;
+use Modules\Clinical\Filament\Clusters\Clinical\Resources\Encounters\Schemas\TriageForm;
 use Modules\Core\Models\Branch;
 use Modules\Core\Support\ModuleAvailability;
 use Modules\Core\Support\OptionalClass;
@@ -279,20 +281,35 @@ class EncounterActions
     public static function triage(Model $encounter): Action
     {
         return Action::make('triage')
-            ->label('Triage')
+            ->label(fn (): string => $encounter->latestTriage()->exists() ? __('Re-triage') : __('Triage'))
             ->icon('heroicon-m-clipboard-document-check')
             ->color('warning')
-            ->visible(fn () => $encounter->status === EncounterStatus::ARRIVED)
-            ->schema([
-                Select::make('priority')
-                    ->label('Priority')
-                    ->options(EncounterPriority::class)
-                    ->required(),
-            ])
-            ->action(fn (array $data) => app(EncounterService::class)->triage(
-                $encounter,
-                enum_from(EncounterPriority::class, $data['priority'])
-            ));
+            ->visible(fn () => self::isTriageVisible($encounter))
+            ->modalHeading(__('SATS triage'))
+            ->modalWidth(Width::FiveExtraLarge)
+            ->schema(TriageForm::schema(fn (): string => TriageService::ageBandFor($encounter->patient)->value))
+            ->fillForm(fn (): array => app(TriageService::class)->prefillFor($encounter->patient, $encounter))
+            ->action(function (array $data) use ($encounter): void {
+                $assessment = app(TriageService::class)->assess($encounter, TriageForm::forService($data));
+
+                Notification::make()
+                    ->title(__('Triaged :category', ['category' => $assessment->final_category->shortLabel()]))
+                    ->body(__('TEWS :score. :target', [
+                        'score' => $assessment->tews_score,
+                        'target' => $assessment->final_category->getDescription(),
+                    ]))
+                    ->success()
+                    ->send();
+            });
+    }
+
+    public static function isTriageVisible(Model $encounter): bool
+    {
+        return in_array($encounter->status, [
+            EncounterStatus::ARRIVED,
+            EncounterStatus::TRIAGED,
+            EncounterStatus::IN_PROGRESS,
+        ], true) && ! $encounter->isInpatient();
     }
 
     public static function isPassVisible(Model $encounter): bool

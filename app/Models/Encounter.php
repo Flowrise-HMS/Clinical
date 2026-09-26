@@ -198,6 +198,19 @@ class Encounter extends BaseModel implements HasMedia, ProvidesClientIdentity
         return $this->hasMany(EncounterParticipant::class);
     }
 
+    public function triageAssessments(): HasMany
+    {
+        return $this->hasMany(TriageAssessment::class)->latest('triaged_at');
+    }
+
+    /**
+     * The assessment that currently decides the encounter's triage priority.
+     */
+    public function latestTriage(): HasOne
+    {
+        return $this->hasOne(TriageAssessment::class)->latestOfMany('triaged_at');
+    }
+
     public function vitalSigns(): HasMany
     {
         return $this->hasMany(VitalSign::class, 'encounter_id');

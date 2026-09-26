@@ -8,6 +8,7 @@ return [
         'manage_bed_status' => 'Manage Bed Status',
         'sign_discharge_summary' => 'Sign Discharge Summary',
         'print_discharge_summary' => 'Print Discharge Summary',
+        'override_triage_category' => 'Override Triage Category',
     ],
 
     /*

@@ -19,6 +19,7 @@ class ClinicalCustomPermissionSeeder extends Seeder
         'manage_bed_status' => ['super_admin', 'nurse', 'admissions_staff'],
         'sign_discharge_summary' => ['super_admin', 'doctor'],
         'print_discharge_summary' => ['super_admin', 'doctor', 'nurse'],
+        'override_triage_category' => ['super_admin', 'doctor'],
     ];
 
     public function run(): void

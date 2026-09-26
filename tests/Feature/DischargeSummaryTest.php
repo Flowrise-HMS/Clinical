@@ -185,6 +185,7 @@ class DischargeSummaryTest extends TestCase
 
         Livewire::actingAs($this->doctor)
             ->test(LongStayPatientsWidget::class)
-            ->assertSee($this->patient->full_name);
+            ->assertSee($this->patient->full_name)
+            ->assertSeeHtml('href="'.e(ClinicalWorkspace::getUrl(['patientId' => $this->patient->id])).'"');
     }
 }

@@ -15,6 +15,7 @@ use Illuminate\Support\Facades\Auth;
 use Modules\Clinical\Classes\Actions\EncounterActions;
 use Modules\Clinical\Classes\Services\AdtService;
 use Modules\Clinical\Enums\EncounterPriority;
+use Modules\Clinical\Filament\Clusters\Workspace\Pages\ClinicalWorkspace;
 use Modules\Clinical\Models\AdmissionRequest;
 use Modules\Clinical\Policies\EncounterPolicy;
 use Modules\Core\Classes\Services\BranchService;
@@ -79,10 +80,7 @@ class PendingAdmissionsWidget extends BaseTableWidget
         return [
             ClientIdentityColumn::make(label: __('Patient'))
                 ->placeholder(__('Unknown patient'))
-                ->action(
-                    Action::make('openPatient')
-                        ->action(fn (AdmissionRequest $record) => $this->dispatch('select-patient', patientId: $record->patient_id))
-                ),
+                ->url(fn (AdmissionRequest $record): string => ClinicalWorkspace::getUrl(['patientId' => $record->patient_id])),
             TextColumn::make('encounter.encounter_number')
                 ->label(__('Encounter'))
                 ->searchable()

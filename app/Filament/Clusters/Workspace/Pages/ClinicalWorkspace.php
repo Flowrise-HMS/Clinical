@@ -35,6 +35,7 @@ use Modules\Clinical\Classes\Services\EncounterService;
 use Modules\Clinical\Classes\Services\FulfillmentService;
 use Modules\Clinical\Classes\Services\NhisClaimCodeGateway;
 use Modules\Clinical\Classes\Services\ServiceRequestService;
+use Modules\Clinical\Classes\Services\TriageService;
 use Modules\Clinical\Classes\Services\VitalSignService;
 use Modules\Clinical\Enums\AdtDestinationType;
 use Modules\Clinical\Enums\AllergySeverity;
@@ -49,10 +50,12 @@ use Modules\Clinical\Enums\NoteStatus;
 use Modules\Clinical\Enums\NoteType;
 use Modules\Clinical\Enums\OnsetType;
 use Modules\Clinical\Enums\RequestPriority;
+use Modules\Clinical\Enums\TriageDisposition;
 use Modules\Clinical\Exceptions\DischargeBlockedException;
 use Modules\Clinical\Filament\Clusters\Clinical\Resources\Allergies\Schemas\AllergyForm;
 use Modules\Clinical\Filament\Clusters\Clinical\Resources\ClinicalNotes\Schemas\ClinicalNoteForm;
 use Modules\Clinical\Filament\Clusters\Clinical\Resources\EncounterDiagnoses\Schemas\EncounterDiagnosisForm;
+use Modules\Clinical\Filament\Clusters\Clinical\Resources\Encounters\Schemas\TriageForm;
 use Modules\Clinical\Filament\Clusters\Clinical\Resources\ServiceRequests\Schemas\ServiceRequestForm;
 use Modules\Clinical\Filament\Clusters\Clinical\Resources\VitalSigns\Schemas\VitalSignForm;
 use Modules\Clinical\Filament\Clusters\Workspace\Concerns\ManagesWorkspacePatient;
@@ -65,12 +68,14 @@ use Modules\Clinical\Filament\Widgets\MyTasksWidget;
 use Modules\Clinical\Filament\Widgets\PatientVitalsHistoryWidget;
 use Modules\Clinical\Filament\Widgets\PendingAdmissionsWidget;
 use Modules\Clinical\Filament\Widgets\PendingFulfillmentsWidget;
+use Modules\Clinical\Filament\Widgets\TriageQueueWidget;
 use Modules\Clinical\Filament\Widgets\WorkspaceTodayAppointmentsWidget;
 use Modules\Clinical\Models\AdmissionRequest;
 use Modules\Clinical\Models\DischargeSummary;
 use Modules\Clinical\Models\Encounter;
 use Modules\Clinical\Models\EncounterDiagnosis;
 use Modules\Clinical\Models\RequestItem;
+use Modules\Clinical\Models\TriageAssessment;
 use Modules\Clinical\Policies\ClinicalNotePolicy;
 use Modules\Clinical\Policies\EncounterDiagnosisPolicy;
 use Modules\Clinical\Policies\EncounterPolicy;
@@ -197,6 +202,13 @@ class ClinicalWorkspace extends Page implements HasSchemas
     public array $consultationData = [
         'notes' => null,
     ];
+
+    /**
+     * SATS triage form state (see TriageForm).
+     *
+     * @var array<string, mixed>
+     */
+    public array $triageData = [];
 
     /**
      * @var array{items: list<array<string, mixed>>}
@@ -364,6 +376,7 @@ class ClinicalWorkspace extends Page implements HasSchemas
             $this->setDefaultTab();
         }
 
+        $this->triageData = $this->defaultTriageData();
         $this->searchTerm = '';
         $this->searchResults = [];
         $this->registerFormData = $this->defaultRegistrationFormData();
@@ -713,13 +726,17 @@ class ClinicalWorkspace extends Page implements HasSchemas
 
         $encounter->loadMissing(['bed', 'location']);
 
+        // Ward, bed and length of stay describe a current stay: a finished visit, or an
+        // outpatient visit that was never admitted, must not read as "Admitted for ...".
+        $isOpen = (bool) $encounter->status?->isActive();
+
         return [
             'type' => $encounter->type?->getLabel(),
             'status' => $encounter->status?->getLabel(),
             'status_color' => $encounter->status?->getColor() ?? 'gray',
-            'ward' => $encounter->location?->name,
-            'bed' => $encounter->bed?->name,
-            'los' => $encounter->duration,
+            'ward' => $isOpen ? $encounter->location?->name : null,
+            'bed' => $isOpen ? $encounter->bed?->name : null,
+            'los' => $isOpen && $encounter->isInpatient() ? $encounter->duration : null,
             'admission_pending' => $encounter->hasPendingAdmissionRequest(),
             'on_pass' => $encounter->status === EncounterStatus::ON_LEAVE,
             'expected_discharge' => $encounter->expected_discharge_at?->format('D j M'),
@@ -802,6 +819,7 @@ class ClinicalWorkspace extends Page implements HasSchemas
         }
 
         return [
+            TriageQueueWidget::class,
             CriticalPatientsWidget::class,
             LongStayPatientsWidget::class,
             MyTasksWidget::class,
@@ -872,6 +890,106 @@ class ClinicalWorkspace extends Page implements HasSchemas
         return ModuleAvailability::appointmentEnabled();
     }
 
+    /**
+     * @return array<string, mixed>
+     */
+    protected function defaultTriageData(): array
+    {
+        return app(TriageService::class)->prefillFor($this->currentPatient, $this->getOpenEncounter());
+    }
+
+    /**
+     * Assessments for the open encounter, newest first, for the Triage tab history.
+     *
+     * @return \Illuminate\Support\Collection<int, TriageAssessment>
+     */
+    public function triageHistory(): \Illuminate\Support\Collection
+    {
+        $encounter = $this->getOpenEncounter();
+
+        if ($encounter === null) {
+            return collect();
+        }
+
+        return $encounter->triageAssessments()->with('triager')->limit(10)->get();
+    }
+
+    public function saveTriage(): void
+    {
+        $encounter = $this->getOpenEncounter();
+
+        if (! $this->currentPatient || ! $encounter) {
+            Notification::make()
+                ->title(__('No open encounter'))
+                ->body(__('Start an encounter for this patient before triaging.'))
+                ->warning()
+                ->send();
+
+            return;
+        }
+
+        if (! $this->canUpdateEncounter($encounter)) {
+            Notification::make()->title(__('You are not allowed to triage this encounter'))->danger()->send();
+
+            return;
+        }
+
+        $state = $this->getSchema('triageForm')?->getState() ?? [];
+
+        try {
+            $assessment = app(TriageService::class)->assess($encounter, TriageForm::forService($state));
+        } catch (\InvalidArgumentException $exception) {
+            Notification::make()->title(__('Triage not saved'))->body($exception->getMessage())->danger()->send();
+
+            return;
+        }
+
+        $this->triageData = $this->defaultTriageData();
+        $this->loadPatientContext();
+        $this->recacheHeaderActions();
+
+        Notification::make()
+            ->title(__('Triaged :category', ['category' => $assessment->final_category->shortLabel()]))
+            ->body(__('TEWS :score. :target', [
+                'score' => $assessment->tews_score,
+                'target' => $assessment->final_category->getDescription(),
+            ]))
+            ->success()
+            ->send();
+
+        $this->followTriageDisposition($assessment);
+    }
+
+    /**
+     * Takes the user straight to the next step chosen at triage.
+     */
+    protected function followTriageDisposition(TriageAssessment $assessment): void
+    {
+        $encounter = $this->getOpenEncounter();
+
+        match ($assessment->disposition) {
+            TriageDisposition::RESUSCITATION => $this->startEncounterForResuscitation($encounter),
+            TriageDisposition::REQUEST_ADMISSION => $this->canAccessAdtTab()
+                ? $this->activeTab = 'adt'
+                : null,
+            TriageDisposition::BOOK_APPOINTMENT => $this->hasAppointmentModule() && $this->getAction('appointment_schedule') !== null
+                ? $this->mountAction('appointment_schedule')
+                : null,
+            default => null,
+        };
+    }
+
+    protected function startEncounterForResuscitation(?Encounter $encounter): void
+    {
+        if ($encounter === null || ! $encounter->canTransitionTo(EncounterStatus::IN_PROGRESS)) {
+            return;
+        }
+
+        $this->encounterService->startEncounter($encounter);
+        $this->loadPatientContext();
+        $this->recacheHeaderActions();
+    }
+
     public function saveConsultation(): void
     {
         if (! $this->currentPatient || ! $this->currentEncounter) {
@@ -880,8 +998,7 @@ class ClinicalWorkspace extends Page implements HasSchemas
             return;
         }
 
-        $formName = $this->activeTab === 'triage' ? 'triageForm' : 'consultationForm';
-        $consultationForm = $this->getSchema($formName);
+        $consultationForm = $this->getSchema('consultationForm');
 
         if ($consultationForm === null) {
             return;
@@ -945,6 +1062,11 @@ class ClinicalWorkspace extends Page implements HasSchemas
 
         $this->vitalsData = $this->defaultVitalsData();
         $this->loadPatientContext();
+        // Vitals just taken become the starting point for triage.
+        $this->triageData = [
+            ...$this->triageData,
+            ...app(TriageService::class)->vitalsPrefillFor($this->currentPatient, $this->getOpenEncounter()),
+        ];
 
         if ($this->postRegistrationFlow) {
             $this->postRegistrationFlow = false;
@@ -2318,12 +2440,8 @@ class ClinicalWorkspace extends Page implements HasSchemas
                 ->schema(AllergyForm::quickElements())
                 ->statePath('allergyData'),
             'triageForm' => $this->makeSchema()
-                ->schema([
-                    RichEditor::make('notes')
-                        ->label('Triage Notes')
-                        ->placeholder('Triage observations...'),
-                ])
-                ->statePath('consultationData'),
+                ->schema(TriageForm::schema(fn (): string => TriageService::ageBandFor($this->currentPatient)->value))
+                ->statePath('triageData'),
             'consultationForm' => $this->makeSchema()
                 ->schema([
                     RichEditor::make('notes')
@@ -2364,6 +2482,10 @@ class ClinicalWorkspace extends Page implements HasSchemas
             'notes' => [
                 'label' => 'Notes',
                 'icon' => 'heroicon-m-document-text',
+            ],
+            'triage' => [
+                'label' => 'Triage',
+                'icon' => 'heroicon-m-clipboard-document',
             ],
             'diagnosis' => [
                 'label' => 'Diagnosis',

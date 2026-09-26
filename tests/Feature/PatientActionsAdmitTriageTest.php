@@ -97,9 +97,11 @@ it('hides triage when the encounter is not arrived', function (): void {
 });
 
 it('uses the encounter passed to withEncounter instead of only the active encounter', function (): void {
+    // Inpatients are never triaged, so this encounter tells us which one the action resolved.
     $active = Encounter::factory()
         ->forPatient($this->patient)
         ->create([
+            'type' => EncounterType::INPATIENT,
             'status' => EncounterStatus::IN_PROGRESS,
             'created_by' => $this->user->id,
             'created_at' => now()->subHour(),

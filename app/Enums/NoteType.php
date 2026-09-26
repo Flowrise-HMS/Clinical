@@ -21,6 +21,7 @@ enum NoteType: string implements HasColor, HasDescription, HasLabel
     case LAB = 'lab';
     case MEDICATION = 'medication';
     case REFERRAL = 'referral';
+    case TRIAGE = 'triage';
 
     public function getLabel(): string|Htmlable|null
     {
@@ -37,6 +38,7 @@ enum NoteType: string implements HasColor, HasDescription, HasLabel
             self::LAB => 'Lab Report',
             self::MEDICATION => 'Medication Note',
             self::REFERRAL => 'Referral Note',
+            self::TRIAGE => 'Triage Note',
         };
     }
 
@@ -55,6 +57,7 @@ enum NoteType: string implements HasColor, HasDescription, HasLabel
             self::LAB => 'primary',
             self::MEDICATION => 'warning',
             self::REFERRAL => 'gray',
+            self::TRIAGE => 'danger',
         };
     }
 
@@ -73,6 +76,7 @@ enum NoteType: string implements HasColor, HasDescription, HasLabel
             self::LAB => 'Laboratory result narrative or interpretation.',
             self::MEDICATION => 'Medication-related documentation or reconciliation.',
             self::REFERRAL => 'Referral request or response documentation.',
+            self::TRIAGE => 'SATS triage assessment and observations',
         };
     }
 

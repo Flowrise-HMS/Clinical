@@ -77,6 +77,7 @@ it('lists pending admission requests for the current branch', function (): void 
         ->assertCanSeeTableRecords([$request])
         ->assertCanNotSeeTableRecords([$foreign])
         ->assertSee('Ward 3')
+        ->assertSeeHtml('href="'.e(ClinicalWorkspace::getUrl(['patientId' => $this->patient->id])).'"')
         ->assertTableColumnExists('requestedWard.name')
         ->assertTableColumnExists('requester.name')
         ->assertTableFilterExists('requested_ward_id')

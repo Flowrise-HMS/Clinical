@@ -9,10 +9,12 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Number;
 use Illuminate\Support\Str;
 use Modules\Clinical\Enums\TaskStatus;
+use Modules\Clinical\Enums\TriageCategory;
 use Modules\Clinical\Models\ClinicalNote;
 use Modules\Clinical\Models\Encounter;
 use Modules\Clinical\Models\ServiceRequest;
 use Modules\Clinical\Models\Task;
+use Modules\Clinical\Models\TriageAssessment;
 use Modules\Clinical\Models\VitalSign;
 use Modules\Clinical\Policies\ServiceRequestPolicy;
 use Modules\Clinical\Policies\TaskPolicy;
@@ -438,8 +440,22 @@ class ClinicalWorkspaceService
 
         $query = Patient::query()
             ->whereHas('encounters', function ($q) {
-                $q->where('status', 'in_progress')
-                    ->where('type', 'emergency');
+                $q->where(function ($q): void {
+                    $q->where('status', 'in_progress')
+                        ->where('type', 'emergency');
+                })->orWhere(function ($q): void {
+                    // Waiting patients whose latest SATS triage is Red or Orange.
+                    $latestCategory = TriageAssessment::query()
+                        ->select('final_category')
+                        ->whereColumn('triage_assessments.encounter_id', 'encounters.id')
+                        ->orderByDesc('triaged_at')
+                        ->limit(1);
+
+                    $q->whereIn('status', ['arrived', 'triaged', 'in_progress'])
+                        ->where(fn ($q) => $q
+                            ->where($latestCategory, TriageCategory::RED->value)
+                            ->orWhere(clone $latestCategory, TriageCategory::ORANGE->value));
+                });
             })
             ->with(['latestEncounter', 'latestVitals']);
 
