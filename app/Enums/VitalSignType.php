@@ -15,6 +15,7 @@ enum VitalSignType: string implements HasColor, HasDescription, HasLabel
     case DISCHARGE = 'discharge';
     case PREOPERATIVE = 'preoperative';
     case POSTOPERATIVE = 'postoperative';
+    case TRIAGE = 'triage';
 
     public function getLabel(): string|Htmlable|null
     {
@@ -25,6 +26,7 @@ enum VitalSignType: string implements HasColor, HasDescription, HasLabel
             self::DISCHARGE => 'Discharge',
             self::PREOPERATIVE => 'Pre-operative',
             self::POSTOPERATIVE => 'Post-operative',
+            self::TRIAGE => 'Triage',
         };
     }
 
@@ -37,6 +39,7 @@ enum VitalSignType: string implements HasColor, HasDescription, HasLabel
             self::DISCHARGE => 'Discharge assessment',
             self::PREOPERATIVE => 'Before surgery assessment',
             self::POSTOPERATIVE => 'After surgery assessment',
+            self::TRIAGE => 'Vital signs taken at triage',
         };
     }
 
@@ -49,6 +52,7 @@ enum VitalSignType: string implements HasColor, HasDescription, HasLabel
             self::DISCHARGE => 'success',
             self::PREOPERATIVE => 'warning',
             self::POSTOPERATIVE => 'secondary',
+            self::TRIAGE => 'secondary',
         };
     }
 

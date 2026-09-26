@@ -9,6 +9,7 @@ use Filament\Schemas\Components\Section;
 use Filament\Schemas\Components\Utilities\Get;
 use Filament\Schemas\Components\Utilities\Set;
 use Filament\Schemas\Schema;
+use Modules\Clinical\Models\VitalSign;
 
 class VitalSignForm
 {
@@ -105,27 +106,41 @@ class VitalSignForm
                                 ->label('Weight')
                                 ->suffix('kg')
                                 ->numeric()
-                                ->step(0.1),
+                                ->step(0.1)
+                                ->minValue(0.3)
+                                ->maxValue(500)
+                                ->live(debounce: 400)
+                                ->afterStateUpdated(fn (Set $set, Get $get) => static::refreshCalculatedBmi($set, $get)),
 
                             TextInput::make('height')
                                 ->label('Height')
                                 ->suffix('cm')
+                                ->helperText('In centimetres (1.70 m = 170 cm).')
                                 ->numeric()
-                                ->live(debounce: 200)
-                                ->afterStateUpdated(function (Set $set, ?string $state, Get $get) {
-                                    $weight = $get('weight');
-                                    if ($state && $weight) {
-                                        $bmi = $weight / (($state / 100) ** 2);
-                                        $set('calculated_bmi', round($bmi, 1));
-                                    }
-                                }),
+                                ->step(0.1)
+                                ->minValue(20)
+                                ->maxValue(272)
+                                ->validationMessages(['min' => 'Enter the height in centimetres, not metres or feet.'])
+                                ->live(debounce: 400)
+                                ->afterStateUpdated(fn (Set $set, Get $get) => static::refreshCalculatedBmi($set, $get)),
                         ]),
 
                     TextInput::make('calculated_bmi')
                         ->label('BMI (calculated)')
+                        ->suffix('kg/m²')
+                        ->visible(fn (Get $get): bool => filled($get('weight')) && filled($get('height')))
+                        ->helperText(fn (Get $get): ?string => VitalSign::bmiCategoryFor(is_numeric($get('calculated_bmi')) ? (float) $get('calculated_bmi') : null))
                         ->numeric()
                         ->readOnly(),
                 ]),
         ];
+    }
+
+    /**
+     * Weight (kg) and height (cm) drive the read-only BMI; clearing either clears it.
+     */
+    protected static function refreshCalculatedBmi(Set $set, Get $get): void
+    {
+        $set('calculated_bmi', VitalSign::calculateBmi($get('weight'), $get('height')));
     }
 }

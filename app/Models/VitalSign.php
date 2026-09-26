@@ -73,14 +73,39 @@ class VitalSign extends BaseModel
 
     protected static function booted(): void
     {
+        // BMI is derived: recalculate whenever weight or height changes so a corrected
+        // measurement never leaves a stale BMI behind.
         static::saving(function (VitalSign $vitalSign) {
-            if (! $vitalSign->bmi) {
-                if ($vitalSign->weight && $vitalSign->height) {
-                    $heightInMeters = $vitalSign->height / 100;
-                    $vitalSign->bmi = round($vitalSign->weight / ($heightInMeters * $heightInMeters), 2);
-                }
+            if ($vitalSign->bmi === null || $vitalSign->isDirty(['weight', 'height'])) {
+                $vitalSign->bmi = self::calculateBmi($vitalSign->weight, $vitalSign->height);
             }
         });
+    }
+
+    /**
+     * Body mass index in kg/m² from weight in kilograms and height in centimetres
+     * (converted to metres), rounded to 2 decimals. Null when either value is missing.
+     */
+    public static function calculateBmi(mixed $weightKg, mixed $heightCm): ?float
+    {
+        if (! is_numeric($weightKg) || ! is_numeric($heightCm) || (float) $weightKg <= 0 || (float) $heightCm <= 0) {
+            return null;
+        }
+
+        $heightM = (float) $heightCm / 100;
+
+        return round((float) $weightKg / ($heightM * $heightM), 2);
+    }
+
+    public static function bmiCategoryFor(?float $bmi): ?string
+    {
+        return match (true) {
+            $bmi === null => null,
+            $bmi < 18.5 => 'Underweight',
+            $bmi < 25 => 'Normal',
+            $bmi < 30 => 'Overweight',
+            default => 'Obese',
+        };
     }
 
     protected static function newFactory(): Factory
@@ -148,16 +173,7 @@ class VitalSign extends BaseModel
 
     public function getBmiCategoryAttribute(): ?string
     {
-        if (! $this->bmi) {
-            return null;
-        }
-
-        return match (true) {
-            $this->bmi < 18.5 => 'Underweight',
-            $this->bmi < 25 => 'Normal',
-            $this->bmi < 30 => 'Overweight',
-            default => 'Obese',
-        };
+        return self::bmiCategoryFor($this->bmi !== null ? (float) $this->bmi : null);
     }
 
     public function isAbnormalBloodPressure(): bool

@@ -22,6 +22,7 @@ use Modules\Clinical\Enums\PatientPosition;
 use Modules\Clinical\Enums\SpO2Label;
 use Modules\Clinical\Enums\SpO2Parameter;
 use Modules\Clinical\Enums\VitalSignType;
+use Modules\Clinical\Models\VitalSign;
 
 class VitalSignsRelationManager extends RelationManager
 {
@@ -135,32 +136,31 @@ class VitalSignsRelationManager extends RelationManager
                                 TextInput::make('weight')
                                     ->label('Weight (kg)')
                                     ->numeric()
-                                    ->step(0.1),
+                                    ->step(0.1)
+                                    ->minValue(0.3)
+                                    ->maxValue(500)
+                                    ->live(onBlur: true),
 
                                 TextInput::make('height')
                                     ->label('Height (cm)')
                                     ->numeric()
-                                    ->step(0.1),
+                                    ->step(0.1)
+                                    ->minValue(20)
+                                    ->maxValue(272)
+                                    ->validationMessages(['min' => 'Enter the height in centimetres, not metres or feet.'])
+                                    ->live(onBlur: true),
 
                                 TextEntry::make('bmi_preview')
                                     ->label('BMI Preview')
+                                    ->visible(fn ($get): bool => filled($get('weight')) && filled($get('height')))
                                     ->state(function ($get) {
-                                        $weight = $get('weight');
-                                        $height = $get('height');
-                                        if ($weight && $height) {
-                                            $heightInMeters = $height / 100;
-                                            $bmi = round($weight / ($heightInMeters * $heightInMeters), 2);
-                                            $category = match (true) {
-                                                $bmi < 18.5 => 'Underweight',
-                                                $bmi < 25 => 'Normal',
-                                                $bmi < 30 => 'Overweight',
-                                                default => 'Obese',
-                                            };
+                                        $bmi = VitalSign::calculateBmi($get('weight'), $get('height'));
 
-                                            return "BMI: {$bmi} ({$category})";
+                                        if ($bmi === null) {
+                                            return 'BMI will be calculated automatically';
                                         }
 
-                                        return 'BMI will be calculated automatically';
+                                        return 'BMI: '.$bmi.' kg/m² ('.VitalSign::bmiCategoryFor($bmi).')';
                                     }),
                             ]),
                     ]),

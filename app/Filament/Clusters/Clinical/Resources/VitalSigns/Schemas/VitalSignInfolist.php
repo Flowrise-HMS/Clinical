@@ -31,7 +31,9 @@ class VitalSignInfolist
                     ->suffix('/min')
                     ->placeholder('-'),
                 TextEntry::make('bmi')
-                    ->suffix(fn ($record) => $record?->bmi_category)
+                    ->label('BMI')
+                    ->prefix('kg/m² ')
+                    ->suffix(fn ($record): string => $record?->bmi_category ? ' ('.$record->bmi_category.')' : '')
                     ->placeholder('-'),
 
             ]);
