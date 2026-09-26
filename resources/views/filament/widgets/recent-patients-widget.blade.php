@@ -5,8 +5,7 @@
             @if($patients->isNotEmpty())
                 <div class="space-y-2">
                     @foreach($patients as $patient)
-                        <div class="flex items-center gap-3 p-2 rounded-lg hover:bg-gray-50 cursor-pointer transition-colors"
-                             wire:click="$dispatch('select-patient', { patientId: '{{ $patient->id }}' })">
+                        <x-core::patient-link :href="\Modules\Clinical\Filament\Clusters\Workspace\Pages\ClinicalWorkspace::getUrl(['patientId' => $patient->id])" class="flex items-center gap-3 p-2 rounded-lg hover:bg-gray-50 transition-colors">
                             <div class="w-10 h-10 rounded-full
                                         @if($patient->gender?->value === 'male') bg-info-100
                                         @elseif($patient->gender?->value === 'female') bg-warning-100
@@ -30,7 +29,7 @@
                                             {{ $patient->latestEncounter->type?->value === 'emergency' ? 'bg-danger-500' : 'bg-success-500' }}">
                                 </div>
                             @endif
-                        </div>
+                        </x-core::patient-link>
                     @endforeach
                 </div>
             @else

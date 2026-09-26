@@ -13,13 +13,12 @@
             </p>
             <div class="space-y-2">
                 @foreach ($this->similarPatientsForRegistration as $similar)
-                    <button type="button" wire:click="selectPatient('{{ $similar['id'] }}')"
-                        class="w-full text-left flex items-center justify-between p-2 rounded-lg bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 hover:border-primary-300 transition-colors">
+                    <x-core::patient-link :href="$this::getUrl(['patientId' => $similar['id']])" class="w-full text-left flex items-center justify-between p-2 rounded-lg bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 hover:border-primary-300 transition-colors">
                         <span class="text-sm font-medium text-gray-900 dark:text-white">
                             {{ $similar['full_name'] ?? ($similar['first_name'] . ' ' . $similar['last_name']) }}
                         </span>
                         <span class="text-xs text-gray-500 font-mono">{{ $similar['mrn'] ?? '' }}</span>
-                    </button>
+                    </x-core::patient-link>
                 @endforeach
             </div>
             <x-filament::button wire:click="confirmRegisterDespiteDuplicates" color="warning" size="sm">

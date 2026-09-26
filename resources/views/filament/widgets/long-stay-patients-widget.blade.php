@@ -4,10 +4,7 @@
             @if ($encounters->isNotEmpty())
                 <div class="space-y-2">
                     @foreach ($encounters as $encounter)
-                        <div
-                            class="cursor-pointer rounded-lg border border-warning-200 p-3 transition-colors hover:bg-warning-100/50 dark:border-warning-500/30 dark:bg-white/5 dark:hover:bg-warning-500/20"
-                            wire:click="$dispatch('select-patient', { patientId: '{{ $encounter->patient_id }}' })"
-                        >
+                        <x-core::patient-link :href="\Modules\Clinical\Filament\Clusters\Workspace\Pages\ClinicalWorkspace::getUrl(['patientId' => $encounter->patient_id])" class="block rounded-lg border border-warning-200 p-3 transition-colors hover:bg-warning-100/50 dark:border-warning-500/30 dark:bg-white/5 dark:hover:bg-warning-500/20">
                             <div class="flex items-center gap-3">
                                 <div class="flex h-10 w-10 items-center justify-center rounded-full border border-warning-200 bg-warning-100 dark:border-warning-500/30 dark:bg-warning-500/20">
                                     <span class="text-sm font-bold tabular-nums text-warning-700 dark:text-warning-400">{{ $encounter->los_days ?? '—' }}d</span>
@@ -21,9 +18,9 @@
                                         @endif
                                     </p>
                                 </div>
-                                <x-heroicon-m-chevron-right class="h-4 w-4 text-warning-300 dark:text-warning-500/50" />
+                                <x-heroicon-m-chevron-right x-show="! opening" class="h-4 w-4 text-warning-300 dark:text-warning-500/50" />
                             </div>
-                        </div>
+                        </x-core::patient-link>
                     @endforeach
                 </div>
             @else

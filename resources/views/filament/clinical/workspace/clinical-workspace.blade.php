@@ -14,7 +14,7 @@
                         </x-slot>
                         <x-filament::input
                             type="search"
-                            wire:model.live="searchTerm"
+                            wire:model.live.debounce.300ms="searchTerm"
                             placeholder="Search patients by name, MRN, or phone..."
                             class="text-base py-3"
                         />
@@ -25,8 +25,9 @@
                         <div
                             class="absolute z-50 my-3 w-full bg-white dark:bg-gray-800 rounded-xl shadow-lg border border-gray-200 dark:border-gray-700 max-h-96 overflow-y-auto">
                             @foreach ($searchResults as $result)
-                                <button wire:click="selectPatient('{{ $result['id'] }}')"
-                                    class="w-full text-left px-4 py-3 hover:bg-gray-50 dark:hover:bg-gray-700/50 border-b border-gray-100 dark:border-gray-700 last:border-0 transition-colors">
+                                <x-core::patient-link :href="$this::getUrl(['patientId' => $result['id']])"
+                                    wire:key="search-result-{{ $result['id'] }}"
+                                    class="block w-full text-left px-4 py-3 hover:bg-gray-50 dark:hover:bg-gray-700/50 border-b border-gray-100 dark:border-gray-700 last:border-0 transition-colors">
                                     <div class="flex items-center gap-3">
                                         <div
                                             class="w-10 h-10 rounded-full bg-primary-100 dark:bg-primary-900/30 flex items-center justify-center text-primary-700 dark:text-primary-300 font-semibold text-sm shrink-0">
@@ -43,10 +44,10 @@
                                                 @endif
                                             </div>
                                         </div>
-                                        <x-filament::icon name="heroicon-m-chevron-right"
+                                        <x-filament::icon icon="heroicon-m-chevron-right" x-show="! opening"
                                             class="w-5 h-5 text-gray-400 shrink-0" />
                                     </div>
-                                </button>
+                                </x-core::patient-link>
                             @endforeach
                         </div>
                     @endif
@@ -69,7 +70,8 @@
                             <h3 class="text-sm font-medium text-gray-500 dark:text-gray-400 mb-2 px-1">Recent Patients</h3>
                             <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-2">
                                 @foreach ($recentPatients as $recent)
-                                    <button wire:click="selectPatient('{{ $recent->id }}')"
+                                    <x-core::patient-link :href="$this::getUrl(['patientId' => $recent->id])"
+                                        wire:key="recent-patient-{{ $recent->id }}"
                                         class="flex flex-col items-center p-3 rounded-xl bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 hover:border-primary-300 dark:hover:border-primary-600 hover:shadow-sm transition-all text-center">
                                         <div
                                             class="w-10 h-10 rounded-full bg-primary-100 dark:bg-primary-900/30 flex items-center justify-center text-primary-700 dark:text-primary-300 font-semibold text-sm mb-1.5">
@@ -78,7 +80,7 @@
                                         <span
                                             class="text-xs font-medium text-gray-700 dark:text-gray-300 truncate w-full">{{ $recent->full_name }}</span>
                                         <span class="text-xs text-gray-400 truncate w-full">{{ $recent->mrn }}</span>
-                                    </button>
+                                    </x-core::patient-link>
                                 @endforeach
                             </div>
                         </div>
@@ -136,7 +138,15 @@
                                 <span>{{ $currentPatient->age ?? '?' }} yrs</span>
                                 <span class="text-gray-300 dark:text-gray-600">|</span>
                                 <span>{{ $currentPatient->gender?->getLabel() ?? 'N/A' }}</span>
-                                @if ($currentEncounter)
+                                @if ($currentEncounter && ! $currentEncounter->status?->isActive())
+                                    <span class="text-gray-300 dark:text-gray-600 hidden sm:inline">|</span>
+                                    <span class="hidden sm:inline text-gray-400 dark:text-gray-500">
+                                        {{ __('Last visit: :type · :date', [
+                                            'type' => $currentEncounter->type?->getLabel() ?? __('Encounter'),
+                                            'date' => ($currentEncounter->discharged_at ?? $currentEncounter->updated_at)?->format('d M Y'),
+                                        ]) }}
+                                    </span>
+                                @elseif ($currentEncounter)
                                     @php $chip = $this->getEncounterStatusChip(); @endphp
                                     <span class="text-gray-300 dark:text-gray-600 hidden sm:inline">|</span>
                                     <span class="hidden sm:inline">{{ $chip['type'] ?? 'Encounter' }}</span>
@@ -213,7 +223,7 @@
                                             ? 'bg-white dark:bg-gray-800 text-primary-600 dark:text-primary-400 shadow-sm border border-gray-200/40 dark:border-gray-700/40 font-semibold transform scale-[1.02]'
                                             : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 hover:bg-white/40 dark:hover:bg-gray-800/40' }}">
                                     @isset($tab['icon'])
-                                        <x-filament::icon name="{{ $tab['icon'] }}" class="w-4 h-4" />
+                                        <x-filament::icon :icon="$tab['icon']" class="w-4 h-4" />
                                     @endisset
                                     <span>{{ $tab['label'] }}</span>
                                 </button>
@@ -271,21 +281,7 @@
                                 </div>
                             </div>
                         @elseif($activeTab === 'triage')
-                            <div class="space-y-4">
-                                <h3 class="text-lg font-semibold text-gray-900 dark:text-white">Triage</h3>
-                                <p class="text-sm text-gray-500 dark:text-gray-400">Triage assessment and notes.</p>
-                                <div>
-                                    <div>
-                                        {{ $this->triageForm }}
-                                    </div>
-                                </div>
-                                <div class="flex justify-end pt-2">
-                                    <x-filament::button wire:click="saveConsultation" color="primary"
-                                        icon="heroicon-m-check">
-                                        Save Triage Notes
-                                    </x-filament::button>
-                                </div>
-                            </div>
+                            @include('clinical::clinical.workspace.partials.triage-tab')
                         @elseif($activeTab === 'history')
                             @include('clinical::clinical.workspace.history-tab')
                         @endif
@@ -304,7 +300,7 @@
                                             ? 'bg-white dark:bg-gray-800 text-primary-600 dark:text-primary-400 shadow-sm border border-gray-200/40 dark:border-gray-700/40 font-semibold transform scale-[1.02]'
                                             : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 hover:bg-white/40 dark:hover:bg-gray-800/40' }}">
                                     @isset($tab['icon'])
-                                        <x-filament::icon name="{{ $tab['icon'] }}" class="w-4 h-4" />
+                                        <x-filament::icon :icon="$tab['icon']" class="w-4 h-4" />
                                     @endisset
                                     <span>{{ $tab['label'] }}</span>
                                 </button>
@@ -432,7 +428,7 @@
                                                 ? 'bg-white dark:bg-gray-800 text-primary-600 dark:text-primary-400 shadow-sm border border-gray-200/40 dark:border-gray-700/40 font-semibold transform scale-[1.02]'
                                                 : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 hover:bg-white/40 dark:hover:bg-gray-800/40' }}">
                                         @isset($tab['icon'])
-                                            <x-filament::icon name="{{ $tab['icon'] }}" class="w-4 h-4" />
+                                            <x-filament::icon :icon="$tab['icon']" class="w-4 h-4" />
                                         @endisset
                                         <span>{{ $tab['label'] }}</span>
                                     </button>
@@ -450,6 +446,8 @@
                                 @include('clinical::clinical.workspace.partials.adt-tab')
                             @elseif ($activeTab === 'notes')
                                 @include('clinical::clinical.workspace.partials.notes-tab')
+                            @elseif ($activeTab === 'triage')
+                                @include('clinical::clinical.workspace.partials.triage-tab')
                             @elseif ($activeTab === 'diagnosis')
                                 @include('clinical::clinical.workspace.partials.diagnosis-tab')
                             @elseif ($activeTab === 'vitals')

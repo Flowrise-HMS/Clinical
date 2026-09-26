@@ -8,6 +8,7 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\Auth;
 use Modules\Clinical\Enums\CarePlanStatus;
 use Modules\Clinical\Filament\Clusters\Clinical\Resources\CarePlans\Tables\CarePlansTable;
+use Modules\Clinical\Filament\Clusters\Workspace\Pages\CarePlanWorkspace;
 use Modules\Clinical\Models\CarePlan;
 use Modules\Core\Filament\Support\ClientIdentityColumn;
 
@@ -43,10 +44,7 @@ class CarePlanWardTableWidget extends BaseTableWidget
         return [
             ClientIdentityColumn::make(label: __('Patient'))
                 ->placeholder('Unknown patient')
-                ->action(
-                    Action::make('openPatient')
-                        ->action(fn (CarePlan $record) => $this->dispatch('select-patient', patientId: $record->patient_id))
-                ),
+                ->url(fn (CarePlan $record): string => CarePlanWorkspace::getUrl(['patientId' => $record->patient_id])),
             ...CarePlansTable::wardWorkspaceColumns(),
         ];
     }

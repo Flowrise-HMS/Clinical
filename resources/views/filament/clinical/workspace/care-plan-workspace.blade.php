@@ -9,7 +9,7 @@
 
                     <x-filament::input
                         type="search"
-                        wire:model.live="searchTerm"
+                        wire:model.live.debounce.300ms="searchTerm"
                         placeholder="Search patients by name, MRN, or phone..."
                     />
                 </x-filament::input.wrapper>
@@ -17,19 +17,15 @@
                 @if (mb_strlen($searchTerm) >= 2)
                     <div class="mt-3 divide-y divide-gray-100 rounded-lg border border-gray-200 dark:divide-gray-700 dark:border-gray-700">
                         @forelse ($searchResults as $result)
-                            <button
-                                type="button"
-                                wire:click="selectPatient('{{ $result['id'] }}')"
-                                class="flex w-full items-center justify-between gap-4 px-4 py-3 text-left hover:bg-gray-50 dark:hover:bg-gray-700/50"
-                            >
+                            <x-core::patient-link :href="$this::getUrl(['patientId' => $result['id']])" class="flex w-full items-center justify-between gap-4 px-4 py-3 text-left hover:bg-gray-50 dark:hover:bg-gray-700/50">
                                 <span>
                                     <span class="block font-medium text-gray-950 dark:text-white">
                                         {{ $result['full_name'] ?? trim(($result['first_name'] ?? '').' '.($result['last_name'] ?? '')) }}
                                     </span>
                                     <span class="block text-sm text-gray-500 dark:text-gray-400">MRN: {{ $result['mrn'] ?? '—' }}</span>
                                 </span>
-                                <x-filament::icon icon="heroicon-m-chevron-right" class="h-5 w-5 text-gray-400" />
-                            </button>
+                                <x-filament::icon icon="heroicon-m-chevron-right" x-show="! opening" class="h-5 w-5 text-gray-400" />
+                            </x-core::patient-link>
                         @empty
                             <p class="px-4 py-6 text-center text-sm text-gray-500 dark:text-gray-400">No patients found.</p>
                         @endforelse

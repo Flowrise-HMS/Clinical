@@ -5,9 +5,8 @@
             @if($criticalPatients->isNotEmpty())
                 <div class="space-y-2">
                     @foreach($criticalPatients as $patient)
-                        <div class="rounded-lg border border-danger-200 dark:border-danger-500/30 dark:bg-white/5 p-3
-                                    hover:bg-danger-100/50 dark:hover:bg-danger-500/20 cursor-pointer transition-colors shadow-sm"
-                            wire:click="$dispatch('select-patient', { patientId: '{{ $patient->id }}' })">
+                        <x-core::patient-link :href="\Modules\Clinical\Filament\Clusters\Workspace\Pages\ClinicalWorkspace::getUrl(['patientId' => $patient->id])" class="block rounded-lg border border-danger-200 dark:border-danger-500/30 dark:bg-white/5 p-3
+                                    hover:bg-danger-100/50 dark:hover:bg-danger-500/20 transition-colors shadow-sm">
 
                             <div class="flex items-center gap-3">
                                 <div class="w-10 h-10 rounded-full bg-danger-100 dark:bg-danger-500/20 flex items-center justify-center border border-danger-200 dark:border-danger-500/30">
@@ -25,9 +24,9 @@
                                     </p>
                                 </div>
 
-                                <x-heroicon-m-chevron-right class="w-4 h-4 text-danger-300 dark:text-danger-500/50" />
+                                <x-heroicon-m-chevron-right x-show="! opening" class="w-4 h-4 text-danger-300 dark:text-danger-500/50" />
                             </div>
-                        </div>
+                        </x-core::patient-link>
                     @endforeach
                 </div>
             @else

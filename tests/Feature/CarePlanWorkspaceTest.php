@@ -170,6 +170,7 @@ it('renders ward care plans with a native Filament table', function (): void {
         ->assertOk()
         ->assertCanSeeTableRecords([$carePlan])
         ->assertSee($this->patient->full_name)
+        ->assertSeeHtml('href="'.e(CarePlanWorkspace::getUrl(['patientId' => $this->patient->id])).'"')
         ->assertSee('Resume');
 });
 
