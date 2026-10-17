@@ -4,8 +4,7 @@
             {{-- ===== HOME / REGISTER MODE ===== --}}
             <div class="space-y-4 sm:space-y-6">
                 {{-- Patient Search --}}
-                <div class="flex flex-col sm:flex-row gap-2 sm:items-start">
-                    <div class="relative flex-1" x-data="{ open: @entangle('searchTerm').live }">
+                <div class="relative" x-data="{ open: @entangle('searchTerm').live }">
                     <x-filament::input.wrapper>
                         <x-slot name="prefix">
                             <svg class="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -50,19 +49,6 @@
                                 </x-core::patient-link>
                             @endforeach
                         </div>
-                    @endif
-                    </div>
-
-                    @if ($this->canAccessWardBoard())
-                        <x-filament::button
-                            tag="a"
-                            :href="\Modules\Clinical\Filament\Clusters\Workspace\Pages\WardBoard::getUrl()"
-                            color="gray"
-                            icon="heroicon-m-rectangle-group"
-                            class="shrink-0"
-                        >
-                            {{ __('Ward Board') }}
-                        </x-filament::button>
                     @endif
                 </div>
 
