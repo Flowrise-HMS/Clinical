@@ -2,6 +2,7 @@
 
 namespace Modules\Clinical\Filament\Clusters\Clinical\Resources\VitalSigns\Schemas;
 
+use Filament\Forms\Components\DateTimePicker;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
 use Filament\Schemas\Components\Grid;
@@ -45,6 +46,12 @@ class VitalSignForm
             Section::make('Vital Signs')
                 ->description('Record patient vital signs')
                 ->schema([
+                    DateTimePicker::make('recorded_at')
+                        ->label('Recorded At')
+                        ->native(true)
+                        ->default(now())
+                        ->required(),
+
                     Grid::make(3)
                         ->schema([
                             TextInput::make('systolic_bp')

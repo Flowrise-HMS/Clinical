@@ -25,7 +25,8 @@ class ClinicalNoteForm
                             ->searchable()
                             ->preload()
                             ->nullable()
-                            ->label('Patient'),
+                            ->label('Patient')
+                            ->helperText(__('Select the patient this clinical note belongs to.')),
 
                         Select::make('encounter_id')
                             ->relationship('encounter', 'encounter_number')
@@ -33,7 +34,8 @@ class ClinicalNoteForm
                             ->searchable()
                             ->preload()
                             ->nullable()
-                            ->label('Encounter'),
+                            ->label('Encounter')
+                            ->helperText(__('Optionally link this note to an encounter visit.')),
                     ]),
 
             ], self::quickElements(), ));
@@ -52,23 +54,27 @@ class ClinicalNoteForm
                                 ->options(NoteType::class)
                                 ->searchable()
                                 ->required()
-                                ->preload(),
+                                ->preload()
+                                ->helperText(__('Categorize the purpose of this note (e.g., Progress, Consultation, Nursing).')),
 
                             Select::make('status')
                                 ->label('Status')
                                 ->options(NoteStatus::class)
                                 ->default(NoteStatus::DRAFT)
-                                ->required(),
+                                ->required()
+                                ->helperText(__('Draft notes remain editable; Final notes represent completed documentation.')),
                         ]),
 
                     TextInput::make('subject')
                         ->label('Subject')
-                        ->maxLength(255),
+                        ->maxLength(255)
+                        ->helperText(__('Brief summary or title describing the encounter or topic of this note.')),
 
                     RichEditor::make('content')
                         ->label('Note Content')
                         ->fileAttachmentsDisk('local')
-                        ->fileAttachmentsDirectory('notes'),
+                        ->fileAttachmentsDirectory('notes')
+                        ->helperText(__('Detailed clinical observations, subjective/objective findings, assessment, and treatment plan.')),
                 ]),
         ];
     }

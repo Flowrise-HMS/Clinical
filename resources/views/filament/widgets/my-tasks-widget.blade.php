@@ -13,9 +13,15 @@
                                 <p class="text-sm font-medium text-gray-900 group-hover:text-primary-700 transition-colors">
                                     {{ $task->title }}
                                 </p>
-                                <p class="text-xs text-gray-500 mt-0.5 truncate">
-                                    {{ $task->clientIdentity()->displayName() }}
-                                </p>
+                                @if($task->patient?->id)
+                                    <a href="{{ \Modules\Clinical\Filament\Clusters\Workspace\Pages\ClinicalWorkspace::getUrl(['patientId' => $task->patient->id]) }}" class="text-xs text-gray-500 hover:text-primary-600 dark:hover:text-primary-400 mt-0.5 truncate block hover:underline">
+                                        {{ $task->clientIdentity()->displayName() }}
+                                    </a>
+                                @else
+                                    <p class="text-xs text-gray-500 mt-0.5 truncate">
+                                        {{ $task->clientIdentity()->displayName() }}
+                                    </p>
+                                @endif
                             </div>
                             @if($task->due_date && \Carbon\Carbon::parse($task->due_date)->isPast())
                                 <span class="flex-shrink-0 px-1.5 py-0.5 bg-danger-100 text-danger-700 text-xs rounded font-medium">

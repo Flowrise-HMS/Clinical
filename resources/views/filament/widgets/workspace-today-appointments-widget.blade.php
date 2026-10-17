@@ -15,7 +15,13 @@
                         <div class="flex flex-wrap items-center justify-between gap-2 py-2 text-sm">
                             <div class="min-w-0 flex-1">
                                 <p class="font-medium text-gray-900 dark:text-white">
-                                    {{ $appointment->patient?->full_name ?? __('Unknown patient') }}
+                                    @if($appointment->patient_id)
+                                        <a href="{{ \Modules\Clinical\Filament\Clusters\Workspace\Pages\ClinicalWorkspace::getUrl(['patientId' => $appointment->patient_id]) }}" class="hover:text-primary-600 dark:hover:text-primary-400 hover:underline">
+                                            {{ $appointment->patient?->full_name ?? __('Unknown patient') }}
+                                        </a>
+                                    @else
+                                        {{ $appointment->patient?->full_name ?? __('Unknown patient') }}
+                                    @endif
                                     @if($appointment->patient?->mrn)
                                         <span class="text-gray-500 dark:text-gray-400">· MRN {{ $appointment->patient->mrn }}</span>
                                     @endif

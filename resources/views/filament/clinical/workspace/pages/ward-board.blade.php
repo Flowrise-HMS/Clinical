@@ -125,9 +125,18 @@
                         @php $encounter = $bed['encounter']; @endphp
                         <div
                             wire:key="bed-{{ $bed['id'] }}"
-                            class="flex flex-col rounded-xl border-2 p-4 shadow-sm {{ $statusStyles[$bed['status']] ?? $statusStyles['occupied'] }}"
+                            class="relative flex flex-col rounded-xl border-2 p-4 shadow-sm {{ $statusStyles[$bed['status']] ?? $statusStyles['occupied'] }}"
                         >
-                            <div class="flex items-start justify-between gap-2">
+                            @if ($encounter && ! empty($encounter['patient']['id']))
+                                <a
+                                    href="{{ \Modules\Clinical\Filament\Clusters\Workspace\Pages\ClinicalWorkspace::getUrl(['patientId' => $encounter['patient']['id']]) }}"
+                                    target="_blank"
+                                    class="absolute inset-0 z-0 rounded-xl"
+                                    aria-label="{{ __('Open :name in Clinical Workspace', ['name' => $encounter['patient']['name'] ?? 'Patient']) }}"
+                                ></a>
+                            @endif
+
+                            <div class="relative z-10 flex items-start justify-between gap-2">
                                 <div>
                                     <div class="text-sm font-semibold text-gray-900 dark:text-white">{{ $bed['name'] }}</div>
                                     <div class="text-[11px] text-gray-500 dark:text-gray-400">
@@ -140,9 +149,9 @@
 
                             @if ($encounter)
                                 @php $patient = $encounter['patient']; @endphp
-                                <div class="mt-3">
+                                <div class="relative z-10 mt-3">
                                     <div class="flex items-center gap-2">
-                                        <a href="{{ \Modules\Clinical\Filament\Clusters\Workspace\Pages\ClinicalWorkspace::getUrl(['patientId' => $patient['id'] ?? null]) }}" class="truncate text-base font-semibold text-gray-900 hover:text-primary-600 dark:text-white dark:hover:text-primary-400">
+                                        <a href="{{ \Modules\Clinical\Filament\Clusters\Workspace\Pages\ClinicalWorkspace::getUrl(['patientId' => $patient['id'] ?? null]) }}" target="_blank" class="truncate text-base font-semibold text-gray-900 hover:text-primary-600 dark:text-white dark:hover:text-primary-400">
                                             {{ $patient['name'] ?? 'Patient' }}
                                         </a>
                                         @if ($encounter['on_pass'])
@@ -181,10 +190,11 @@
                                     @endif
                                 </div>
 
-                                <div class="mt-auto flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-gray-100 pt-3 text-xs dark:border-gray-800">
-                                    <a class="font-medium text-primary-600 hover:text-primary-500 dark:text-primary-400" href="{{ \Modules\Clinical\Filament\Clusters\Workspace\Pages\Timeline::getUrl(['patient' => $patient['id'] ?? null, 'view' => 'canvas']) }}">Timeline</a>
+                                <div class="relative z-10 mt-auto flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-gray-100 pt-3 text-xs dark:border-gray-800">
+                                    <a class="font-medium text-primary-600 hover:text-primary-500 dark:text-primary-400" href="{{ \Modules\Clinical\Filament\Clusters\Workspace\Pages\ClinicalWorkspace::getUrl(['patientId' => $patient['id'] ?? null]) }}" target="_blank">Workspace</a>
+                                    <a class="font-medium text-primary-600 hover:text-primary-500 dark:text-primary-400" href="{{ \Modules\Clinical\Filament\Clusters\Workspace\Pages\Timeline::getUrl(['patient' => $patient['id'] ?? null, 'view' => 'canvas']) }}" target="_blank">Timeline</a>
                                     @if ($this->pharmacyEnabled())
-                                        <a class="font-medium text-primary-600 hover:text-primary-500 dark:text-primary-400" href="{{ \Modules\Clinical\Filament\Clusters\Workspace\Pages\MedicationCanvas::getUrl(['patient' => $patient['id'] ?? null]) }}">Medications</a>
+                                        <a class="font-medium text-primary-600 hover:text-primary-500 dark:text-primary-400" href="{{ \Modules\Clinical\Filament\Clusters\Workspace\Pages\MedicationCanvas::getUrl(['patient' => $patient['id'] ?? null]) }}" target="_blank">Medications</a>
                                     @endif
                                     @if ($canUpdate)
                                         {{ ($this->assignNurseAction)(['encounterId' => $encounter['id']]) }}
@@ -201,7 +211,7 @@
                                     @endif
                                 </div>
                             @else
-                                <div class="mt-3 flex-1 text-sm text-gray-500 dark:text-gray-400">
+                                <div class="relative z-10 mt-3 flex-1 text-sm text-gray-500 dark:text-gray-400">
                                     @if ($bed['reserved_for'])
                                         Reserved for <span class="font-medium text-gray-800 dark:text-gray-200">{{ $bed['reserved_for']['patient_name'] ?? 'an admission' }}</span>
                                     @elseif ($bed['status_reason'])
@@ -211,7 +221,7 @@
                                     @endif
                                 </div>
                                 @if ($this->canManageBedStatus() && $bed['manual_transitions'] !== [])
-                                    <div class="mt-auto border-t border-gray-100 pt-3 text-xs dark:border-gray-800">
+                                    <div class="relative z-10 mt-auto border-t border-gray-100 pt-3 text-xs dark:border-gray-800">
                                         {{ ($this->setBedStatusAction)(['bedId' => $bed['id']]) }}
                                     </div>
                                 @endif
@@ -220,6 +230,11 @@
                     @endforeach
                 </div>
             @endif
+
+            {{-- Patient Table --}}
+            <div class="mt-8">
+                {{ $this->table }}
+            </div>
         @endif
     </div>
 </x-filament-panels::page>

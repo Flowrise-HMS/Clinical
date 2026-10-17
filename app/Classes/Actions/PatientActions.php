@@ -2,6 +2,7 @@
 
 namespace Modules\Clinical\Classes\Actions;
 
+use CodeWithDennis\FilamentLucideIcons\Enums\LucideIcon;
 use Filament\Actions\Action;
 use Filament\Actions\ActionGroup;
 use Filament\Forms\Components\Select;
@@ -32,6 +33,7 @@ use Modules\Clinical\Filament\Clusters\Workspace\Pages\ClinicalWorkspace;
 use Modules\Clinical\Filament\Clusters\Workspace\Pages\MedicationCanvas;
 use Modules\Clinical\Filament\Clusters\Workspace\Pages\PatientProfile;
 use Modules\Clinical\Filament\Clusters\Workspace\Pages\Timeline;
+use Modules\Clinical\Filament\Clusters\Workspace\Pages\WardBoard;
 use Modules\Clinical\Filament\Support\MarRecordDoseFormSchema;
 use Modules\Clinical\Models\Allergy;
 use Modules\Clinical\Models\ClinicalNote;
@@ -322,6 +324,20 @@ class PatientActions
                 && app(PatientPolicy::class)->view(Auth::user(), $patient)
                 && $patient->activeEncounter()->exists())
             ->url(fn (): string => MedicationCanvas::getUrl(['patient' => $patient?->id]), shouldOpenInNewTab: true);
+    }
+
+    public function wardBoardAction(): Action
+    {
+        $encounter = $this->resolveEncounter();
+
+        return Action::make('view_ward_board')
+            ->label('Ward Board')
+            ->icon(LucideIcon::BedDouble)
+            ->color('gray')
+            ->visible(fn (): bool => Auth::check() && WardBoard::canAccess())
+            ->url(fn (): string => WardBoard::getUrl(
+                filled($encounter?->location_id) ? ['ward' => $encounter->location_id] : []
+            ), shouldOpenInNewTab: true);
     }
 
     public function carePlanAction(): Action

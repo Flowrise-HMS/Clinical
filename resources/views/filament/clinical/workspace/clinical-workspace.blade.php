@@ -44,7 +44,7 @@
                                                 @endif
                                             </div>
                                         </div>
-                                        <x-filament::icon icon="heroicon-m-chevron-right" x-show="! opening"
+                                        <x-filament::icon icon="heroicon-m-chevron-right"
                                             class="w-5 h-5 text-gray-400 shrink-0" />
                                     </div>
                                 </x-core::patient-link>
@@ -52,6 +52,18 @@
                         </div>
                     @endif
                     </div>
+
+                    @if ($this->canAccessWardBoard())
+                        <x-filament::button
+                            tag="a"
+                            :href="\Modules\Clinical\Filament\Clusters\Workspace\Pages\WardBoard::getUrl()"
+                            color="gray"
+                            icon="heroicon-m-rectangle-group"
+                            class="shrink-0"
+                        >
+                            {{ __('Ward Board') }}
+                        </x-filament::button>
+                    @endif
                 </div>
 
                 @if ($mode === 'register')
@@ -252,6 +264,8 @@
                                     </x-filament::button>
                                 </div>
                             </div>
+                        @elseif($activeTab === 'triage')
+                            @include('clinical::clinical.workspace.partials.triage-tab')
                         @elseif($activeTab === 'allergies')
                             <div class="space-y-4">
                                 <h3 class="text-lg font-semibold text-gray-900 dark:text-white">Allergies</h3>
@@ -280,8 +294,6 @@
                                     </x-filament::button>
                                 </div>
                             </div>
-                        @elseif($activeTab === 'triage')
-                            @include('clinical::clinical.workspace.partials.triage-tab')
                         @elseif($activeTab === 'history')
                             @include('clinical::clinical.workspace.history-tab')
                         @endif
@@ -446,8 +458,6 @@
                                 @include('clinical::clinical.workspace.partials.adt-tab')
                             @elseif ($activeTab === 'notes')
                                 @include('clinical::clinical.workspace.partials.notes-tab')
-                            @elseif ($activeTab === 'triage')
-                                @include('clinical::clinical.workspace.partials.triage-tab')
                             @elseif ($activeTab === 'diagnosis')
                                 @include('clinical::clinical.workspace.partials.diagnosis-tab')
                             @elseif ($activeTab === 'vitals')
@@ -460,6 +470,8 @@
                                         </x-filament::button>
                                     </div>
                                 </div>
+                            @elseif ($activeTab === 'triage')
+                                @include('clinical::clinical.workspace.partials.triage-tab')
                             @elseif($activeTab === 'service-lab')
                                 <div class="space-y-4">
                                     <h4 class="text-base font-semibold text-gray-900 dark:text-white">Service / Lab Orders

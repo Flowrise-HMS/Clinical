@@ -3,6 +3,7 @@
 namespace Modules\Clinical\Filament\Clusters\Workspace\Pages;
 
 use BezhanSalleh\FilamentShield\Traits\HasPageShield;
+use CodeWithDennis\FilamentLucideIcons\Enums\LucideIcon;
 use Filament\Actions\Action;
 use Filament\Forms\Components\Checkbox;
 use Filament\Forms\Components\Repeater;
@@ -154,6 +155,7 @@ class ClinicalWorkspace extends Page implements HasSchemas
      * @var array<string, mixed>
      */
     public array $vitalsData = [
+        'recorded_at' => null,
         'systolic_bp' => null,
         'diastolic_bp' => null,
         'heart_rate' => null,
@@ -563,6 +565,7 @@ class ClinicalWorkspace extends Page implements HasSchemas
     protected function defaultVitalsData(): array
     {
         return [
+            'recorded_at' => now()->format('Y-m-d H:i:s'),
             'systolic_bp' => null,
             'diastolic_bp' => null,
             'heart_rate' => null,
@@ -829,12 +832,25 @@ class ClinicalWorkspace extends Page implements HasSchemas
         ];
     }
 
+    public function canAccessWardBoard(): bool
+    {
+        return Auth::check() && WardBoard::canAccess();
+    }
+
     protected function getHeaderActions(): array
     {
         if (! $this->currentPatient) {
-            // Workspace home: only cross-module actions such as the quick
-            // "Add appointment" registered by the Appointment module.
-            return app(PageHeaderActionsRegistry::class)->for(static::class, $this);
+            // Workspace home: Ward Board link (if authorized) plus cross-module actions
+            return [
+                ...($this->canAccessWardBoard() ? [
+                    Action::make('ward_board')
+                        ->label(__('Ward Board'))
+                        ->icon(LucideIcon::BedDouble)
+                        ->color('gray')
+                        ->url(fn (): string => WardBoard::getUrl()),
+                ] : []),
+                ...app(PageHeaderActionsRegistry::class)->for(static::class, $this),
+            ];
         }
 
         $actions = PatientActions::make()
@@ -845,6 +861,7 @@ class ClinicalWorkspace extends Page implements HasSchemas
             $actions->timelineAction(),
             $actions->profileAction(),
             $actions->medicationCanvasAction(),
+            $actions->wardBoardAction(),
             $actions->patientActionGroups(),
             ...app(PageHeaderActionsRegistry::class)->for(static::class, $this),
         ];
@@ -2483,10 +2500,6 @@ class ClinicalWorkspace extends Page implements HasSchemas
                 'label' => 'Notes',
                 'icon' => 'heroicon-m-document-text',
             ],
-            'triage' => [
-                'label' => 'Triage',
-                'icon' => 'heroicon-m-clipboard-document',
-            ],
             'diagnosis' => [
                 'label' => 'Diagnosis',
                 'icon' => 'heroicon-m-document-magnifying-glass',
@@ -2494,6 +2507,10 @@ class ClinicalWorkspace extends Page implements HasSchemas
             'vitals' => [
                 'label' => 'Vitals',
                 'icon' => 'heroicon-m-heart',
+            ],
+            'triage' => [
+                'label' => 'Triage',
+                'icon' => 'heroicon-m-clipboard-document',
             ],
             'service-lab' => [
                 'label' => 'Service / Lab',
@@ -2548,13 +2565,13 @@ class ClinicalWorkspace extends Page implements HasSchemas
                 'label' => 'Vitals',
                 'icon' => 'heroicon-m-heart',
             ],
-            'allergies' => [
-                'label' => 'Allergies',
-                'icon' => 'heroicon-m-exclamation-triangle',
-            ],
             'triage' => [
                 'label' => 'Triage',
                 'icon' => 'heroicon-m-clipboard-document',
+            ],
+            'allergies' => [
+                'label' => 'Allergies',
+                'icon' => 'heroicon-m-exclamation-triangle',
             ],
             'history' => [
                 'label' => 'History',

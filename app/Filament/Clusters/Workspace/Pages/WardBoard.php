@@ -12,6 +12,10 @@ use Filament\Forms\Components\Textarea;
 use Filament\Notifications\Notification;
 use Filament\Pages\Page;
 use Filament\Support\Enums\Width;
+use Filament\Tables\Columns\TextColumn;
+use Filament\Tables\Concerns\InteractsWithTable;
+use Filament\Tables\Contracts\HasTable;
+use Filament\Tables\Table;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Auth;
 use Livewire\Attributes\Url;
@@ -20,8 +24,8 @@ use Modules\Clinical\Classes\Services\AdtService;
 use Modules\Clinical\Classes\Services\BedAssignmentService;
 use Modules\Clinical\Classes\Services\EncounterService;
 use Modules\Clinical\Classes\Services\WardBoardService;
+use Modules\Clinical\Enums\EncounterStatus;
 use Modules\Clinical\Exceptions\DischargeBlockedException;
-use Modules\Clinical\Filament\Clusters\Workspace\WorkspaceCluster;
 use Modules\Clinical\Models\AdmissionRequest;
 use Modules\Clinical\Models\Encounter;
 use Modules\Clinical\Policies\EncounterPolicy;
@@ -29,6 +33,7 @@ use Modules\Core\Classes\Services\BedStatusService;
 use Modules\Core\Classes\Services\BranchService;
 use Modules\Core\Classes\Support\PageWidgetsRegistry;
 use Modules\Core\Enums\BedStatus;
+use Modules\Core\Enums\SidebarGroup;
 use Modules\Core\Models\Location;
 use Modules\Core\Support\ModuleAvailability;
 
@@ -37,19 +42,22 @@ use Modules\Core\Support\ModuleAvailability;
  * the ADT actions ward staff take from the bedside. Polls every 60 seconds;
  * that is deliberate until Clinical adopts Echo/Reverb.
  */
-class WardBoard extends Page
+class WardBoard extends Page implements HasTable
 {
     use HasPageShield;
+    use InteractsWithTable;
 
     protected static ?string $title = 'Ward Board';
 
     protected static ?string $navigationLabel = 'Ward Board';
 
-    protected static ?string $cluster = WorkspaceCluster::class;
+    protected static ?string $cluster = null;
 
     protected static string|\BackedEnum|null $navigationIcon = LucideIcon::BedDouble;
 
-    protected static ?int $navigationSort = 3;
+    protected static string|\UnitEnum|null $navigationGroup = SidebarGroup::Workspaces;
+
+    protected static ?int $navigationSort = 15;
 
     protected static ?string $slug = 'wards';
 
@@ -91,6 +99,92 @@ class WardBoard extends Page
         }
 
         $this->refreshBoard();
+        $this->resetTable();
+    }
+
+    public function table(Table $table): Table
+    {
+        return $table
+            ->query(
+                Encounter::query()
+                    ->when(
+                        filled($this->wardId),
+                        fn ($query) => $query->where(function ($q) {
+                            $q->where('location_id', $this->wardId)
+                                ->orWhereHas('bed', fn ($b) => $b->where('parent_id', $this->wardId));
+                        })->whereNotIn('status', [EncounterStatus::FINISHED->value, EncounterStatus::CANCELLED->value]),
+                        fn ($query) => $query->whereRaw('1 = 0')
+                    )
+                    ->with(['patient', 'bed', 'activeParticipants.user', 'location'])
+            )
+            ->heading(__('Patients in this Ward'))
+            ->columns([
+                TextColumn::make('bed.name')
+                    ->label(__('Bed'))
+                    ->sortable()
+                    ->placeholder(__('Unassigned'))
+                    ->weight('bold'),
+                TextColumn::make('patient.full_name')
+                    ->label(__('Patient'))
+                    ->description(fn (Encounter $record): ?string => $record->patient?->mrn)
+                    ->url(fn (Encounter $record): string => ClinicalWorkspace::getUrl(['patientId' => $record->patient_id]), shouldOpenInNewTab: true)
+                    ->weight('medium')
+                    ->searchable(query: fn ($query, string $search) => $query->whereHas(
+                        'patient',
+                        fn ($q) => $q->where('first_name', 'like', "%{$search}%")
+                            ->orWhere('last_name', 'like', "%{$search}%")
+                            ->orWhere('mrn', 'like', "%{$search}%")
+                    )),
+                TextColumn::make('patient.age_gender')
+                    ->label(__('Age / Gender'))
+                    ->state(fn (Encounter $record): string => collect([
+                        $record->patient?->age ? $record->patient->age.' yrs' : null,
+                        $record->patient?->gender?->getLabel() ?? ($record->patient?->gender ? ucfirst((string) ($record->patient->gender->value ?? $record->patient->gender)) : null),
+                    ])->filter()->implode(' · '))
+                    ->placeholder('—'),
+                TextColumn::make('admitted_at')
+                    ->label(__('Admitted'))
+                    ->dateTime('d M Y, H:i')
+                    ->description(fn (Encounter $record): ?string => $record->los_days !== null ? $record->los_days.' days LOS' : null)
+                    ->sortable(),
+                TextColumn::make('chief_complaint')
+                    ->label(__('Chief Complaint'))
+                    ->limit(40)
+                    ->tooltip(fn (Encounter $record): ?string => $record->chief_complaint)
+                    ->placeholder('—'),
+                TextColumn::make('attending')
+                    ->label(__('Attending'))
+                    ->state(fn (Encounter $record): ?string => $record->attendingDoctor?->name ?? $record->activeParticipants->firstWhere('role', 'attending')?->user?->name)
+                    ->placeholder('—'),
+                TextColumn::make('nurse')
+                    ->label(__('Nurse in Charge'))
+                    ->state(fn (Encounter $record): ?string => $record->activeParticipants->firstWhere('role', 'nurse')?->user?->name)
+                    ->placeholder('—'),
+                TextColumn::make('status')
+                    ->label(__('Status'))
+                    ->badge(),
+            ])
+            ->actions([
+                Action::make('open_workspace')
+                    ->label(__('Workspace'))
+                    ->icon('heroicon-m-heart')
+                    ->color('primary')
+                    ->url(fn (Encounter $record): string => ClinicalWorkspace::getUrl(['patientId' => $record->patient_id]), shouldOpenInNewTab: true),
+                Action::make('timeline')
+                    ->label(__('Timeline'))
+                    ->icon('heroicon-m-clock')
+                    ->color('gray')
+                    ->url(fn (Encounter $record): string => Timeline::getUrl(['patient' => $record->patient_id, 'view' => 'canvas']), shouldOpenInNewTab: true),
+                Action::make('medications')
+                    ->label(__('Medications'))
+                    ->icon('heroicon-m-beaker')
+                    ->color('gray')
+                    ->visible(fn (): bool => ModuleAvailability::pharmacyEnabled())
+                    ->url(fn (Encounter $record): string => MedicationCanvas::getUrl(['patient' => $record->patient_id]), shouldOpenInNewTab: true),
+            ])
+            ->emptyStateHeading(__('No admitted patients in this ward'))
+            ->emptyStateDescription(__('Currently, there are no active patient encounters recorded in this ward.'))
+            ->emptyStateIcon('heroicon-o-user-group');
     }
 
     public function refreshBoard(): void
