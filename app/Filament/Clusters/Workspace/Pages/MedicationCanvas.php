@@ -16,9 +16,11 @@ use Modules\Clinical\Classes\Services\CanvasLayoutService;
 use Modules\Clinical\Classes\Services\ClinicalCanvasTreeBuilder;
 use Modules\Clinical\Classes\Services\MedicationAdministrationService;
 use Modules\Clinical\Classes\Services\MedicationCanvasService;
+use Modules\Clinical\Classes\Services\MedicationDoseScheduleService;
 use Modules\Clinical\Classes\Services\MedicationFulfillmentPolicy;
 use Modules\Clinical\Filament\Clusters\Workspace\WorkspaceCluster;
 use Modules\Clinical\Filament\Support\MarRecordDoseFormSchema;
+use Modules\Clinical\Filament\Support\MarScheduleFormSchema;
 use Modules\Clinical\Models\CanvasLayout;
 use Modules\Clinical\Models\Encounter;
 use Modules\Clinical\Models\RequestItem;
@@ -177,6 +179,44 @@ class MedicationCanvas extends Page
                     Notification::make()->title('Dose recorded')->success()->send();
                 } catch (\Throwable $e) {
                     Notification::make()->title('Could not record dose')->body($e->getMessage())->danger()->persistent()->send();
+                }
+
+                $this->loadCanvasData();
+            });
+    }
+
+    public function scheduleMedicationAction(): Action
+    {
+        return Action::make('scheduleMedication')
+            ->label('Customize Schedule')
+            ->icon('heroicon-m-calendar')
+            ->color('primary')
+            ->disabled(fn (array $arguments): bool => $this->resolveCanvasItem($arguments) === null)
+            ->modalHeading(fn (array $arguments): string => 'Customize Schedule — '.($this->resolveCanvasItem($arguments)?->service?->name ?? 'Medication'))
+            ->modalSubmitActionLabel('Save Schedule')
+            ->schema(function (array $arguments): array {
+                $item = $this->resolveCanvasItem($arguments);
+
+                if ($item === null) {
+                    return [];
+                }
+
+                return MarScheduleFormSchema::forSingleItem($item);
+            })
+            ->action(function (array $data, array $arguments): void {
+                $item = $this->resolveCanvasItem($arguments);
+
+                if ($item === null) {
+                    Notification::make()->title('This medication can no longer be scheduled')->warning()->send();
+
+                    return;
+                }
+
+                try {
+                    app(MedicationDoseScheduleService::class)->customizeSchedule($item, $data, Auth::user());
+                    Notification::make()->title('Medication schedule updated')->success()->send();
+                } catch (\Throwable $e) {
+                    Notification::make()->title('Could not update schedule')->body($e->getMessage())->danger()->persistent()->send();
                 }
 
                 $this->loadCanvasData();

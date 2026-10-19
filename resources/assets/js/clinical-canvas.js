@@ -904,6 +904,17 @@ export default function clinicalCanvas(config) {
             }
         },
 
+        scheduleMedication(node) {
+            if (this.readOnly) {
+                return
+            }
+
+            const requestItemId = node.requestItemId || (node.kind === 'medication' ? node.id?.replace(/^med_/, '') : null)
+            if (requestItemId) {
+                this.$wire.mountAction('scheduleMedication', { requestItemId: requestItemId })
+            }
+        },
+
         // ------------------------------------------------------------------
         // Sticky notes
         // ------------------------------------------------------------------

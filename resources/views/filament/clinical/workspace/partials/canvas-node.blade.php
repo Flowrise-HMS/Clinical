@@ -201,16 +201,33 @@
                     <div class="mt-2 rounded-lg bg-gray-50 px-2 py-1.5 text-[11px] text-gray-500 dark:bg-gray-800 dark:text-gray-400">Course complete</div>
                 </template>
 
-                <template x-if="node.canRecord && (node.prn || node.nextDueAt)">
-                    <button
-                        type="button"
-                        class="mt-2 inline-flex w-full items-center justify-center gap-1 rounded-lg bg-success-600 px-2 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-success-500"
-                        x-on:pointerdown.stop
-                        x-on:click.stop="recordDose(node)"
-                    >
-                        <x-heroicon-m-beaker class="h-3.5 w-3.5" />
-                        Record dose
-                    </button>
+                <template x-if="node.canRecord">
+                    <div class="mt-2 flex items-center gap-1.5">
+                        <template x-if="node.prn || node.nextDueAt">
+                            <button
+                                type="button"
+                                class="inline-flex flex-1 items-center justify-center gap-1 rounded-lg bg-success-600 px-2 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-success-500"
+                                x-on:pointerdown.stop
+                                x-on:click.stop="recordDose(node)"
+                            >
+                                <x-heroicon-m-beaker class="h-3.5 w-3.5" />
+                                Record dose
+                            </button>
+                        </template>
+                        <template x-if="!node.prn">
+                            <button
+                                type="button"
+                                class="inline-flex items-center justify-center gap-1 rounded-lg border border-gray-300 bg-white px-2 py-1.5 text-xs font-semibold text-gray-700 shadow-sm hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-700"
+                                x-bind:class="{ 'flex-1': !node.nextDueAt }"
+                                title="Customize / plan schedule"
+                                x-on:pointerdown.stop
+                                x-on:click.stop="scheduleMedication(node)"
+                            >
+                                <x-heroicon-m-calendar-days class="h-3.5 w-3.5" />
+                                Schedule
+                            </button>
+                        </template>
+                    </div>
                 </template>
             </div>
         </article>

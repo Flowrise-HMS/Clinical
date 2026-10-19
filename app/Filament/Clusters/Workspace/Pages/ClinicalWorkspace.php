@@ -6,6 +6,7 @@ use BezhanSalleh\FilamentShield\Traits\HasPageShield;
 use CodeWithDennis\FilamentLucideIcons\Enums\LucideIcon;
 use Filament\Actions\Action;
 use Filament\Forms\Components\Checkbox;
+use Filament\Forms\Components\DateTimePicker;
 use Filament\Forms\Components\Repeater;
 use Filament\Forms\Components\RichEditor;
 use Filament\Forms\Components\Select;
@@ -223,6 +224,7 @@ class ClinicalWorkspace extends Page implements HasSchemas
                 'frequency' => null,
                 'route' => null,
                 'duration_days' => null,
+                'start_time' => null,
                 'instructions' => null,
                 'prn' => false,
                 'indication' => null,
@@ -629,6 +631,7 @@ class ClinicalWorkspace extends Page implements HasSchemas
             'frequency' => null,
             'route' => null,
             'duration_days' => null,
+            'start_time' => null,
             'instructions' => null,
             'prn' => false,
             'indication' => null,
@@ -2146,6 +2149,10 @@ class ClinicalWorkspace extends Page implements HasSchemas
                         ->label('Duration (days)')
                         ->numeric()
                         ->minValue(1),
+                    DateTimePicker::make('start_time')
+                        ->label('Start Time / First Dose')
+                        ->native(true)
+                        ->default(now()),
                     Checkbox::make('prn')
                         ->label('Take as needed (PRN)'),
                     TextInput::make('indication')

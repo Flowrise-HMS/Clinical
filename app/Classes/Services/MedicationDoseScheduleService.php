@@ -2,7 +2,9 @@
 
 namespace Modules\Clinical\Classes\Services;
 
+use App\Models\User;
 use Carbon\Carbon;
+use Illuminate\Support\Facades\Auth;
 use Modules\Clinical\Contracts\PrescriptionScheduleCalculatorContract;
 use Modules\Clinical\Enums\MedicationAdministrationStatus;
 use Modules\Clinical\Models\MedicationAdministration;
@@ -26,6 +28,60 @@ class MedicationDoseScheduleService
         }
 
         return $this->calculator->buildDoseSchedule($detail);
+    }
+
+    public function customizeSchedule(RequestItem $item, array $scheduleData, ?User $user = null): object
+    {
+        $user = $user ?? Auth::user();
+
+        if ($user && ! $user->can('administer_medication')) {
+            throw new \InvalidArgumentException('You do not have permission to customize medication schedules.');
+        }
+
+        $detail = $item->loadMissing('prescriptionDetail')->prescriptionDetail;
+        if (! $detail) {
+            throw new \InvalidArgumentException("{$item->service?->name}: missing prescription details.");
+        }
+
+        $courseStartedAt = ! empty($scheduleData['course_started_at'])
+            ? Carbon::parse($scheduleData['course_started_at'])
+            : ($detail->course_started_at ?? now());
+
+        $scheduleType = $scheduleData['schedule_type'] ?? 'interval_based';
+        $customDoseTimes = $scheduleData['custom_dose_times'] ?? null;
+        if (is_string($customDoseTimes)) {
+            $customDoseTimes = array_values(array_filter(array_map('trim', explode(',', $customDoseTimes))));
+        }
+
+        $computeInput = [
+            'frequency' => $detail->frequency,
+            'duration_days' => $detail->duration_days ?? 1,
+            'prn' => (bool) $detail->prn,
+            'course_started_at' => $courseStartedAt,
+            'max_administrations' => $detail->max_administrations,
+        ];
+
+        $recomputed = method_exists($this->calculator, 'compute')
+            ? $this->calculator->compute($computeInput)
+            : null;
+
+        $updateData = [
+            'course_started_at' => $courseStartedAt,
+            'schedule_type' => $scheduleType,
+            'custom_dose_times' => $customDoseTimes,
+        ];
+
+        if ($recomputed) {
+            $updateData['course_end_at'] = $recomputed['course_end_at'];
+            $updateData['total_administrations'] = $recomputed['total_administrations'];
+        }
+
+        $detail->update($updateData);
+        $detail->refresh();
+
+        $this->syncNextDoseAt($item);
+
+        return $detail;
     }
 
     public function getNextDueSlot(RequestItem $item): ?object

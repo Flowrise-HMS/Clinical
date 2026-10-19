@@ -3,14 +3,23 @@
 namespace Modules\Clinical\Filament\Clusters\Clinical\Pages;
 
 use BezhanSalleh\FilamentShield\Traits\HasPageShield;
+use Filament\Actions\Action;
+use Filament\Forms\Components\Textarea;
+use Filament\Notifications\Notification;
 use Filament\Pages\Page;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Concerns\InteractsWithTable;
 use Filament\Tables\Contracts\HasTable;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Facades\Auth;
+use Modules\Clinical\Classes\Services\MedicationAdministrationService;
+use Modules\Clinical\Classes\Services\MedicationDoseScheduleService;
 use Modules\Clinical\Classes\Services\MedicationFulfillmentPolicy;
 use Modules\Clinical\Filament\Clusters\Clinical\ClinicalCluster;
+use Modules\Clinical\Filament\Clusters\Workspace\Pages\MedicationCanvas;
+use Modules\Clinical\Filament\Support\MarRecordDoseFormSchema;
+use Modules\Clinical\Filament\Support\MarScheduleFormSchema;
 use Modules\Clinical\Models\RequestItem;
 use Modules\Core\Classes\Services\BranchService;
 use Modules\Core\Filament\Support\ClientIdentityColumn;
@@ -98,6 +107,57 @@ class MedicationAdministrationBoard extends Page implements HasTable
                         'upcoming' => 'info',
                         default => 'gray',
                     }),
+            ])
+            ->actions([
+                Action::make('record_dose')
+                    ->label('Record dose')
+                    ->icon('heroicon-m-beaker')
+                    ->color('success')
+                    ->button()
+                    ->visible(fn (?RequestItem $record): bool => (bool) ($record?->prescriptionDetail?->isInFacility()
+                        && ! $record?->hasActiveFinancialHold()
+                        && $policy->canRecordMar($record, Auth::user())))
+                    ->modalHeading(fn (?RequestItem $record): string => 'Record dose — '.($record?->service?->name ?? 'Medication'))
+                    ->modalSubmitActionLabel('Save administration')
+                    ->schema(fn (?RequestItem $record): array => $record ? [
+                        ...MarRecordDoseFormSchema::forSingleItem($record),
+                        Textarea::make('notes')->label('Notes')->rows(2),
+                    ] : [])
+                    ->action(function (array $data, RequestItem $record): void {
+                        try {
+                            app(MedicationAdministrationService::class)->administer($record, $data, $data['notes'] ?? null, Auth::user());
+                            Notification::make()->title('Dose recorded')->success()->send();
+                        } catch (\Throwable $e) {
+                            Notification::make()->title('Could not record dose')->body($e->getMessage())->danger()->persistent()->send();
+                        }
+                    }),
+                Action::make('customize_schedule')
+                    ->label('Schedule')
+                    ->icon('heroicon-m-calendar-days')
+                    ->color('primary')
+                    ->button()
+                    ->visible(fn (?RequestItem $record): bool => (bool) ($record?->prescriptionDetail?->isInFacility()
+                        && ! $record?->hasActiveFinancialHold()
+                        && $policy->canRecordMar($record, Auth::user())))
+                    ->modalHeading(fn (?RequestItem $record): string => 'Customize Schedule — '.($record?->service?->name ?? 'Medication'))
+                    ->modalSubmitActionLabel('Save Schedule')
+                    ->schema(fn (?RequestItem $record): array => $record ? MarScheduleFormSchema::forSingleItem($record) : [])
+                    ->action(function (array $data, RequestItem $record): void {
+                        try {
+                            app(MedicationDoseScheduleService::class)->customizeSchedule($record, $data, Auth::user());
+                            Notification::make()->title('Medication schedule updated')->success()->send();
+                        } catch (\Throwable $e) {
+                            Notification::make()->title('Could not update schedule')->body($e->getMessage())->danger()->persistent()->send();
+                        }
+                    }),
+                Action::make('medication_canvas')
+                    ->label('Canvas')
+                    ->icon('heroicon-m-rectangle-group')
+                    ->color('gray')
+                    ->button()
+                    ->url(fn (?RequestItem $record): ?string => $record?->serviceRequest?->patient_id
+                        ? MedicationCanvas::getUrl(['patient' => $record->serviceRequest->patient_id])
+                        : null, shouldOpenInNewTab: true),
             ])
             ->poll('30s');
     }
