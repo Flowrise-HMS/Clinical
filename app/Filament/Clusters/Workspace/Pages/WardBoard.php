@@ -24,13 +24,18 @@ use Modules\Clinical\Classes\Services\AdtService;
 use Modules\Clinical\Classes\Services\BedAssignmentService;
 use Modules\Clinical\Classes\Services\EncounterService;
 use Modules\Clinical\Classes\Services\WardBoardService;
+use Modules\Clinical\Classes\Services\WardInchargeNoteService;
 use Modules\Clinical\Enums\EncounterStatus;
+use Modules\Clinical\Enums\WardNotePriority;
+use Modules\Clinical\Enums\WardNoteType;
+use Modules\Clinical\Enums\WardShift;
 use Modules\Clinical\Exceptions\DischargeBlockedException;
 use Modules\Clinical\Models\AdmissionRequest;
 use Modules\Clinical\Models\Encounter;
 use Modules\Clinical\Policies\EncounterPolicy;
 use Modules\Core\Classes\Services\BedStatusService;
 use Modules\Core\Classes\Services\BranchService;
+use Modules\Core\Classes\Services\WardAccessService;
 use Modules\Core\Classes\Support\PageWidgetsRegistry;
 use Modules\Core\Enums\BedStatus;
 use Modules\Core\Enums\SidebarGroup;
@@ -86,7 +91,14 @@ class WardBoard extends Page implements HasTable
             : [];
 
         if ($this->wardId === null || ! array_key_exists($this->wardId, $this->wardOptions)) {
-            $this->wardId = array_key_first($this->wardOptions);
+            $user = Auth::user();
+            $assignedWardId = $user !== null
+                ? app(WardAccessService::class)->defaultWardIdFor($user, $this->branchId)
+                : null;
+
+            $this->wardId = ($assignedWardId !== null && array_key_exists($assignedWardId, $this->wardOptions))
+                ? $assignedWardId
+                : array_key_first($this->wardOptions);
         }
 
         $this->refreshBoard();
@@ -197,6 +209,80 @@ class WardBoard extends Page implements HasTable
     public function getMaxContentWidth(): Width
     {
         return Width::Full;
+    }
+
+    protected function getHeaderActions(): array
+    {
+        return [
+            Action::make('daily_statement')
+                ->label(__('Daily Ward Statement'))
+                ->icon('heroicon-o-clipboard-document-check')
+                ->color('primary')
+                ->visible(fn (): bool => filled($this->wardId))
+                ->url(fn (): string => DailyWardStatementsPage::getUrl(['ward' => $this->wardId])),
+            Action::make('incharge_notes')
+                ->label(__('Incharge Notes'))
+                ->icon('heroicon-o-book-open')
+                ->color('gray')
+                ->visible(fn (): bool => filled($this->wardId))
+                ->url(fn (): string => WardInchargeNotesPage::getUrl(['ward' => $this->wardId])),
+            Action::make('quick_ward_note')
+                ->label(__('Log Handover / Note'))
+                ->icon('heroicon-o-plus-circle')
+                ->color('info')
+                ->slideOver()
+                ->modalWidth('2xl')
+                ->visible(fn (): bool => filled($this->wardId))
+                ->schema([
+                    Select::make('note_type')
+                        ->label(__('Note type'))
+                        ->options(WardNoteType::class)
+                        ->default(WardNoteType::SHIFT_HANDOVER->value)
+                        ->live()
+                        ->required(),
+                    Select::make('shift')
+                        ->label(__('Shift'))
+                        ->options(WardShift::class)
+                        ->nullable(),
+                    Select::make('priority')
+                        ->label(__('Priority'))
+                        ->options(WardNotePriority::class)
+                        ->default(WardNotePriority::NORMAL->value)
+                        ->required(),
+                    \Filament\Forms\Components\TextInput::make('title')
+                        ->label(__('Summary title'))
+                        ->required()
+                        ->maxLength(255),
+                    Textarea::make('body')
+                        ->label(__('Details / Handover summary'))
+                        ->rows(4)
+                        ->required(),
+                    \Filament\Forms\Components\Toggle::make('is_pinned')
+                        ->label(__('Pin notice to ward'))
+                        ->default(false),
+                ])
+                ->action(function (array $data): void {
+                    $ward = $this->ward();
+                    if ($ward === null) {
+                        return;
+                    }
+
+                    app(WardInchargeNoteService::class)->create($ward, $data);
+
+                    Notification::make()
+                        ->success()
+                        ->title(__('Ward note logged'))
+                        ->send();
+                }),
+        ];
+    }
+
+    public function getWidgetData(): array
+    {
+        return [
+            'wardId' => $this->wardId,
+            'branchId' => $this->branchId,
+        ];
     }
 
     protected function getHeaderWidgets(): array
