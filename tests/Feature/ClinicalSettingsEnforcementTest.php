@@ -58,4 +58,22 @@ class ClinicalSettingsEnforcementTest extends TestCase
 
         $this->assertSame(99, app_settings()->clinicalValue('mar_reminders_lead_minutes', config('clinical.mar_reminders.lead_minutes')));
     }
+
+    public function test_mar_schedule_mode_selects_the_default_schedule_strategy(): void
+    {
+        ClinicalSettings::fake(['mar_schedule_mode' => 'standard_times']);
+        $this->assertSame('standard_times', app_settings()->marDefaultScheduleType());
+
+        ClinicalSettings::fake(['mar_schedule_mode' => 'interval_based']);
+        $this->assertSame('interval_based', app_settings()->marDefaultScheduleType());
+    }
+
+    public function test_legacy_or_unknown_mar_schedule_mode_falls_back_to_interval_based(): void
+    {
+        ClinicalSettings::fake(['mar_schedule_mode' => 'fixed_from_order']);
+        $this->assertSame('interval_based', app_settings()->marDefaultScheduleType());
+
+        ClinicalSettings::fake(['mar_schedule_mode' => 'custom_times']);
+        $this->assertSame('interval_based', app_settings()->marDefaultScheduleType());
+    }
 }

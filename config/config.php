@@ -85,7 +85,6 @@ return [
     ],
 
     'mar_schedule' => [
-        'mode' => 'fixed_from_order',
         'stat_duration_days' => 1,
         'grace_minutes' => 30,
     ],

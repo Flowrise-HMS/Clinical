@@ -2,7 +2,6 @@
 
 namespace Modules\Clinical\Filament\Support;
 
-use Carbon\Carbon;
 use Filament\Forms\Components\DateTimePicker;
 use Filament\Forms\Components\Hidden;
 use Filament\Forms\Components\Placeholder;
@@ -80,7 +79,7 @@ class MarScheduleFormSchema
                     'standard_times' => __('Standard Facility / Ward Times (e.g. 08:00, 20:00)'),
                     'custom_times' => __('Custom Daily Times'),
                 ])
-                ->default($detail?->schedule_type ?? 'interval_based')
+                ->default($detail?->schedule_type ?? app_settings()->marDefaultScheduleType())
                 ->required()
                 ->live()
                 ->helperText(__('Choose how subsequent dosage slots should be planned across the treatment duration.')),
@@ -97,7 +96,7 @@ class MarScheduleFormSchema
                 ->label(__('Planned Dose Schedule Preview'))
                 ->content(function (Get $get) use ($calculator, $detail, $givenSlotSequences): HtmlString {
                     $courseStartedAt = $get('course_started_at') ?: ($detail?->course_started_at ?? now());
-                    $scheduleType = $get('schedule_type') ?: ($detail?->schedule_type ?? 'interval_based');
+                    $scheduleType = $get('schedule_type') ?: ($detail?->schedule_type ?? app_settings()->marDefaultScheduleType());
                     $customTimes = $get('custom_dose_times') ?: ($detail?->custom_dose_times ?? []);
 
                     $slots = $calculator->buildDoseSchedule((object) [

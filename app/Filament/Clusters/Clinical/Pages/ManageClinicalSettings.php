@@ -4,6 +4,7 @@ namespace Modules\Clinical\Filament\Clusters\Clinical\Pages;
 
 use BezhanSalleh\FilamentShield\Traits\HasPageShield;
 use Filament\Forms\Components\CheckboxList;
+use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Toggle;
 use Filament\Pages\SettingsPage;
@@ -49,6 +50,15 @@ class ManageClinicalSettings extends SettingsPage
                             ->label(__('Reminder lead time (minutes)'))
                             ->numeric()
                             ->minValue(1),
+                        Select::make('mar_schedule_mode')
+                            ->label(__('Default dose schedule strategy'))
+                            ->helperText(__('Used for new medication orders when the prescriber does not choose a schedule.'))
+                            ->options([
+                                'interval_based' => __('Interval from first dose (e.g. BD = every 12h)'),
+                                'standard_times' => __('Standard ward times (e.g. 08:00, 20:00)'),
+                            ])
+                            ->required()
+                            ->native(false),
                         TextInput::make('mar_schedule_grace_minutes')
                             ->label(__('Dose grace window (minutes)'))
                             ->numeric()

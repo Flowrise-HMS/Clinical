@@ -47,7 +47,7 @@ class MedicationDoseScheduleService
             ? Carbon::parse($scheduleData['course_started_at'])
             : ($detail->course_started_at ?? now());
 
-        $scheduleType = $scheduleData['schedule_type'] ?? 'interval_based';
+        $scheduleType = $scheduleData['schedule_type'] ?? app_settings()->marDefaultScheduleType();
         $customDoseTimes = $scheduleData['custom_dose_times'] ?? null;
         if (is_string($customDoseTimes)) {
             $customDoseTimes = array_values(array_filter(array_map('trim', explode(',', $customDoseTimes))));

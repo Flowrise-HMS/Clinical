@@ -12,7 +12,8 @@ class ClinicalSettings extends Settings
 
     public bool $mar_allergy_block_on_match = false;
 
-    public string $mar_schedule_mode = 'fixed_from_order';
+    /** Default dose-schedule strategy for new orders: `interval_based` or `standard_times`. */
+    public string $mar_schedule_mode = 'interval_based';
 
     public int $mar_schedule_grace_minutes = 30;
 
