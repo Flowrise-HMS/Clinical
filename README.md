@@ -72,7 +72,7 @@ For laboratory, radiology, and pathology fulfillment after an order is placed, s
 | `app/Events/`, `app/Listeners/`, `app/Notifications/` | Admission requested/accepted/rejected/cancelled, patient admitted/transferred/discharged, encounter finished/cancelled, request item created/updated/cancelled; ward and patient notifications (patient-facing channels per Core notification settings; ward-staff channels per the Clinical settings "Staff alert channels"; MAR reminders per "Reminder channels"). |
 | `app/Console/` | `clinical:mar-dose-reminders` (every 5 min), `clinical:expire-admission-requests` (hourly), `clinical:backfill-bed-status`. |
 | `app/Http/` | `CarePlanPdfController` (`GET /care-plans/{carePlan}/pdf`), `DischargeSummaryPdfController` (`GET /discharge-summaries/{dischargeSummary}/pdf`). |
-| `database/migrations/` | 42 migrations as of 2026-09-20; 26 factories; seeders for diagnosis codes and the nursing diagnosis catalogue. |
+| `database/migrations/` | 45 migrations as of 2026-11-24; 27 factories; seeders for diagnosis codes and the nursing diagnosis catalogue. |
 
 ## Current status
 
@@ -96,5 +96,6 @@ Configuration lives in `config/config.php` (admission request expiry 24 h, long-
 - **Service provider:** `Modules\Clinical\Providers\ClinicalServiceProvider` (registers sub-providers and loads Filament views under the `clinical` view namespace).
 - **Patterns:** prefer `*Service` classes for writes; use Filament `Schema` / action patterns consistent with the rest of FlowRise (see implementation plan for naming).
 - **Custom permissions:** `manage_clinical_settings`, `manage_bed_status`, `sign_discharge_summary`, `print_discharge_summary` (config), plus `discharge_patient` / `print_hospital_card` from Patient and `administer_medication` / `order_prescription_medication` from Pharmacy.
-- **Tests:** `php artisan test --compact Modules/Clinical/tests` (93 test files; the four Playwright browser tests time out on machines without a working headless Chromium and are not a regression signal).
+- **Tests:** `php artisan test --compact Modules/Clinical/tests` (114 test files; the four Playwright browser tests time out on machines without a working headless Chromium and are not a regression signal).
 - **FHIR:** data shapes and names often follow **HL7 FHIR** ideas (for example, “Encounter”, “ServiceRequest”, “CarePlan”) to ease interoperability—you can ignore FHIR day-to-day unless you are building an export or API.
+- **REST API** (Api module, token scope `clinical`): encounters, triage, vitals, allergies, notes, diagnoses, service requests, tasks, MAR entries, admission requests, discharge summaries, care plans. Records without a policy follow the panel: admissions and triage follow the encounter, MAR reading follows the service request and recording needs `administer_medication`. Inpatients are not completed over the API; they leave through discharge. See the [API Reference](../../docs/developer-guide/api-reference.md).
