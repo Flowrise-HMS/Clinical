@@ -60,7 +60,7 @@ class TaskController extends ClinicalApiController
 
         return $this->act($id, 'update', fn (Task $task) => $this->tasks->completeTask(
             $task,
-            isset($data['outcome']) ? TaskOutcome::from($data['outcome']) : TaskOutcome::COMPLETED,
+            isset($data['outcome']) ? enum_from(TaskOutcome::class, $data['outcome']) : TaskOutcome::COMPLETED,
             $data['results'] ?? null,
             $data['notes'] ?? null,
         ));

@@ -69,8 +69,8 @@ class VitalSignController extends ClinicalApiController
     protected function createRecord(array $data): Model
     {
         $patient = $this->patient($data['patient_id']);
-        $encounterId = isset($data['encounter_id']) ? $this->encounter($data['encounter_id'])->getKey() : null;
-        $type = isset($data['type']) ? VitalSignType::from($data['type']) : null;
+        $encounterId = $this->encounterIdFor($patient, $data['encounter_id'] ?? null);
+        $type = isset($data['type']) ? enum_from(VitalSignType::class, $data['type']) : null;
 
         return $this->vitals->record($patient, collect($data)->except(['patient_id', 'encounter_id', 'type'])->all(), $encounterId, $type);
     }

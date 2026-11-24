@@ -62,9 +62,9 @@ class ClinicalNoteController extends ClinicalApiController
 
     protected function createRecord(array $data): Model
     {
-        $encounterId = isset($data['encounter_id']) ? $this->encounter($data['encounter_id'])->getKey() : null;
+        $patient = $this->patient($data['patient_id']);
 
-        return $this->notes->record($this->patient($data['patient_id']), $data, $encounterId);
+        return $this->notes->record($patient, $data, $this->encounterIdFor($patient, $data['encounter_id'] ?? null));
     }
 
     protected function updateRecord(Model $record, array $data): Model

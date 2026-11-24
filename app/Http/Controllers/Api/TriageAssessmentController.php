@@ -4,13 +4,16 @@ namespace Modules\Clinical\Http\Controllers\Api;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Validation\Rule;
+use Modules\Clinical\Classes\Actions\EncounterActions;
 use Modules\Clinical\Classes\Services\TriageService;
 use Modules\Clinical\Enums\AvpuLevel;
 use Modules\Clinical\Enums\TriageAgeBand;
 use Modules\Clinical\Enums\TriageCategory;
 use Modules\Clinical\Enums\TriageDisposition;
 use Modules\Clinical\Enums\TriageMobility;
+use Modules\Clinical\Filament\Clusters\Clinical\Resources\Encounters\Schemas\TriageForm;
 use Modules\Clinical\Models\TriageAssessment;
+use Symfony\Component\HttpKernel\Exception\AccessDeniedHttpException;
 
 /**
  * @group Clinical
@@ -69,8 +72,27 @@ class TriageAssessmentController extends ClinicalApiController
         ];
     }
 
+    /**
+     * As in the panel, triage follows the encounter's permissions.
+     */
+    protected function authorizeResource(string $ability, ?Model $record = null): void
+    {
+        $this->authorizeThroughEncounter($ability, $record?->encounter);
+    }
+
     protected function createRecord(array $data): Model
     {
-        return $this->triage->assess($this->encounter($data['encounter_id']), $data, auth()->id());
+        $encounter = $this->encounter($data['encounter_id']);
+        $this->authorizeThroughEncounter('update', $encounter);
+
+        if (! EncounterActions::isTriageVisible($encounter)) {
+            throw new \DomainException('Only arrived, triaged or in-progress non-inpatient encounters can be triaged.');
+        }
+
+        if (filled($data['override_category'] ?? null) && ! TriageForm::canOverride()) {
+            throw new AccessDeniedHttpException('You are not allowed to override the triage category.');
+        }
+
+        return $this->triage->assess($encounter, $data, auth()->id());
     }
 }

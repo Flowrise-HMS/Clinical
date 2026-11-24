@@ -78,7 +78,13 @@ class DischargeSummaryController extends ClinicalApiController
 
     protected function createRecord(array $data): Model
     {
-        return $this->summaries->draftFor($this->encounter($data['encounter_id']), auth()->id());
+        $encounter = $this->encounter($data['encounter_id']);
+
+        if (! $encounter->isInpatient()) {
+            throw new \DomainException('Discharge summaries are written for inpatient encounters.');
+        }
+
+        return $this->summaries->draftFor($encounter, auth()->id());
     }
 
     protected function updateRecord(Model $record, array $data): Model

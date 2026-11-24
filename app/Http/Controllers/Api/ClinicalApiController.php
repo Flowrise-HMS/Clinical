@@ -21,4 +21,37 @@ abstract class ClinicalApiController extends ResourceApiController
     {
         return Encounter::query()->findOrFail($id);
     }
+
+    /**
+     * The encounter id, provided the encounter belongs to the patient.
+     */
+    protected function encounterIdFor(Patient $patient, ?string $encounterId): ?string
+    {
+        if ($encounterId === null) {
+            return null;
+        }
+
+        $encounter = $this->encounter($encounterId);
+
+        if ((string) $encounter->patient_id !== (string) $patient->getKey()) {
+            throw new \InvalidArgumentException('The encounter belongs to another patient.');
+        }
+
+        return (string) $encounter->getKey();
+    }
+
+    /**
+     * Authorisation for records the panel guards through their encounter
+     * (admission requests, triage): reading follows encounter reads, anything
+     * else needs to be able to update the encounter.
+     */
+    protected function authorizeThroughEncounter(string $ability, ?Encounter $encounter = null): void
+    {
+        match (true) {
+            $ability === 'viewAny' => $this->authorizeApi('viewAny', Encounter::class),
+            $encounter === null => $this->requirePermission('Update Encounter'),
+            $ability === 'view' => $this->authorizeApi('view', $encounter),
+            default => $this->authorizeApi('update', $encounter),
+        };
+    }
 }

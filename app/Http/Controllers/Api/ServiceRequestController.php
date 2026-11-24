@@ -67,13 +67,13 @@ class ServiceRequestController extends ClinicalApiController
 
     protected function createRecord(array $data): Model
     {
-        $encounterId = isset($data['encounter_id']) ? $this->encounter($data['encounter_id'])->getKey() : null;
+        $patient = $this->patient($data['patient_id']);
 
         return $this->requests->createForPatient(
-            $this->patient($data['patient_id']),
+            $patient,
             $data['items'],
-            $encounterId,
-            isset($data['priority']) ? RequestPriority::from($data['priority']) : null,
+            $this->encounterIdFor($patient, $data['encounter_id'] ?? null),
+            isset($data['priority']) ? enum_from(RequestPriority::class, $data['priority']) : null,
             $data['notes'] ?? null,
         );
     }

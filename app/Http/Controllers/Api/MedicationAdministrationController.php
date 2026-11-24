@@ -8,6 +8,7 @@ use Modules\Clinical\Classes\Services\MedicationAdministrationService;
 use Modules\Clinical\Enums\MedicationAdministrationStatus;
 use Modules\Clinical\Models\MedicationAdministration;
 use Modules\Clinical\Models\RequestItem;
+use Modules\Clinical\Models\ServiceRequest;
 
 /**
  * @group Clinical
@@ -55,6 +56,19 @@ class MedicationAdministrationController extends ClinicalApiController
             'prn_reason' => ['nullable', 'string', 'max:500'],
             'notes' => ['nullable', 'string', 'max:2000'],
         ];
+    }
+
+    /**
+     * Reading follows the order (service request) the dose belongs to; recording
+     * needs the MAR permission, as in the panel.
+     */
+    protected function authorizeResource(string $ability, ?Model $record = null): void
+    {
+        match ($ability) {
+            'viewAny' => $this->authorizeApi('viewAny', ServiceRequest::class),
+            'view' => $this->authorizeApi('view', $record?->requestItem?->serviceRequest),
+            default => $this->requirePermission('administer_medication'),
+        };
     }
 
     protected function createRecord(array $data): Model

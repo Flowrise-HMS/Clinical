@@ -6,6 +6,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
+use Modules\Clinical\Classes\Services\AdtService;
 use Modules\Clinical\Classes\Services\EncounterService;
 use Modules\Clinical\Enums\EncounterPriority;
 use Modules\Clinical\Enums\EncounterType;
@@ -21,7 +22,7 @@ class EncounterController extends ClinicalApiController
 {
     protected string $defaultSort = '-created_at';
 
-    public function __construct(protected EncounterService $encounters) {}
+    public function __construct(protected EncounterService $encounters, protected AdtService $adt) {}
 
     public static function model(): string
     {
@@ -76,9 +77,9 @@ class EncounterController extends ClinicalApiController
     {
         return $this->encounters->createForPatient(
             $this->patient($data['patient_id']),
-            EncounterType::from($data['type']),
+            enum_from(EncounterType::class, $data['type']),
             $data['chief_complaint'] ?? null,
-            isset($data['priority']) ? EncounterPriority::from($data['priority']) : null,
+            isset($data['priority']) ? enum_from(EncounterPriority::class, $data['priority']) : null,
             $data['location_id'] ?? null,
             $data['department_id'] ?? null,
         );
@@ -101,7 +102,7 @@ class EncounterController extends ClinicalApiController
     }
 
     /**
-     * Complete an active outpatient encounter.
+     * Complete an active outpatient encounter. Inpatients leave through the discharge workflow.
      *
      * @bodyParam notes string Closing notes. Example: Reviewed and discharged home.
      */
@@ -109,11 +110,17 @@ class EncounterController extends ClinicalApiController
     {
         $data = $request->validate(['notes' => ['nullable', 'string', 'max:5000']]);
 
-        return $this->act($id, 'update', fn (Encounter $encounter) => $this->encounters->completeEncounter($encounter, $data['notes'] ?? null, auth()->id()));
+        return $this->act($id, 'update', function (Encounter $encounter) use ($data): Encounter {
+            if ($encounter->type === EncounterType::INPATIENT || filled($encounter->bed_id)) {
+                throw new \DomainException('Inpatient encounters are closed by discharging the patient.');
+            }
+
+            return $this->encounters->completeEncounter($encounter, $data['notes'] ?? null, auth()->id());
+        });
     }
 
     /**
-     * Cancel an encounter.
+     * Cancel an encounter (releases its bed and any pending admission request).
      *
      * @bodyParam reason string Why it was cancelled. Example: Registered in error.
      */
@@ -121,6 +128,6 @@ class EncounterController extends ClinicalApiController
     {
         $data = $request->validate(['reason' => ['nullable', 'string', 'max:500']]);
 
-        return $this->act($id, 'update', fn (Encounter $encounter) => $this->encounters->cancelEncounter($encounter, $data['reason'] ?? null));
+        return $this->act($id, 'update', fn (Encounter $encounter) => $this->adt->cancel($encounter, $data['reason'] ?? null));
     }
 }

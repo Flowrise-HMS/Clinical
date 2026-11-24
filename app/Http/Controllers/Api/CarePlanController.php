@@ -64,7 +64,7 @@ class CarePlanController extends ClinicalApiController
         return $this->plans->create(
             $encounter->patient,
             $encounter,
-            CarePlanCategory::from($data['category']),
+            enum_from(CarePlanCategory::class, $data['category']),
             auth()->user(),
             collect($data)->only(['title', 'description', 'period_start', 'period_end'])->all(),
         );

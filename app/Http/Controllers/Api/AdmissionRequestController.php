@@ -43,9 +43,25 @@ class AdmissionRequestController extends ClinicalApiController
         ];
     }
 
+    /**
+     * Same rules as the panel: reading follows the encounter, deciding needs
+     * update on it, and the requester may withdraw their own pending request.
+     */
+    protected function authorizeResource(string $ability, ?Model $record = null): void
+    {
+        if ($ability === 'cancel' && $record instanceof AdmissionRequest && $record->isCancellableBy(auth()->id())) {
+            return;
+        }
+
+        $this->authorizeThroughEncounter($ability, $record?->encounter);
+    }
+
     protected function createRecord(array $data): Model
     {
-        return $this->adt->requestAdmission($this->encounter($data['encounter_id']), $data['ward_id'], $data['bed_id'] ?? null, $data['notes'] ?? null);
+        $encounter = $this->encounter($data['encounter_id']);
+        $this->authorizeThroughEncounter('update', $encounter);
+
+        return $this->adt->requestAdmission($encounter, $data['ward_id'], $data['bed_id'] ?? null, $data['notes'] ?? null);
     }
 
     /**
@@ -61,7 +77,7 @@ class AdmissionRequestController extends ClinicalApiController
             'notes' => ['nullable', 'string', 'max:2000'],
         ]);
 
-        return $this->act($id, 'update', function (AdmissionRequest $admission) use ($data): AdmissionRequest {
+        return $this->act($id, 'accept', function (AdmissionRequest $admission) use ($data): AdmissionRequest {
             $this->adt->acceptAdmission($admission, $data['bed_id'], $data['notes'] ?? null);
 
             return $admission->refresh();
@@ -77,7 +93,7 @@ class AdmissionRequestController extends ClinicalApiController
     {
         $data = $request->validate(['reason' => ['required', 'string', 'max:500']]);
 
-        return $this->act($id, 'update', fn (AdmissionRequest $admission) => $this->adt->rejectAdmission($admission, $data['reason']));
+        return $this->act($id, 'reject', fn (AdmissionRequest $admission) => $this->adt->rejectAdmission($admission, $data['reason']));
     }
 
     /**
@@ -89,6 +105,6 @@ class AdmissionRequestController extends ClinicalApiController
     {
         $data = $request->validate(['reason' => ['nullable', 'string', 'max:500']]);
 
-        return $this->act($id, 'update', fn (AdmissionRequest $admission) => $this->adt->cancelAdmissionRequest($admission, $data['reason'] ?? null));
+        return $this->act($id, 'cancel', fn (AdmissionRequest $admission) => $this->adt->cancelAdmissionRequest($admission, $data['reason'] ?? null));
     }
 }

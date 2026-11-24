@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use Illuminate\Foundation\Testing\DatabaseTransactions;
+use Modules\Clinical\Enums\EncounterStatus;
 use Modules\Clinical\Enums\EncounterType;
 use Modules\Clinical\Models\AdmissionRequest;
 use Modules\Clinical\Models\Allergy;
@@ -161,7 +162,8 @@ describe('care plans', function () use ($modules): void {
 describe('medication administrations', function () use ($modules): void {
     ApiResourceTestSuite::register([
         'uri' => 'medication-administrations',
-        'subject' => 'MedicationAdministration',
+        // Reading follows the order; recording needs the MAR permission.
+        'subject' => 'ServiceRequest',
         'scope' => 'clinical',
         'modules' => $modules,
         'make' => fn (TestCase $test, Branch $branch, array $attributes = []) => MedicationAdministration::factory()->create(['request_item_id' => clinicalApiRequestItem($branch)->id, ...$attributes]),
@@ -171,7 +173,8 @@ describe('medication administrations', function () use ($modules): void {
 describe('admission requests', function () use ($modules): void {
     ApiResourceTestSuite::register([
         'uri' => 'admission-requests',
-        'subject' => 'AdmissionRequest',
+        // Follows the encounter, as in the panel.
+        'subject' => 'Encounter',
         'scope' => 'clinical',
         'modules' => $modules,
         'make' => fn (TestCase $test, Branch $branch, array $attributes = []) => AdmissionRequest::factory()->create(['encounter_id' => clinicalApiEncounter($branch)->id, ...$attributes]),
@@ -196,12 +199,14 @@ describe('discharge summaries', function () use ($modules): void {
 describe('triage assessments', function () use ($modules): void {
     ApiResourceTestSuite::register([
         'uri' => 'triage-assessments',
-        'subject' => 'TriageAssessment',
+        // Follows the encounter, as in the panel.
+        'subject' => 'Encounter',
+        'permissions' => ['create' => 'Update Encounter'],
         'scope' => 'clinical',
         'modules' => $modules,
         'make' => fn (TestCase $test, Branch $branch, array $attributes = []) => TriageAssessment::factory()->create(['encounter_id' => clinicalApiEncounter($branch)->id, ...$attributes]),
         'store' => fn (TestCase $test, Branch $branch): array => [
-            'encounter_id' => clinicalApiEncounter($branch)->id,
+            'encounter_id' => clinicalApiEncounter($branch, ['status' => EncounterStatus::ARRIVED])->id,
             'mobility' => 'walking',
             'avpu' => 'alert',
             'heart_rate' => 88,
