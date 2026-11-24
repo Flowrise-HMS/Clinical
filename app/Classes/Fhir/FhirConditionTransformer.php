@@ -129,11 +129,7 @@ class FhirConditionTransformer implements FhirResourceContract
 
     public function findById(string $id): ?Model
     {
-        return EncounterDiagnosis::with([
-            'encounter',
-            'patient',
-            'diagnosisCode',
-        ])->find($id);
+        return $this->query()->find($id);
     }
 
     /**

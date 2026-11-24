@@ -213,10 +213,7 @@ class FhirAllergyIntoleranceTransformer implements FhirResourceContract
 
     public function findById(string $id): ?Model
     {
-        return Allergy::with([
-            'patient',
-            'verifiedBy',
-        ])->find($id);
+        return $this->query()->find($id);
     }
 
     /**
