@@ -192,7 +192,7 @@ class WardInchargeAndDailyStatementTest extends TestCase
         DischargeSummary::factory()->create([
             'encounter_id' => $deceasedEncounter->id,
             'patient_id' => $patient2->id,
-            'discharge_disposition' => DischargeDisposition::DECEASED,
+            'disposition' => DischargeDisposition::DECEASED,
         ]);
 
         $service = app(DailyWardStatementService::class);

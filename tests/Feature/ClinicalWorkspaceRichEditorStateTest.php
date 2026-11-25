@@ -88,6 +88,7 @@ function expectedMedicationItemDefaults(): array
         'frequency' => null,
         'route' => null,
         'duration_days' => null,
+        'start_time' => null,
         'instructions' => null,
         'prn' => false,
         'indication' => null,

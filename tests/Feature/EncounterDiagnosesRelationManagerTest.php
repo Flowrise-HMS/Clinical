@@ -40,6 +40,11 @@ beforeEach(function (): void {
         'certainty' => DiagnosisCertainty::Provisional,
         'ordered_by' => User::factory()->create(['branch_id' => $this->branch->id])->id,
     ]);
+
+    // Relation managers check viewAny on mount.
+    $viewer = User::factory()->create(['branch_id' => $this->branch->id]);
+    $viewer->givePermissionTo(Permission::findOrCreate('ViewAny EncounterDiagnosis', 'web'));
+    $this->actingAs($viewer);
 });
 
 function relationManagerEncounterDiagnosis(array $attributes): EncounterDiagnosis

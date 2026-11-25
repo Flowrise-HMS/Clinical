@@ -144,7 +144,7 @@ class DailyWardStatementService
         $dispositionsByEncounter = $dischargeEncounterIds->isNotEmpty()
             ? DischargeSummary::query()
                 ->whereIn('encounter_id', $dischargeEncounterIds)
-                ->pluck('discharge_disposition', 'encounter_id')
+                ->pluck('disposition', 'encounter_id')
             : collect();
 
         $normalDischarges = 0;

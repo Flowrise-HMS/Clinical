@@ -41,6 +41,11 @@ beforeEach(function (): void {
     $this->request->items()->save(
         RequestItem::factory()->forService(Service::factory()->create(['name' => 'Full Blood Count']))->make()
     );
+
+    // Relation managers check viewAny on mount.
+    $viewer = User::factory()->create(['branch_id' => $this->branch->id]);
+    $viewer->givePermissionTo(Permission::findOrCreate('ViewAny ServiceRequest', 'web'));
+    $this->actingAs($viewer);
 });
 
 function mountServiceRequestsRelationManager(Encounter $encounter): Testable

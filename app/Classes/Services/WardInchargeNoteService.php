@@ -28,7 +28,7 @@ class WardInchargeNoteService
         $author ??= Auth::user();
         $noteType = $data['note_type'] instanceof WardNoteType
             ? $data['note_type']
-            : WardNoteType::from($data['note_type'] ?? WardNoteType::DAILY_AFFAIRS->value);
+            : enum_from(WardNoteType::class, $data['note_type'] ?? WardNoteType::DAILY_AFFAIRS);
 
         $requiresAck = array_key_exists('requires_acknowledgement', $data)
             ? (bool) $data['requires_acknowledgement']

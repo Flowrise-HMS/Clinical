@@ -39,6 +39,7 @@ use Modules\Core\Classes\Services\WardAccessService;
 use Modules\Core\Classes\Support\PageWidgetsRegistry;
 use Modules\Core\Enums\BedStatus;
 use Modules\Core\Enums\SidebarGroup;
+use Modules\Core\Filament\Support\ClientIdentityColumn;
 use Modules\Core\Models\Location;
 use Modules\Core\Support\ModuleAvailability;
 
@@ -136,17 +137,10 @@ class WardBoard extends Page implements HasTable
                     ->sortable()
                     ->placeholder(__('Unassigned'))
                     ->weight('bold'),
-                TextColumn::make('patient.full_name')
-                    ->label(__('Patient'))
+                ClientIdentityColumn::make(label: __('Patient'), withIdentifier: false)
                     ->description(fn (Encounter $record): ?string => $record->patient?->mrn)
                     ->url(fn (Encounter $record): string => ClinicalWorkspace::getUrl(['patientId' => $record->patient_id]), shouldOpenInNewTab: true)
-                    ->weight('medium')
-                    ->searchable(query: fn ($query, string $search) => $query->whereHas(
-                        'patient',
-                        fn ($q) => $q->where('first_name', 'like', "%{$search}%")
-                            ->orWhere('last_name', 'like', "%{$search}%")
-                            ->orWhere('mrn', 'like', "%{$search}%")
-                    )),
+                    ->weight('medium'),
                 TextColumn::make('patient.age_gender')
                     ->label(__('Age / Gender'))
                     ->state(fn (Encounter $record): string => collect([

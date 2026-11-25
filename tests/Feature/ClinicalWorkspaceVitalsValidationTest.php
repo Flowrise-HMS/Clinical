@@ -90,6 +90,7 @@ class ClinicalWorkspaceVitalsValidationTest extends TestCase
         $page = $this->makeWorkspacePage();
         $page->selectPatient($this->patient->id);
         $page->vitalsData = [
+            'recorded_at' => now()->toDateTimeString(),
             'systolic_bp' => 120,
             'diastolic_bp' => 80,
             'heart_rate' => 72,
