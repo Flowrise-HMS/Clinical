@@ -2,6 +2,7 @@
 
 namespace Modules\Clinical\Filament\Clusters\Clinical\Resources\EncounterDiagnoses\Schemas;
 
+use Filament\Forms\Components\Hidden;
 use Filament\Forms\Components\Repeater;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
@@ -38,7 +39,12 @@ class EncounterDiagnosisForm
                 ->label('Diagnoses')
                 ->defaultItems(1)
                 ->addActionLabel('Add diagnosis')
-                ->schema(self::itemElements())
+                ->schema([
+                    // Row identity for in-place updates. Named deliberately: the
+                    // service treats a bare `id` as a diagnosis *code* id.
+                    Hidden::make('encounter_diagnosis_id'),
+                    ...self::itemElements(),
+                ])
                 ->columns(1)
                 ->collapsible()
                 ->itemLabel(fn (array $state): ?string => $state['description'] ?? $state['icd_code'] ?? 'Diagnosis'),
@@ -160,11 +166,13 @@ class EncounterDiagnosisForm
                 ->rows(2)
                 ->placeholder('Optional notes for this diagnosis'),
 
-            TextInput::make('diagnosis_code_id')->hidden()->dehydrated(),
-            TextInput::make('icd_entity_id')->hidden()->dehydrated(),
-            TextInput::make('icd_uri')->hidden()->dehydrated(),
-            TextInput::make('icd_code')->hidden()->dehydrated(),
-            TextInput::make('icd10_code')->hidden()->dehydrated(),
+            // Hidden inputs (not hidden() fields): Filament drops hidden() fields from
+            // getState(), which would strip the ICD codes NHIS claims depend on.
+            Hidden::make('diagnosis_code_id'),
+            Hidden::make('icd_entity_id'),
+            Hidden::make('icd_uri'),
+            Hidden::make('icd_code'),
+            Hidden::make('icd10_code'),
         ];
     }
 

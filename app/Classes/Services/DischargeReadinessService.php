@@ -79,7 +79,10 @@ class DischargeReadinessService
 
         $items[] = $this->item('unsigned_notes', __('Unsigned clinical notes'), $draftNotes === 0, $draftNotes > 0 ? __(':count draft', ['count' => $draftNotes]) : null);
 
-        $hasDiagnosis = EncounterDiagnosis::query()->where('encounter_id', $encounter->id)->exists();
+        $hasDiagnosis = EncounterDiagnosis::query()
+            ->where('encounter_id', $encounter->id)
+            ->where('is_active', true)
+            ->exists();
         $items[] = $this->item('discharge_diagnosis', __('Discharge diagnosis recorded'), $hasDiagnosis, null);
 
         $requireSummary = (bool) config('clinical.discharge.require_signed_summary', true);

@@ -7,6 +7,7 @@ use Filament\Forms\Components\Hidden;
 use Filament\Resources\RelationManagers\RelationManager;
 use Filament\Schemas\Schema;
 use Filament\Tables\Table;
+use Illuminate\Database\Eloquent\Builder;
 use Modules\Clinical\Filament\Clusters\Clinical\Resources\EncounterDiagnoses\Schemas\EncounterDiagnosisForm;
 use Modules\Clinical\Filament\Clusters\Clinical\Resources\EncounterDiagnoses\Tables\EncounterDiagnosesTable;
 
@@ -29,6 +30,7 @@ class DiagnosesRelationManager extends RelationManager
     public function table(Table $table): Table
     {
         return EncounterDiagnosesTable::configure($table)
+            ->modifyQueryUsing(fn (Builder $query): Builder => $query->where('is_active', true))
             ->headerActions([
                 CreateAction::make(),
             ]);

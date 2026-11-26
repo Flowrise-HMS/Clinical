@@ -33,26 +33,69 @@ class DiagnosisService
     }
 
     /**
-     * Replace active diagnoses for an encounter with the provided set (workspace form source of truth).
+     * Make the encounter's active diagnoses match the submitted set (workspace form
+     * source of truth). Rows that carry an `encounter_diagnosis_id` belonging to one
+     * of this encounter's active diagnoses are updated in place, so re-saving an
+     * edit never produces a new row; rows without one are created; active rows
+     * missing from the submission are deactivated. An id from another encounter is
+     * ignored and the row is treated as new.
+     *
+     * Pass `$loadedIds` (the rows the caller's form was showing) so that only rows the
+     * user could have removed are retired. A diagnosis added meanwhile from the header
+     * menu or by a colleague was never on the form, so its absence is not a removal.
      *
      * @param  array<int, array<string, mixed>>  $diagnoses
+     * @param  list<string>|null  $loadedIds  null retires every active row not submitted
      */
     public function syncForEncounter(
         Patient $patient,
         array $diagnoses,
         string $encounterId,
         ?int $orderedBy = null,
+        ?array $loadedIds = null,
     ): void {
         $diagnoses = $this->hydrateRows($diagnoses);
         $this->assertValidRows($diagnoses);
 
-        DB::transaction(function () use ($patient, $diagnoses, $encounterId, $orderedBy) {
+        DB::transaction(function () use ($patient, $diagnoses, $encounterId, $orderedBy, $loadedIds) {
+            $existing = EncounterDiagnosis::query()
+                ->where('encounter_id', $encounterId)
+                ->where('is_active', true)
+                ->get()
+                ->keyBy('id');
+
+            $kept = [];
+            $new = [];
+
+            foreach ($diagnoses as $dx) {
+                $rowId = $dx['encounter_diagnosis_id'] ?? null;
+
+                if (! filled($rowId) || ! $existing->has((string) $rowId)) {
+                    $new[] = $dx;
+
+                    continue;
+                }
+
+                $attributes = $this->rowAttributes($dx);
+
+                if ($attributes === null) {
+                    continue;
+                }
+
+                /** @var EncounterDiagnosis $row */
+                $row = $existing->get((string) $rowId);
+                $row->fill($attributes)->save();
+                $kept[] = $row->id;
+            }
+
             EncounterDiagnosis::query()
                 ->where('encounter_id', $encounterId)
                 ->where('is_active', true)
+                ->whereNotIn('id', $kept)
+                ->when($loadedIds !== null, fn ($query) => $query->whereIn('id', $loadedIds))
                 ->update(['is_active' => false]);
 
-            $this->createRows($patient, $diagnoses, $encounterId, $orderedBy);
+            $this->createRows($patient, $new, $encounterId, $orderedBy);
         });
     }
 
@@ -67,62 +110,82 @@ class DiagnosisService
         ?string $fallbackNotes = null,
     ): void {
         foreach ($diagnoses as $dx) {
-            $icdCode = $dx['icd_code'] ?? null;
-            $icd10Code = $dx['icd10_code'] ?? null;
-            $diagnosisCodeId = $dx['diagnosis_code_id'] ?? $dx['id'] ?? null;
-            $description = $dx['description'] ?? $dx['label'] ?? null;
-            $icdEntityId = $dx['icd_entity_id'] ?? null;
-            $icdUri = $dx['icd_uri'] ?? null;
+            $attributes = $this->rowAttributes($dx, $fallbackNotes);
 
-            if (filled($diagnosisCodeId)) {
-                $code = DiagnosisCode::find($diagnosisCodeId);
-                if ($code) {
-                    $diagnosisCodeId = $code->id;
-                    $icdCode ??= $code->code;
-                    $description ??= $code->description;
-                } else {
-                    $diagnosisCodeId = null;
-                }
-            } else {
-                $diagnosisCodeId = null;
-            }
-
-            if (! filled($description)) {
+            if ($attributes === null) {
                 continue;
             }
 
-            if (! filled($diagnosisCodeId) && filled($icdEntityId)) {
-                $diagnosisCodeId = app(IcdCatalogueService::class)->localId(
-                    new DiagnosisCodeSearchResult(
-                        localId: null,
-                        code: $icdCode,
-                        label: $description,
-                        externalId: $icdEntityId,
-                        uri: $icdUri,
-                        source: 'who',
-                    )
-                );
-            }
-
-            $rowNotes = $dx['notes'] ?? $fallbackNotes;
-
             EncounterDiagnosis::create([
+                ...$attributes,
                 'encounter_id' => $encounterId,
                 'patient_id' => $patient->id,
-                'diagnosis_code_id' => $diagnosisCodeId,
-                'icd_entity_id' => $icdEntityId,
-                'icd_uri' => $icdUri,
-                'icd_code' => $icdCode,
-                'icd10_code' => $icd10Code,
-                'description' => $description,
-                'notes' => is_string($rowNotes) ? $rowNotes : null,
-                'type' => $this->resolveType($dx['type'] ?? null),
-                'is_new_case' => filter_var($dx['is_new_case'] ?? false, FILTER_VALIDATE_BOOLEAN),
-                'certainty' => $this->resolveCertainty($dx['certainty'] ?? null),
                 'ordered_by' => $orderedBy ?? auth()->id(),
                 'is_active' => true,
             ]);
         }
+    }
+
+    /**
+     * Resolve one submitted row to the clinical attributes shared by create and
+     * update. Returns null when the row has no usable description.
+     *
+     * @param  array<string, mixed>  $dx
+     * @return array<string, mixed>|null
+     */
+    protected function rowAttributes(array $dx, ?string $fallbackNotes = null): ?array
+    {
+        $icdCode = $dx['icd_code'] ?? null;
+        $icd10Code = $dx['icd10_code'] ?? null;
+        $diagnosisCodeId = $dx['diagnosis_code_id'] ?? $dx['id'] ?? null;
+        $description = $dx['description'] ?? $dx['label'] ?? null;
+        $icdEntityId = $dx['icd_entity_id'] ?? null;
+        $icdUri = $dx['icd_uri'] ?? null;
+
+        if (filled($diagnosisCodeId)) {
+            $code = DiagnosisCode::find($diagnosisCodeId);
+            if ($code) {
+                $diagnosisCodeId = $code->id;
+                $icdCode ??= $code->code;
+                $description ??= $code->description;
+            } else {
+                $diagnosisCodeId = null;
+            }
+        } else {
+            $diagnosisCodeId = null;
+        }
+
+        if (! filled($description)) {
+            return null;
+        }
+
+        if (! filled($diagnosisCodeId) && filled($icdEntityId)) {
+            $diagnosisCodeId = app(IcdCatalogueService::class)->localId(
+                new DiagnosisCodeSearchResult(
+                    localId: null,
+                    code: $icdCode,
+                    label: $description,
+                    externalId: $icdEntityId,
+                    uri: $icdUri,
+                    source: 'who',
+                )
+            );
+        }
+
+        $rowNotes = $dx['notes'] ?? $fallbackNotes;
+
+        return [
+            'diagnosis_code_id' => $diagnosisCodeId,
+            'icd_entity_id' => $icdEntityId,
+            'icd_uri' => $icdUri,
+            'icd_code' => $icdCode,
+            'icd10_code' => $icd10Code,
+            'description' => $description,
+            'notes' => is_string($rowNotes) ? $rowNotes : null,
+            'type' => $this->resolveType($dx['type'] ?? null),
+            'is_new_case' => filter_var($dx['is_new_case'] ?? false, FILTER_VALIDATE_BOOLEAN),
+            'certainty' => $this->resolveCertainty($dx['certainty'] ?? null),
+        ];
     }
 
     /**
@@ -139,6 +202,7 @@ class DiagnosisService
 
         return [
             'diagnoses' => $records->map(fn (EncounterDiagnosis $dx): array => [
+                'encounter_diagnosis_id' => $dx->id,
                 'diagnosis_code_id' => $dx->diagnosis_code_id,
                 'code_search' => $dx->diagnosis_code_id
                     ? 'local:'.$dx->diagnosis_code_id
@@ -203,7 +267,8 @@ class DiagnosisService
             $dx['icd_entity_id'] = $dx['icd_entity_id'] ?? $code->icd_entity_id;
             $dx['icd_uri'] = $dx['icd_uri'] ?? $code->icd_uri;
 
-            if (! array_key_exists('icd10_code', $dx) && $code->source !== 'who') {
+            // Form rows always carry the key (null until a pick), so test presence by value.
+            if (! filled($dx['icd10_code'] ?? null) && $code->source !== 'who') {
                 $dx['icd10_code'] = $code->code;
             }
 

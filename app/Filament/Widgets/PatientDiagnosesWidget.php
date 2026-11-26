@@ -27,6 +27,7 @@ class PatientDiagnosesWidget extends BaseTableWidget
     protected function getTableQuery(): Builder
     {
         return EncounterDiagnosis::query()
+            ->where('is_active', true)
             ->when(
                 filled($this->patientId),
                 fn (Builder $query): Builder => $query->where('patient_id', $this->patientId),

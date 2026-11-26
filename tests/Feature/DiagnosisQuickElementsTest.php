@@ -1,5 +1,6 @@
 <?php
 
+use Filament\Forms\Components\Hidden;
 use Filament\Schemas\Concerns\InteractsWithSchemas;
 use Filament\Schemas\Contracts\HasSchemas;
 use Filament\Schemas\Schema;
@@ -44,12 +45,15 @@ it('exposes a single searchable diagnosis search field', function (): void {
         ->and($elements['code_search']->isSearchable())->toBeTrue();
 });
 
-it('hides the icd code fields and removes the legacy nhis selector', function (): void {
+it('carries the icd code fields as hidden inputs and removes the legacy nhis selector', function (): void {
     $elements = diagnosisQuickElements();
 
+    // Hidden inputs, not hidden() fields: Filament drops hidden() fields from getState(),
+    // which would strip the ICD codes NHIS claims depend on when the workspace validates.
     foreach (['diagnosis_code_id', 'icd_entity_id', 'icd_uri', 'icd_code', 'icd10_code'] as $hiddenField) {
         expect($elements)->toHaveKey($hiddenField)
-            ->and($elements[$hiddenField]->isHidden())->toBeTrue();
+            ->and($elements[$hiddenField])->toBeInstanceOf(Hidden::class)
+            ->and($elements[$hiddenField]->isDehydrated())->toBeTrue();
     }
 
     expect($elements)->toHaveKey('description')

@@ -226,6 +226,15 @@ class Encounter extends BaseModel implements HasMedia, ProvidesClientIdentity
         return $this->hasMany(EncounterDiagnosis::class, 'encounter_id');
     }
 
+    /**
+     * Diagnoses currently recorded on the visit. Superseded or removed rows stay
+     * in `diagnoses()` with `is_active = false` for audit and FHIR history.
+     */
+    public function activeDiagnoses(): HasMany
+    {
+        return $this->diagnoses()->where('is_active', true);
+    }
+
     public function dischargeSummary(): HasOne
     {
         return $this->hasOne(DischargeSummary::class);

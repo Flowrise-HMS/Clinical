@@ -56,7 +56,7 @@ class ClinicalCanvasTreeBuilder
 
         $vitals = VitalSign::query()->where('patient_id', $patient->id)->with('recordedBy')->orderByDesc('recorded_at')->get();
         $notes = ClinicalNote::query()->where('patient_id', $patient->id)->with('author')->orderByDesc('created_at')->get();
-        $diagnoses = EncounterDiagnosis::query()->whereIn('encounter_id', $encounterIds)->with('diagnosisCode')->orderByDesc('created_at')->get();
+        $diagnoses = EncounterDiagnosis::query()->whereIn('encounter_id', $encounterIds)->where('is_active', true)->with('diagnosisCode')->orderByDesc('created_at')->get();
         $orders = ServiceRequest::query()->where('patient_id', $patient->id)->with(['orderedBy', 'items.service'])->orderByDesc('created_at')->get();
         $adtEvents = EncounterLocationEvent::query()->whereIn('encounter_id', $encounterIds)->with(['toLocation', 'toBed'])->orderByDesc('occurred_at')->get();
 

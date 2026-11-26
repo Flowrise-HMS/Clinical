@@ -33,9 +33,9 @@ class DischargeSummaryService
             return $existing;
         }
 
-        $encounter->loadMissing(['diagnoses.diagnosisCode']);
+        $encounter->loadMissing(['activeDiagnoses.diagnosisCode']);
 
-        $diagnoses = $encounter->diagnoses->map(fn (EncounterDiagnosis $diagnosis): array => [
+        $diagnoses = $encounter->activeDiagnoses->map(fn (EncounterDiagnosis $diagnosis): array => [
             'description' => $diagnosis->description ?: $diagnosis->diagnosisCode?->description,
             'icd10_code' => $diagnosis->icd10_code ?: $diagnosis->icd_code,
             'type' => $this->value($diagnosis->type),

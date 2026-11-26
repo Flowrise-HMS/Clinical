@@ -12,6 +12,7 @@ use Modules\Clinical\Classes\Services\MedicationFulfillmentPolicy;
 use Modules\Clinical\Classes\Services\NullPrescriptionScheduleCalculator;
 use Modules\Clinical\Console\BackfillBedStatusCommand;
 use Modules\Clinical\Console\ExpireAdmissionRequestsCommand;
+use Modules\Clinical\Console\PruneDiagnosisGhostsCommand;
 use Modules\Clinical\Console\SendMarDoseRemindersCommand;
 use Modules\Clinical\Contracts\DiagnosisCodeSearchContract;
 use Modules\Clinical\Contracts\PrescriptionScheduleCalculatorContract;
@@ -52,6 +53,7 @@ class ClinicalServiceProvider extends ModuleServiceProvider
     protected array $commands = [
         BackfillBedStatusCommand::class,
         ExpireAdmissionRequestsCommand::class,
+        PruneDiagnosisGhostsCommand::class,
         SendMarDoseRemindersCommand::class,
     ];
 
