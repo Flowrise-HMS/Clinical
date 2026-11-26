@@ -22,9 +22,24 @@ class ClinicalCustomPermissionSeeder extends Seeder
         'override_triage_category' => ['super_admin', 'doctor'],
     ];
 
+    /**
+     * Resource permissions for encounter diagnoses, per role. Shield's generated role
+     * dump predates the diagnosis resource, so without this a fresh install leaves
+     * doctors without the Diagnosis tab. Mirrors the clinical-note grants.
+     *
+     * @var array<string, list<string>>
+     */
+    public const ENCOUNTER_DIAGNOSIS_GRANTS = [
+        'super_admin' => ['ViewAny', 'View', 'Create', 'Update', 'Delete', 'Restore', 'ForceDelete', 'ForceDeleteAny', 'RestoreAny', 'Replicate', 'Reorder'],
+        'doctor' => ['ViewAny', 'View', 'Create', 'Update'],
+        'nurse' => ['ViewAny', 'View'],
+    ];
+
     public function run(): void
     {
         app(PermissionRegistrar::class)->forgetCachedPermissions();
+
+        static::grantEncounterDiagnosisPermissions();
 
         foreach ($this->matrix as $name => $roles) {
             $permission = Permission::findOrCreate($name, 'web');
@@ -35,6 +50,27 @@ class ClinicalCustomPermissionSeeder extends Seeder
                     ->first()
                     ?->givePermissionTo($permission);
             }
+        }
+
+        app(PermissionRegistrar::class)->forgetCachedPermissions();
+    }
+
+    /**
+     * Creates the encounter diagnosis permissions and grants them to the default
+     * roles that exist. Only adds: never removes a permission an admin granted.
+     * Also run by a migration so existing installs get it on upgrade.
+     */
+    public static function grantEncounterDiagnosisPermissions(): void
+    {
+        foreach (self::ENCOUNTER_DIAGNOSIS_GRANTS as $roleName => $actions) {
+            $role = Role::query()->where(['name' => $roleName, 'guard_name' => 'web'])->first();
+
+            $permissions = array_map(
+                fn (string $action): Permission => Permission::findOrCreate("{$action} EncounterDiagnosis", 'web'),
+                $actions,
+            );
+
+            $role?->givePermissionTo($permissions);
         }
 
         app(PermissionRegistrar::class)->forgetCachedPermissions();
