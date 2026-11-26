@@ -4,8 +4,10 @@ namespace Modules\Clinical\Filament\Widgets;
 
 use Filament\Widgets\TableWidget as BaseTableWidget;
 use Illuminate\Database\Eloquent\Builder;
+use Livewire\Attributes\On;
 use Livewire\Attributes\Reactive;
 use Modules\Clinical\Filament\Clusters\Clinical\Resources\VitalSigns\Tables\VitalSignsTable;
+use Modules\Clinical\Filament\Clusters\Workspace\Pages\ClinicalWorkspace;
 use Modules\Clinical\Models\VitalSign;
 
 class PatientVitalsHistoryWidget extends BaseTableWidget
@@ -21,6 +23,12 @@ class PatientVitalsHistoryWidget extends BaseTableWidget
 
     #[Reactive]
     public ?string $encounterId = null;
+
+    #[On(ClinicalWorkspace::PATIENT_UPDATED_EVENT)]
+    public function onWorkspacePatientUpdated(string $patientId, string $scope): void
+    {
+        // Running the listener re-renders the table with fresh records.
+    }
 
     protected function getTableQuery(): Builder
     {

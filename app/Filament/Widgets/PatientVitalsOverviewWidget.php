@@ -4,7 +4,9 @@ namespace Modules\Clinical\Filament\Widgets;
 
 use Filament\Widgets\StatsOverviewWidget as BaseWidget;
 use Filament\Widgets\StatsOverviewWidget\Stat;
+use Livewire\Attributes\On;
 use Livewire\Attributes\Reactive;
+use Modules\Clinical\Filament\Clusters\Workspace\Pages\ClinicalWorkspace;
 use Modules\Clinical\Models\VitalSign;
 
 class PatientVitalsOverviewWidget extends BaseWidget
@@ -13,11 +15,23 @@ class PatientVitalsOverviewWidget extends BaseWidget
 
     protected ?string $heading = 'Current Vitals';
 
+    /**
+     * Hosts that record vitals on the same page (the Clinical Workspace) pass null and
+     * rely on the update event below; other hosts keep a slow poll as a safety net.
+     */
+    public ?string $pollingInterval = '60s';
+
     #[Reactive]
     public ?string $patientId = null;
 
     #[Reactive]
     public ?string $encounterId = null;
+
+    #[On(ClinicalWorkspace::PATIENT_UPDATED_EVENT)]
+    public function onWorkspacePatientUpdated(string $patientId, string $scope): void
+    {
+        // Running the listener re-renders the widget; nothing else to do.
+    }
 
     protected function getStats(): array
     {

@@ -7,7 +7,8 @@
     @endphp
 
     @forelse($pastEncounters as $encounter)
-        <div class="rounded-lg border border-gray-200 dark:border-gray-700 dark:bg-white dark:bg-gray-800 overflow-hidden mb-3">
+        @php $expanded = $this->isHistoryExpanded($encounter['id'], $loop->index); @endphp
+        <div class="rounded-lg border border-gray-200 dark:border-gray-700 dark:bg-white dark:bg-gray-800 overflow-hidden mb-3" wire:key="history-{{ $encounter['id'] }}">
             {{-- Encounter Header --}}
             <div class="flex items-center justify-between px-4 py-3 bg-gray-50 dark:bg-gray-800/80 border-b border-gray-200 dark:border-gray-700">
                 <div class="flex items-center gap-2 min-w-0">
@@ -22,7 +23,18 @@
                         </x-filament::badge>
                     @endif
                 </div>
-                <span class="text-xs text-gray-400 shrink-0">{{ $encounter['date'] }}</span>
+                <div class="flex items-center gap-3 shrink-0">
+                    <span class="text-xs text-gray-400">{{ $encounter['date'] }}</span>
+                    <x-filament::link
+                        tag="button"
+                        size="sm"
+                        color="gray"
+                        wire:click="toggleHistoryDetails('{{ $encounter['id'] }}', {{ $loop->index }})"
+                        :icon="$expanded ? 'heroicon-m-chevron-up' : 'heroicon-m-chevron-down'"
+                    >
+                        {{ $expanded ? __('Hide details') : __('Show details') }}
+                    </x-filament::link>
+                </div>
             </div>
 
             <div class="px-4 py-3 space-y-3">
@@ -107,31 +119,47 @@
                 @endif
             </div>
         </div>
-        @livewire(\Modules\Clinical\Filament\Widgets\PatientOrdersWidget::class, [
-                'patientId' => $encounter['patient_id'],
-                'encounterId' => $encounter['id'],
-            ], key('orders-'.$encounter['id']))
-            <br>
-        @if ($completedResultsWidget)
-            @livewire($completedResultsWidget, [
+
+        {{-- Detail widgets: only for expanded encounters, and mounted lazily so the tab paints first. --}}
+        @if ($expanded)
+            @livewire(\Modules\Clinical\Filament\Widgets\PatientOrdersWidget::class, [
                     'patientId' => $encounter['patient_id'],
                     'encounterId' => $encounter['id'],
-                ], key('results-'.$encounter['id']))
+                    'lazy' => true,
+                ], key('orders-'.$encounter['id']))
                 <br>
+            @if ($completedResultsWidget)
+                @livewire($completedResultsWidget, [
+                        'patientId' => $encounter['patient_id'],
+                        'encounterId' => $encounter['id'],
+                        'lazy' => true,
+                    ], key('results-'.$encounter['id']))
+                    <br>
+            @endif
+            @livewire(\Modules\Clinical\Filament\Widgets\PatientDiagnosesWidget::class, [
+                    'patientId' => $encounter['patient_id'],
+                    'encounterId' => $encounter['id'],
+                    'lazy' => true,
+                ], key('diagnoses-'.$encounter['id']))
+                <br>
+            @livewire(\Modules\Clinical\Filament\Widgets\PatientNotesWidget::class, [
+                    'patientId' => $encounter['patient_id'],
+                    'encounterId' => $encounter['id'],
+                    'lazy' => true,
+                ], key('notes-'.$encounter['id']))
         @endif
-        @livewire(\Modules\Clinical\Filament\Widgets\PatientDiagnosesWidget::class, [
-                'patientId' => $encounter['patient_id'],
-                'encounterId' => $encounter['id'],
-            ], key('diagnoses-'.$encounter['id']))
-            <br>
-        @livewire(\Modules\Clinical\Filament\Widgets\PatientNotesWidget::class, [
-                'patientId' => $encounter['patient_id'],
-                'encounterId' => $encounter['id'],
-            ], key('notes-'.$encounter['id']))
     @empty
         <div class="flex flex-col items-center justify-center py-12 text-center">
             <x-filament::icon name="heroicon-o-clock" class="w-12 h-12 text-gray-300 dark:text-gray-600 mb-3" />
             <p class="text-sm text-gray-500 dark:text-gray-400">No previous encounter history found.</p>
         </div>
     @endforelse
+
+    @if ($this->hasMoreHistory())
+        <div class="flex justify-center pt-2">
+            <x-filament::button wire:click="loadMoreHistory" color="gray" outlined size="sm" icon="heroicon-m-arrow-down">
+                {{ __('Load older encounters') }}
+            </x-filament::button>
+        </div>
+    @endif
 </div>

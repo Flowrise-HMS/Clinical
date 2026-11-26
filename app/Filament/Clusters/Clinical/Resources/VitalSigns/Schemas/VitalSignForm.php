@@ -58,15 +58,7 @@ class VitalSignForm
                                 ->label('Systolic BP')
                                 ->suffix('mmHg')
                                 ->numeric()
-                                ->required()
-                                ->live()
-                                ->afterStateUpdated(function (Set $set, ?string $state) {
-                                    if ($state && $state > 140) {
-                                        $set('bp_warning', true);
-                                    } else {
-                                        $set('bp_warning', false);
-                                    }
-                                }),
+                                ->required(),
 
                             TextInput::make('diastolic_bp')
                                 ->label('Diastolic BP')
@@ -91,15 +83,7 @@ class VitalSignForm
                             TextInput::make('spo2')
                                 ->label('SpO2')
                                 ->suffix('%')
-                                ->numeric()
-                                ->live()
-                                ->afterStateUpdated(function (Set $set, ?string $state) {
-                                    if ($state && $state < 94) {
-                                        $set('spo2_warning', true);
-                                    } else {
-                                        $set('spo2_warning', false);
-                                    }
-                                }),
+                                ->numeric(),
 
                             TextInput::make('respiratory_rate')
                                 ->label('Respiratory Rate')

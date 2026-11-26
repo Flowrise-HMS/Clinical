@@ -27,7 +27,7 @@ class VitalSignService
                 'patient_id' => $patient->id,
                 'branch_id' => $patient->branch_id,
                 'recorded_by' => $recordedBy ?? auth()->id(),
-                'recorded_at' => $vitalData['recorded_at'] ?? now(),
+                'recorded_at' => filled($vitalData['recorded_at'] ?? null) ? $vitalData['recorded_at'] : now(),
                 'type' => $type ?? VitalSignType::ROUTINE,
             ];
 

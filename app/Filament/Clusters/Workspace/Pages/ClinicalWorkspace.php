@@ -22,6 +22,7 @@ use Filament\Schemas\Schema;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Support\Facades\Auth;
 use Livewire\Attributes\Computed;
+use Livewire\Attributes\Locked;
 use Livewire\Attributes\On;
 use Livewire\Attributes\Url;
 use Modules\Clinical\Classes\Actions\DischargeSummaryActions;
@@ -119,13 +120,81 @@ class ClinicalWorkspace extends Page implements HasSchemas
 
     public string $mode = 'home';
 
+    /**
+     * Kept in the URL so a refresh or back navigation returns to the same tab and
+     * other screens can deep-link to one. Validated against the user's tabs on select.
+     */
+    #[Url(as: 'tab', history: true, except: '')]
     public string $activeTab = '';
 
     public ?Encounter $currentEncounter = null;
 
+    /**
+     * Encounter whose diagnoses the diagnosis form currently holds. Kept across
+     * requests so a context reload only replaces the form when the visit changes,
+     * never while the clinician is mid-edit.
+     */
+    #[Locked]
+    public ?string $diagnosisFormEncounterId = null;
+
+    /**
+     * Diagnosis rows the form loaded. Saving may only retire these.
+     *
+     * @var list<string>
+     */
+    #[Locked]
+    public array $diagnosisFormLoadedIds = [];
+
+    /**
+     * Fingerprint of the form as loaded, to tell "untouched" from "mid-edit".
+     */
+    #[Locked]
+    public ?string $diagnosisFormFingerprint = null;
+
+    /**
+     * Last "Recorded at" value the page stamped itself. A value the user typed is
+     * never overwritten by a later auto-stamp.
+     */
+    #[Locked]
+    public ?string $vitalsAutoStampedAt = null;
+
+    /**
+     * Same, for the first dose time on medication rows.
+     */
+    #[Locked]
+    public ?string $medicationAutoStampedAt = null;
+
+    /**
+     * Per-request memo of the open encounter, keyed by patient id. Livewire restores
+     * `$currentPatient` by key only, so without this every call re-queries.
+     *
+     * @var array<string, ?Encounter>
+     */
+    protected array $openEncounterMemo = [];
+
+    /**
+     * @var array<string, mixed>|null
+     */
+    protected ?array $encounterStatusChipMemo = null;
+
     public string $searchTerm = '';
 
     public array $searchResults = [];
+
+    public const HISTORY_PAGE_SIZE = 10;
+
+    public const HISTORY_EXPANDED_BY_DEFAULT = 3;
+
+    /**
+     * Past encounters whose detail widgets the user opened or closed. The first few
+     * are open unless closed here, the rest closed unless opened, so the History tab
+     * does not mount dozens of nested components at once.
+     *
+     * @var array<string, bool>
+     */
+    public array $expandedHistory = [];
+
+    public int $historyLimit = self::HISTORY_PAGE_SIZE;
 
     public string $consultationChiefComplaint = '';
 
@@ -351,11 +420,6 @@ class ClinicalWorkspace extends Page implements HasSchemas
         $this->allergyService ??= app(AllergyService::class);
         $this->diagnosisService ??= app(DiagnosisService::class);
 
-        foreach ($this->registerForms() as $name => $schema) {
-            $this->cacheSchema($name, $schema);
-        }
-
-        $this->buildLabResultFormSchema();
     }
 
     public function mount(): void
@@ -369,15 +433,19 @@ class ClinicalWorkspace extends Page implements HasSchemas
     {
         $this->patientId = $id;
         $this->mode = 'patient';
+        // Drafts (including the diagnosis rows) belong to the previous patient.
+        $this->resetFormStates();
+        $this->patientFormFilledFor = null;
+        $this->expandedHistory = [];
+        $this->historyLimit = self::HISTORY_PAGE_SIZE;
         $this->loadPatientContext();
-        $this->fillPatientFormDataFromCurrentPatient();
 
         if ($fromRegistration) {
             $this->postRegistrationFlow = true;
-            $this->activeTab = $this->getPostRegistrationTab();
+            $this->activateTab($this->getPostRegistrationTab());
         } else {
             $this->postRegistrationFlow = false;
-            $this->setDefaultTab();
+            $this->activateTab($this->isAllowedTab($this->activeTab) ? $this->activeTab : $this->defaultTabForRole());
         }
 
         $this->triageData = $this->defaultTriageData();
@@ -413,7 +481,11 @@ class ClinicalWorkspace extends Page implements HasSchemas
         $this->consultationNotes = '';
         $this->consultationData = $this->defaultConsultationData();
         $this->diagnosisFormData = $this->defaultDiagnosisFormData();
+        $this->diagnosisFormEncounterId = null;
+        $this->diagnosisFormLoadedIds = [];
+        $this->diagnosisFormFingerprint = $this->fingerprintDiagnosisForm();
         $this->vitalsData = $this->defaultVitalsData();
+        $this->stampVitalsRecordedAt();
         $this->serviceRequestData = $this->defaultServiceRequestData();
         $this->labResultData = [];
         $this->allergyData = $this->defaultAllergyData();
@@ -567,7 +639,7 @@ class ClinicalWorkspace extends Page implements HasSchemas
     protected function defaultVitalsData(): array
     {
         return [
-            'recorded_at' => now()->format('Y-m-d H:i:s'),
+            'recorded_at' => null,
             'systolic_bp' => null,
             'diastolic_bp' => null,
             'heart_rate' => null,
@@ -641,6 +713,8 @@ class ClinicalWorkspace extends Page implements HasSchemas
 
     protected function loadPatientContext(): void
     {
+        $this->forgetOpenEncounterMemo();
+
         if (! $this->patientId) {
             return;
         }
@@ -649,6 +723,7 @@ class ClinicalWorkspace extends Page implements HasSchemas
             'allergies',
             'activeEncounter.bed',
             'activeEncounter.location',
+            'activeEncounter.pendingAdmissionRequest',
             'latestEncounter.bed',
             'latestEncounter.location',
             'latestVitals',
@@ -656,19 +731,66 @@ class ClinicalWorkspace extends Page implements HasSchemas
 
         if ($this->currentPatient) {
             $this->workspaceService->setPatient($this->currentPatient);
+            // Display context only (banner "last visit"). Writes go through writableEncounter().
             $this->currentEncounter = $this->currentPatient->activeEncounter ?? $this->currentPatient->latestEncounter;
 
-            if ($this->currentEncounter) {
-                $existing = $this->diagnosisService->getForEncounter($this->currentEncounter->id);
-                $this->diagnosisFormData = [
-                    'diagnoses' => $existing['diagnoses'] !== []
-                        ? $existing['diagnoses']
-                        : [$this->defaultDiagnosisItem()],
-                ];
-            }
+            $previousEncounterId = $this->diagnosisFormEncounterId;
+            $this->syncDiagnosisFormWithOpenEncounter();
 
-            $this->fillEncounterFormData();
+            // With no visit open before or after, the encounter form may hold a visit
+            // the user is still typing: leave it alone.
+            if ($previousEncounterId !== null || $this->getOpenEncounter() !== null) {
+                $this->fillEncounterFormData();
+            }
         }
+    }
+
+    /**
+     * Load the diagnosis form from the open encounter. The form is replaced when the
+     * visit changed, after a save (`force`), or when the user has not touched it, so
+     * rows added elsewhere appear without ever discarding rows being edited.
+     */
+    protected function syncDiagnosisFormWithOpenEncounter(bool $force = false): void
+    {
+        $encounterId = $this->getOpenEncounter()?->id;
+
+        if (! $force
+            && $encounterId === $this->diagnosisFormEncounterId
+            && ($encounterId === null || $this->diagnosisFormIsDirty())) {
+            return;
+        }
+
+        $this->diagnosisFormEncounterId = $encounterId;
+
+        $rows = $encounterId === null ? [] : $this->diagnosisService->getForEncounter($encounterId)['diagnoses'];
+
+        $this->diagnosisFormLoadedIds = array_column($rows, 'encounter_diagnosis_id');
+        $this->diagnosisFormData = ['diagnoses' => $rows !== [] ? $rows : [$this->defaultDiagnosisItem()]];
+        $this->diagnosisFormFingerprint = $this->fingerprintDiagnosisForm();
+    }
+
+    protected function diagnosisFormIsDirty(): bool
+    {
+        return $this->diagnosisFormFingerprint !== $this->fingerprintDiagnosisForm();
+    }
+
+    /**
+     * Compares values only: row keys, key order and null/empty differences come from
+     * the form layer rather than from the user.
+     */
+    protected function fingerprintDiagnosisForm(): string
+    {
+        $rows = array_map(
+            function ($row): array {
+                $row = array_filter(is_array($row) ? $row : [], filled(...));
+                ksort($row);
+
+                return $row;
+            },
+            array_values($this->diagnosisFormData['diagnoses'] ?? []),
+        );
+
+        return md5((string) json_encode($rows));
     }
 
     public function hasOpenEncounter(): bool
@@ -682,11 +804,158 @@ class ClinicalWorkspace extends Page implements HasSchemas
             return null;
         }
 
-        if ($this->currentPatient->relationLoaded('activeEncounter')) {
-            return $this->currentPatient->activeEncounter;
+        $patientKey = (string) $this->currentPatient->getKey();
+
+        if (array_key_exists($patientKey, $this->openEncounterMemo)) {
+            return $this->openEncounterMemo[$patientKey];
         }
 
-        return $this->currentPatient->activeEncounter()->first();
+        $encounter = $this->currentPatient->relationLoaded('activeEncounter')
+            ? $this->currentPatient->activeEncounter
+            : $this->currentPatient->activeEncounter()->first();
+
+        $encounter?->loadMissing(['bed', 'location', 'pendingAdmissionRequest']);
+
+        return $this->openEncounterMemo[$patientKey] = $encounter;
+    }
+
+    /**
+     * The only encounter clinical work may be written to. `$currentEncounter` can be
+     * a finished visit (banner context); this never is.
+     */
+    public function writableEncounter(): ?Encounter
+    {
+        return $this->getOpenEncounter();
+    }
+
+    protected function forgetOpenEncounterMemo(): void
+    {
+        $this->openEncounterMemo = [];
+        $this->encounterStatusChipMemo = null;
+    }
+
+    public const PATIENT_UPDATED_EVENT = 'workspace-patient-updated';
+
+    /**
+     * Tell the patient-scoped child widgets (vitals bar, vitals history, pending
+     * fulfilments, other modules' banner widgets) that something they show changed.
+     * They refresh on this instead of polling.
+     */
+    protected function announcePatientUpdate(string $scope): void
+    {
+        if (! $this->currentPatient) {
+            return;
+        }
+
+        $this->dispatch(self::PATIENT_UPDATED_EVENT, patientId: (string) $this->currentPatient->getKey(), scope: $scope);
+    }
+
+    /**
+     * Header-menu and tab actions save through their own services, so the page has to
+     * catch up after them: vitals bar, diagnosis rows, allergies, encounter state.
+     * Actions belonging to a form component (repeater add/remove, select "create")
+     * change form state only and are skipped.
+     */
+    protected function afterActionCalled(Action $action): void
+    {
+        if ($this->currentPatient === null || $action->getSchemaComponent() !== null) {
+            return;
+        }
+
+        $this->refreshEncounterContext();
+    }
+
+    /**
+     * Header-menu actions (PatientActions) can change the encounter without going
+     * through this page's refresh path, so the memo is dropped before every render:
+     * the render then resolves the encounter once, fresh, and reuses it.
+     */
+    public function rendering(): void
+    {
+        $this->forgetOpenEncounterMemo();
+
+        // Build the schemas this render will show before seeding their state keys;
+        // otherwise a tab opened this request would be seeded after it rendered.
+        foreach ($this->schemaNamesForCurrentView() as $name) {
+            $this->getSchema($name);
+        }
+
+        $this->ensureSchemaEntangleKeysExist();
+    }
+
+    /**
+     * Filament remembers every schema name it has ever resolved (`discoveredSchemaNames`)
+     * and rebuilds all of them on the next request. Keep only what the current view
+     * needs so visiting a tab does not make every later request pay for it.
+     */
+    public function dehydrate(): void
+    {
+        $this->discoveredSchemaNames = array_values(array_intersect(
+            $this->discoveredSchemaNames,
+            $this->schemaNamesForCurrentView(),
+        ));
+    }
+
+    /**
+     * @return list<string>
+     */
+    protected function schemaNamesForCurrentView(): array
+    {
+        if ($this->mode === 'register') {
+            return ['registerPatientForm'];
+        }
+
+        if ($this->mode !== 'patient' || ! $this->currentPatient) {
+            return [];
+        }
+
+        $names = $this->schemaNamesForTab($this->activeTab);
+
+        if ($this->getUserRoleKey() === 'clinician') {
+            $names[] = 'consultationForm';
+        }
+
+        return $names;
+    }
+
+    /**
+     * @return list<string>
+     */
+    protected function schemaNamesForTab(string $tab): array
+    {
+        return match ($tab) {
+            'patient-details' => ['patientDetailsForm'],
+            'encounter' => ['encounterForm'],
+            'adt' => ['adtTransferInForm', 'adtAdmitForm', 'adtTransferInternalForm', 'adtTransferOutForm', 'dischargeForm'],
+            'notes' => ['noteForm'],
+            'diagnosis' => ['diagnosisForm'],
+            'vitals' => ['vitalsForm'],
+            'triage' => ['triageForm'],
+            'service-lab' => ['serviceRequestForm'],
+            'medication' => ['medicationForm'],
+            'allergies' => ['allergyForm'],
+            'referral' => ['referralForm'],
+            'submit-results' => ['labResultForm'],
+            default => [],
+        };
+    }
+
+    /**
+     * Single path for "the encounter changed": reload patient + encounter context,
+     * refresh the encounter form and rebuild the header actions, which Filament
+     * cached before this request's action ran.
+     */
+    protected function refreshEncounterContext(?Encounter $encounter = null): void
+    {
+        if ($encounter !== null) {
+            $this->currentEncounter = $encounter->fresh(['bed', 'location']);
+        }
+
+        $this->currentPatient?->unsetRelation('activeEncounter');
+        $this->currentPatient?->unsetRelation('latestEncounter');
+        $this->loadPatientContext();
+        $this->recacheHeaderActions();
+        $this->announcePatientUpdate('encounter');
     }
 
     protected function fillEncounterFormData(): void
@@ -712,6 +981,14 @@ class ClinicalWorkspace extends Page implements HasSchemas
      * @return array{type: ?string, status: ?string, status_color: string, ward: ?string, bed: ?string, los: ?string, admission_pending: bool, on_pass: bool, expected_discharge: ?string, long_stay: bool}
      */
     public function getEncounterStatusChip(): array
+    {
+        return $this->encounterStatusChipMemo ??= $this->buildEncounterStatusChip();
+    }
+
+    /**
+     * @return array{type: ?string, status: ?string, status_color: string, ward: ?string, bed: ?string, los: ?string, admission_pending: bool, on_pass: bool, expected_discharge: ?string, long_stay: bool}
+     */
+    protected function buildEncounterStatusChip(): array
     {
         $encounter = $this->getOpenEncounter() ?? $this->currentEncounter;
 
@@ -752,21 +1029,123 @@ class ClinicalWorkspace extends Page implements HasSchemas
 
     protected function setDefaultTab(): void
     {
-        if ($this->activeTab) {
+        if ($this->isAllowedTab($this->activeTab)) {
             return;
         }
 
         if ($this->postRegistrationFlow) {
-            $this->activeTab = $this->getPostRegistrationTab();
+            $this->activateTab($this->getPostRegistrationTab());
 
             return;
         }
 
-        $this->activeTab = match ($this->getUserRoleKey()) {
+        $this->activateTab($this->defaultTabForRole());
+    }
+
+    protected function defaultTabForRole(): string
+    {
+        return match ($this->getUserRoleKey()) {
             'nurse' => 'encounter',
             'lab' => 'pending-labs',
             default => 'vitals',
         };
+    }
+
+    /**
+     * Tabs the current user may open for the selected patient (role tab bar).
+     *
+     * @return list<string>
+     */
+    public function allowedTabs(): array
+    {
+        if (! $this->currentPatient) {
+            return [];
+        }
+
+        return array_keys(match ($this->getUserRoleKey()) {
+            'nurse' => $this->getNurseTabs(),
+            'lab' => $this->getLabTabs(),
+            default => $this->getClinicianTabs(),
+        });
+    }
+
+    public function isAllowedTab(string $tab): bool
+    {
+        return $tab !== '' && in_array($tab, $this->allowedTabs(), true);
+    }
+
+    /**
+     * Every tab change, whether the user clicked or PHP decided, goes through here
+     * so tab-entry work (e.g. stamping the vitals time) is never skipped.
+     */
+    public function activateTab(string $tab): void
+    {
+        // Callable from the browser, so the role check cannot live only in the URL/click path.
+        $this->activeTab = $this->isAllowedTab($tab) ? $tab : $this->defaultTabForRole();
+        $this->onTabActivated($this->activeTab);
+    }
+
+    public function updatedActiveTab(string $tab): void
+    {
+        if (! $this->isAllowedTab($tab)) {
+            $this->activateTab($this->defaultTabForRole());
+
+            return;
+        }
+
+        $this->onTabActivated($tab);
+    }
+
+    protected function onTabActivated(string $tab): void
+    {
+        if ($tab === 'vitals') {
+            $this->stampVitalsRecordedAt();
+        }
+
+        if ($tab === 'medication') {
+            $this->stampMedicationStartTimes();
+        }
+
+        if ($tab === 'diagnosis') {
+            $this->syncDiagnosisFormWithOpenEncounter();
+        }
+
+        if ($tab === 'patient-details') {
+            $this->ensurePatientFormFilled();
+        }
+    }
+
+    /**
+     * The field's own `default(now())` only reaches rows added with the repeater
+     * button, so the row the form starts with is stamped here. Typed times stay.
+     */
+    protected function stampMedicationStartTimes(): void
+    {
+        $previous = $this->medicationAutoStampedAt;
+        $this->medicationAutoStampedAt = now()->format('Y-m-d H:i:s');
+
+        foreach ($this->medicationData['items'] ?? [] as $key => $item) {
+            $current = $item['start_time'] ?? null;
+
+            if (blank($current) || $current === $previous) {
+                $this->medicationData['items'][$key]['start_time'] = $this->medicationAutoStampedAt;
+            }
+        }
+    }
+
+    /**
+     * Default "Recorded at" to the moment the user reaches the field. Only a blank
+     * value or the page's own previous stamp is replaced; a typed time stays.
+     */
+    protected function stampVitalsRecordedAt(): void
+    {
+        $current = $this->vitalsData['recorded_at'] ?? null;
+
+        if (filled($current) && $current !== $this->vitalsAutoStampedAt) {
+            return;
+        }
+
+        $this->vitalsData['recorded_at'] = $this->vitalsAutoStampedAt = now()->format('Y-m-d H:i:s');
     }
 
     public function updatedSearchTerm(): void
@@ -858,7 +1237,7 @@ class ClinicalWorkspace extends Page implements HasSchemas
 
         $actions = PatientActions::make()
             ->forPatient($this->currentPatient)
-            ->withEncounter($this->currentEncounter);
+            ->withEncounter($this->writableEncounter());
 
         return [
             $actions->timelineAction(),
@@ -894,7 +1273,7 @@ class ClinicalWorkspace extends Page implements HasSchemas
     {
         $widgets = [];
         if (! empty($this->currentPatient?->id)) {
-            $widgets[] = PendingFulfillmentsWidget::make(['patientId' => $this->currentPatient?->id, 'encounterId' => $this->currentEncounter?->id]);
+            $widgets[] = PendingFulfillmentsWidget::make(['patientId' => $this->currentPatient?->id, 'encounterId' => $this->writableEncounter()?->id]);
             $widgets[] = PatientVitalsHistoryWidget::make(['patientId' => $this->currentPatient?->id]);
         }
 
@@ -965,8 +1344,7 @@ class ClinicalWorkspace extends Page implements HasSchemas
         }
 
         $this->triageData = $this->defaultTriageData();
-        $this->loadPatientContext();
-        $this->recacheHeaderActions();
+        $this->refreshEncounterContext();
 
         Notification::make()
             ->title(__('Triaged :category', ['category' => $assessment->final_category->shortLabel()]))
@@ -990,7 +1368,7 @@ class ClinicalWorkspace extends Page implements HasSchemas
         match ($assessment->disposition) {
             TriageDisposition::RESUSCITATION => $this->startEncounterForResuscitation($encounter),
             TriageDisposition::REQUEST_ADMISSION => $this->canAccessAdtTab()
-                ? $this->activeTab = 'adt'
+                ? $this->activateTab('adt')
                 : null,
             TriageDisposition::BOOK_APPOINTMENT => $this->hasAppointmentModule() && $this->getAction('appointment_schedule') !== null
                 ? $this->mountAction('appointment_schedule')
@@ -1006,13 +1384,14 @@ class ClinicalWorkspace extends Page implements HasSchemas
         }
 
         $this->encounterService->startEncounter($encounter);
-        $this->loadPatientContext();
-        $this->recacheHeaderActions();
+        $this->refreshEncounterContext();
     }
 
     public function saveConsultation(): void
     {
-        if (! $this->currentPatient || ! $this->currentEncounter) {
+        $encounter = $this->writableEncounter();
+
+        if (! $this->currentPatient || ! $encounter) {
             Notification::make()->title('No active encounter')->danger()->send();
 
             return;
@@ -1045,15 +1424,16 @@ class ClinicalWorkspace extends Page implements HasSchemas
                 'subject' => 'Consultation - '.($this->consultationChiefComplaint ?: 'General'),
                 'content' => $content,
             ],
-            $this->currentEncounter->id,
+            $encounter->id,
         );
 
-        if ($this->consultationChiefComplaint && ! $this->currentEncounter->chief_complaint) {
-            $this->currentEncounter->update(['chief_complaint' => $this->consultationChiefComplaint]);
+        if ($this->consultationChiefComplaint && ! $encounter->chief_complaint) {
+            $encounter->update(['chief_complaint' => $this->consultationChiefComplaint]);
         }
 
         $this->consultationData = $this->defaultConsultationData();
         $this->consultationChiefComplaint = '';
+        $this->announcePatientUpdate('notes');
 
         Notification::make()->title('Consultation saved')->success()->send();
     }
@@ -1074,14 +1454,20 @@ class ClinicalWorkspace extends Page implements HasSchemas
             return;
         }
 
+        if (blank($this->vitalsData['recorded_at'] ?? null)) {
+            $this->stampVitalsRecordedAt();
+        }
+
         $this->vitalSignService->record(
             $this->currentPatient,
             $vitalsForm->getState(),
-            $this->currentEncounter?->id,
+            $this->writableEncounter()?->id,
         );
 
         $this->vitalsData = $this->defaultVitalsData();
+        $this->stampVitalsRecordedAt();
         $this->loadPatientContext();
+        $this->announcePatientUpdate('vitals');
         // Vitals just taken become the starting point for triage.
         $this->triageData = [
             ...$this->triageData,
@@ -1117,11 +1503,12 @@ class ClinicalWorkspace extends Page implements HasSchemas
         $this->serviceRequestService->record(
             $this->currentPatient,
             $serviceRequestForm->getState(),
-            $this->currentEncounter?->id,
+            $this->writableEncounter()?->id,
             lockStatuses: true,
         );
 
         $this->serviceRequestData = $this->defaultServiceRequestData();
+        $this->announcePatientUpdate('orders');
         Notification::make()->title('Service request created')->success()->send();
     }
 
@@ -1141,6 +1528,7 @@ class ClinicalWorkspace extends Page implements HasSchemas
 
         $this->allergyData = $this->defaultAllergyData();
         $this->loadPatientContext();
+        $this->announcePatientUpdate('allergies');
         Notification::make()->title('Allergy recorded')->success()->send();
     }
 
@@ -1192,12 +1580,10 @@ class ClinicalWorkspace extends Page implements HasSchemas
             $gateway->notify($gateway->generateFor($encounter->refresh()));
         }
 
-        $this->currentEncounter = $encounter->fresh(['bed', 'location']);
-        $this->currentPatient?->unsetRelation('activeEncounter');
-        $this->fillEncounterFormData();
-        $this->activeTab = $type === EncounterType::INPATIENT && $this->canAccessAdtTab()
+        $this->refreshEncounterContext($encounter);
+        $this->activateTab($type === EncounterType::INPATIENT && $this->canAccessAdtTab()
             ? 'adt'
-            : 'vitals';
+            : 'vitals');
 
         $label = $type->getLabel();
 
@@ -1237,8 +1623,7 @@ class ClinicalWorkspace extends Page implements HasSchemas
         $gateway = app(NhisClaimCodeGateway::class);
         $gateway->notify($gateway->generateFor($encounter), verbose: true);
 
-        $this->currentEncounter = $encounter->fresh(['bed', 'location']);
-        $this->fillEncounterFormData();
+        $this->refreshEncounterContext($encounter);
     }
 
     public function admitToBed(): void
@@ -1387,9 +1772,7 @@ class ClinicalWorkspace extends Page implements HasSchemas
             );
 
             $this->adtFormData = $this->defaultAdtFormData();
-            $this->currentEncounter = null;
-            $this->currentPatient?->unsetRelation('activeEncounter');
-            $this->loadPatientContext();
+            $this->refreshEncounterContext();
             Notification::make()->title('Patient transferred out')->success()->send();
         } catch (\Throwable $e) {
             Notification::make()->title('Transfer out failed')->body($e->getMessage())->danger()->send();
@@ -1441,7 +1824,7 @@ class ClinicalWorkspace extends Page implements HasSchemas
 
             $this->refreshAdtContext($encounter);
             $this->adtFormData = $this->defaultAdtFormData();
-            $this->activeTab = 'vitals';
+            $this->activateTab('vitals');
             Notification::make()->title($isLocal ? 'Patient admitted successfully' : 'Patient admitted from transfer')->success()->send();
         } catch (\Throwable $e) {
             Notification::make()->title($isLocal ? 'Admission failed' : 'Transfer in failed')->body($e->getMessage())->danger()->send();
@@ -1667,9 +2050,7 @@ class ClinicalWorkspace extends Page implements HasSchemas
 
                 try {
                     $this->encounterService->arrive($encounter);
-                    $this->currentPatient?->unsetRelation('activeEncounter');
-                    $this->loadPatientContext();
-                    $this->recacheHeaderActions();
+                    $this->refreshEncounterContext();
                     Notification::make()->title('Patient marked as arrived')->success()->send();
                 } catch (\Throwable $e) {
                     Notification::make()->title('Arrive failed')->body($e->getMessage())->danger()->send();
@@ -1704,11 +2085,7 @@ class ClinicalWorkspace extends Page implements HasSchemas
                 try {
                     $this->encounterService->completeEncounter($encounter, notes: $data['notes'] ?? null);
 
-                    $this->currentEncounter = null;
-                    $this->currentPatient?->unsetRelation('activeEncounter');
-                    $this->currentPatient?->unsetRelation('latestEncounter');
-                    $this->loadPatientContext();
-                    $this->recacheHeaderActions();
+                    $this->refreshEncounterContext();
                     Notification::make()->title('Encounter completed')->success()->send();
                 } catch (\Throwable $e) {
                     Notification::make()->title('Complete failed')->body($e->getMessage())->danger()->send();
@@ -1818,11 +2195,7 @@ class ClinicalWorkspace extends Page implements HasSchemas
 
     protected function refreshAdtContext(Encounter $encounter): void
     {
-        $this->currentEncounter = $encounter->fresh(['bed', 'location']);
-        $this->currentPatient?->unsetRelation('activeEncounter');
-        $this->currentPatient?->unsetRelation('latestEncounter');
-        $this->loadPatientContext();
-        $this->fillEncounterFormData();
+        $this->refreshEncounterContext($encounter);
     }
 
     /**
@@ -1876,43 +2249,66 @@ class ClinicalWorkspace extends Page implements HasSchemas
             return;
         }
 
-        if (! $this->currentEncounter || ! $this->currentPatient) {
+        $encounter = $this->writableEncounter();
+
+        if (! $encounter || ! $this->currentPatient) {
             Notification::make()->title('No active encounter')->warning()->send();
 
             return;
         }
 
-        $diagnoses = array_values(array_filter(
-            $this->diagnosisFormData['diagnoses'] ?? [],
-            fn ($row): bool => filled($row['description'] ?? null)
-                || filled($row['diagnosis_code_id'] ?? null)
-                || filled($row['code_search'] ?? null)
-                || filled($row['icd_entity_id'] ?? null),
+        // Blank repeater rows are noise, not errors: drop them before validation. Rows
+        // are completed with the item defaults so a partially built row (older state,
+        // API callers) is validated on what the user actually chose.
+        $rows = array_values(array_map(
+            fn (array $row): array => $row + $this->defaultDiagnosisItem() + ['encounter_diagnosis_id' => null],
+            array_filter(
+                $this->diagnosisFormData['diagnoses'] ?? [],
+                fn ($row): bool => $this->diagnosisRowIsFilled($row),
+            ),
         ));
 
-        if ($diagnoses === []) {
-            Notification::make()->title('No diagnoses to save')->warning()->send();
+        if ($rows === []) {
+            if ($this->diagnosisFormLoadedIds === []) {
+                Notification::make()->title('No diagnoses to save')->warning()->send();
+
+                return;
+            }
+
+            // Submitting an empty set is how the last diagnosis is removed.
+            $this->diagnosisService->syncForEncounter($this->currentPatient, [], $encounter->id, Auth::id(), $this->diagnosisFormLoadedIds);
+            $this->syncDiagnosisFormWithOpenEncounter(force: true);
+            $this->announcePatientUpdate('diagnoses');
+            Notification::make()->title('All diagnoses removed from this visit')->warning()->send();
 
             return;
         }
 
+        $this->diagnosisFormData['diagnoses'] = $rows;
+
+        $diagnosisForm = $this->getSchema('diagnosisForm');
+
+        if ($diagnosisForm === null) {
+            return;
+        }
+
+        // Schema validation runs here so errors land on the fields; the service's own
+        // checks (unresolvable ICD selections) are reported as a notification below.
+        $diagnoses = array_values($diagnosisForm->getState()['diagnoses'] ?? []);
+
         try {
-            $this->diagnosisService->assertValidRows($diagnoses);
             $this->diagnosisService->syncForEncounter(
                 $this->currentPatient,
                 $diagnoses,
-                $this->currentEncounter->id,
+                $encounter->id,
                 Auth::id(),
+                $this->diagnosisFormLoadedIds,
             );
 
-            $existing = $this->diagnosisService->getForEncounter($this->currentEncounter->id);
-            $this->diagnosisFormData = [
-                'diagnoses' => $existing['diagnoses'] !== []
-                    ? $existing['diagnoses']
-                    : [$this->defaultDiagnosisItem()],
-            ];
+            $this->syncDiagnosisFormWithOpenEncounter(force: true);
+            $this->announcePatientUpdate('diagnoses');
 
-            Notification::make()->title('Diagnoses saved')->success()->send();
+            Notification::make()->title('Diagnoses updated')->success()->send();
         } catch (\Throwable $e) {
             Notification::make()
                 ->title('Could not save diagnoses')
@@ -1922,16 +2318,40 @@ class ClinicalWorkspace extends Page implements HasSchemas
         }
     }
 
+    /**
+     * @param  mixed  $row
+     */
+    protected function diagnosisRowIsFilled($row): bool
+    {
+        return is_array($row) && (
+            filled($row['description'] ?? null)
+            || filled($row['diagnosis_code_id'] ?? null)
+            || filled($row['code_search'] ?? null)
+            || filled($row['icd_entity_id'] ?? null)
+        );
+    }
+
+    /**
+     * Number of diagnoses currently recorded on the open visit (for the tab heading).
+     */
+    public function savedDiagnosisCount(): int
+    {
+        return count(array_filter(
+            $this->diagnosisFormData['diagnoses'] ?? [],
+            fn ($row): bool => is_array($row) && filled($row['encounter_diagnosis_id'] ?? null),
+        ));
+    }
+
     public function updatedServiceRequestDataRequestItemId(?string $requestItemId): void
     {
         $this->labResultData = [];
-        $this->buildLabResultFormSchema();
+        $this->rebuildLabResultForm();
     }
 
-    protected function buildLabResultFormSchema(): void
+    public function labResultForm(Schema $schema): Schema
     {
         $requestItemId = $this->serviceRequestData['request_item_id'] ?? null;
-        $schema = [];
+        $components = [];
 
         if (filled($requestItemId)) {
             $item = RequestItem::query()
@@ -1939,23 +2359,30 @@ class ClinicalWorkspace extends Page implements HasSchemas
                 ->find($requestItemId);
 
             if ($item !== null) {
-                $schema = app(FulfillmentService::class)->getFormSchema($item);
+                $components = app(FulfillmentService::class)->getFormSchema($item);
             }
         }
 
-        if ($schema === []) {
-            $schema = [
+        if ($components === []) {
+            $components = [
                 TextEntry::make('select_pending_lab')
                     ->hiddenLabel()
                     ->state('Select a pending lab item to load the result form.'),
             ];
         }
 
-        $this->cacheSchema('labResultForm', $this->makeSchema()
-            ->schema($schema)
-            ->statePath('labResultData'));
+        return $schema
+            ->schema($components)
+            ->statePath('labResultData');
+    }
 
-        $labResultForm = $this->getSchema('labResultForm');
+    /**
+     * The lab result schema depends on the selected request item, so it is rebuilt
+     * (and its state keys seeded) whenever that selection changes.
+     */
+    protected function rebuildLabResultForm(): void
+    {
+        $labResultForm = $this->cacheSchema('labResultForm');
 
         if ($labResultForm instanceof Schema) {
             $this->seedStateKeysForSchema($labResultForm);
@@ -1992,7 +2419,8 @@ class ClinicalWorkspace extends Page implements HasSchemas
             app(FulfillmentService::class)->fulfill($item, $labResultData);
             $this->serviceRequestData = $this->defaultServiceRequestData();
             $this->labResultData = [];
-            $this->buildLabResultFormSchema();
+            $this->rebuildLabResultForm();
+            $this->announcePatientUpdate('orders');
             Notification::make()->title('Lab result submitted')->success()->send();
         } catch (\Throwable $e) {
             Notification::make()
@@ -2005,7 +2433,9 @@ class ClinicalWorkspace extends Page implements HasSchemas
 
     public function saveMedicationOrder(): void
     {
-        if (! $this->currentPatient || ! $this->currentEncounter) {
+        $encounter = $this->writableEncounter();
+
+        if (! $this->currentPatient || ! $encounter) {
             Notification::make()->title('No active encounter')->danger()->send();
 
             return;
@@ -2045,11 +2475,13 @@ class ClinicalWorkspace extends Page implements HasSchemas
                 $this->currentPatient,
                 $medicationItems,
                 Auth::user(),
-                $this->currentEncounter->id,
+                $encounter->id,
             );
 
             if ($request) {
                 $this->medicationData = $this->defaultMedicationData();
+                $this->stampMedicationStartTimes();
+                $this->announcePatientUpdate('orders');
                 Notification::make()->title('Medication order created')->success()->send();
             }
         } catch (\Exception $e) {
@@ -2198,9 +2630,7 @@ class ClinicalWorkspace extends Page implements HasSchemas
             EncounterActions::performDischarge($encounter, $dischargeData);
 
             $this->dischargeData = $this->defaultDischargeData();
-            $this->currentEncounter = null;
-            $this->currentPatient?->unsetRelation('activeEncounter');
-            $this->loadPatientContext();
+            $this->refreshEncounterContext();
             Notification::make()->title('Patient discharged')->success()->send();
         } catch (DischargeBlockedException $e) {
             Notification::make()
@@ -2248,10 +2678,11 @@ class ClinicalWorkspace extends Page implements HasSchemas
             $this->clinicalNoteService->record(
                 $this->currentPatient,
                 $noteData,
-                $this->currentEncounter?->id ?? $this->getOpenEncounter()?->id,
+                $this->writableEncounter()?->id,
             );
 
             $this->noteFormData = $this->defaultNoteFormData();
+            $this->announcePatientUpdate('notes');
             Notification::make()->title('Clinical note created')->success()->send();
         } catch (\Throwable $e) {
             Notification::make()
@@ -2264,7 +2695,9 @@ class ClinicalWorkspace extends Page implements HasSchemas
 
     public function saveReferral(): void
     {
-        if (! $this->currentPatient || ! $this->currentEncounter) {
+        $encounter = $this->writableEncounter();
+
+        if (! $this->currentPatient || ! $encounter) {
             Notification::make()->title('No active encounter')->danger()->send();
 
             return;
@@ -2288,10 +2721,11 @@ class ClinicalWorkspace extends Page implements HasSchemas
                     'content' => ($referralData['notes'] ?? '')
                         ."\n\nDestination: ".($referralData['destination'] ?? ''),
                 ],
-                $this->currentEncounter->id,
+                $encounter->id,
             );
 
             $this->referralData = $this->defaultReferralData();
+            $this->announcePatientUpdate('notes');
             Notification::make()->title('Referral submitted')->success()->send();
         } catch (\Exception $e) {
             Notification::make()
@@ -2302,202 +2736,265 @@ class ClinicalWorkspace extends Page implements HasSchemas
         }
     }
 
-    protected function registerForms(): array
+    /*
+    |--------------------------------------------------------------------------
+    | Schemas
+    |--------------------------------------------------------------------------
+    | One method per schema. Filament resolves `$this->vitalsForm` lazily through
+    | these on first use, so a request only builds the forms it renders or saves.
+    | The names are part of the page's contract (views, tests, tab map below).
+    */
+
+    public function encounterForm(Schema $schema): Schema
     {
-        return array_merge([
-            'encounterForm' => $this->makeSchema()
-                ->model(fn (): ?Encounter => $this->getOpenEncounter())
-                ->schema([
-                    Grid::make(2)
-                        ->schema([
-                            Select::make('type')
-                                ->label('Encounter Type')
-                                ->options([
-                                    EncounterType::OUTPATIENT->value => EncounterType::OUTPATIENT->getLabel(),
-                                    EncounterType::INPATIENT->value => EncounterType::INPATIENT->getLabel(),
-                                    EncounterType::EMERGENCY->value => EncounterType::EMERGENCY->getLabel(),
-                                    EncounterType::ANTENATAL->value => EncounterType::ANTENATAL->getLabel(),
-                                    EncounterType::POSTNATAL->value => EncounterType::POSTNATAL->getLabel(),
-                                    EncounterType::CHILD_WELFARE->value => EncounterType::CHILD_WELFARE->getLabel(),
-                                ])
-                                ->default(EncounterType::OUTPATIENT->value)
-                                ->required()
-                                ->native(false),
-                            EncounterCoverageSchema::coverageField(),
-                            Textarea::make('chief_complaint')
-                                ->label('Chief Complaint')
-                                ->placeholder('Reason for visit')
-                                ->columnSpanFull(),
-                            EncounterCoverageSchema::claimCheckCodeField(),
-                        ]),
-                ])
-                ->disabled(fn (): bool => $this->hasOpenEncounter())
-                ->statePath('encounterFormData'),
-            'adtAdmitForm' => $this->makeSchema()
-                ->schema([
-                    Select::make('ward_id')
-                        ->label('Ward / Room')
-                        ->options(fn (): array => $this->getWardOptions())
-                        ->searchable()
-                        ->required()
-                        ->live()
-                        ->afterStateUpdated(fn ($state, callable $set) => $set('bed_id', null)),
-                    Select::make('bed_id')
-                        ->label('Preferred bed (optional)')
-                        ->helperText('Ward staff confirm the final bed when they accept the request.')
-                        ->options(fn (callable $get): array => $this->getAvailableBedOptions($get('ward_id')))
-                        ->searchable()
-                        ->disabled(fn (callable $get) => blank($get('ward_id'))),
-                    Textarea::make('notes')
-                        ->label('Notes for the ward')
-                        ->rows(2),
-                ])
-                ->statePath('adtFormData'),
-            'adtTransferInternalForm' => $this->makeSchema()
-                ->schema([
-                    Select::make('transfer_ward_id')
-                        ->label('Destination ward / room')
-                        ->options(fn (): array => $this->getWardOptions())
-                        ->searchable()
-                        ->live()
-                        ->afterStateUpdated(fn ($state, callable $set) => $set('transfer_bed_id', null)),
-                    Select::make('transfer_bed_id')
-                        ->label('Destination bed')
-                        ->options(fn (callable $get): array => $this->getAvailableBedOptions($get('transfer_ward_id')))
-                        ->searchable()
-                        ->required()
-                        ->disabled(fn (callable $get) => blank($get('transfer_ward_id'))),
-                    RichEditor::make('transfer_notes')
-                        ->label('Notes')
-                        ->toolbarButtons([
-                            'bold',
-                            'bulletList',
-                            'italic',
-                            'orderedList',
-                        ]),
-                ])
-                ->statePath('adtFormData'),
-            'adtTransferOutForm' => $this->makeSchema()
-                ->schema([
-                    Select::make('destination_type')
-                        ->label('Destination type')
-                        ->options([
-                            AdtDestinationType::Branch->value => AdtDestinationType::Branch->getLabel(),
-                            AdtDestinationType::ExternalFacility->value => AdtDestinationType::ExternalFacility->getLabel(),
-                        ])
-                        ->default(AdtDestinationType::ExternalFacility->value)
-                        ->live()
-                        ->required(),
-                    Select::make('destination_branch_id')
-                        ->label('Destination branch')
-                        ->options(fn (): array => Branch::query()->orderBy('name')->pluck('name', 'id')->all())
-                        ->searchable()
-                        ->visible(fn (callable $get) => $get('destination_type') === AdtDestinationType::Branch->value)
-                        ->required(fn (callable $get) => $get('destination_type') === AdtDestinationType::Branch->value),
-                    TextInput::make('destination_label')
-                        ->label('Destination facility')
-                        ->visible(fn (callable $get) => $get('destination_type') === AdtDestinationType::ExternalFacility->value)
-                        ->required(fn (callable $get) => $get('destination_type') === AdtDestinationType::ExternalFacility->value),
-                    RichEditor::make('transfer_out_notes')
-                        ->label('Notes')
-                        ->toolbarButtons([
-                            'bold',
-                            'bulletList',
-                            'italic',
-                            'orderedList',
-                        ]),
-                ])
-                ->statePath('adtFormData'),
-            'adtTransferInForm' => $this->makeSchema()
-                ->schema([
-                    Select::make('admission_source')
-                        ->label('Admission source')
-                        ->options([
-                            'local' => 'Local (Admit from Consultation / ER)',
-                            'transfer_in' => 'Transfer In (Referral from other Branch / Hospital)',
-                        ])
-                        ->default('local')
-                        ->live()
-                        ->required(),
-                    TextInput::make('source_label')
-                        ->label('Transferring facility')
-                        ->placeholder('Hospital or clinic name')
-                        ->visible(fn (callable $get) => $get('admission_source') === 'transfer_in'),
-                    Select::make('from_branch_id')
-                        ->label('From branch (same org)')
-                        ->options(fn (): array => Branch::query()->orderBy('name')->pluck('name', 'id')->all())
-                        ->searchable()
-                        ->visible(fn (callable $get) => $get('admission_source') === 'transfer_in'),
-                    Textarea::make('transfer_in_chief_complaint')
-                        ->label('Chief complaint')
-                        ->rows(2),
-                    Select::make('transfer_in_ward_id')
-                        ->label('Ward / Room')
-                        ->required()
-                        ->options(fn (): array => $this->getWardOptions())
-                        ->searchable()
-                        ->live()
-                        ->afterStateUpdated(fn ($state, callable $set) => $set('transfer_in_bed_id', null)),
-                    Select::make('transfer_in_bed_id')
-                        ->label('Bed')
-                        ->options(fn (callable $get): array => $this->getAvailableBedOptions($get('transfer_in_ward_id')))
-                        ->searchable()
-                        ->required()
-                        ->disabled(fn (callable $get) => blank($get('transfer_in_ward_id'))),
-                    RichEditor::make('transfer_in_notes')
-                        ->label('Notes')
-                        ->toolbarButtons([
-                            'bold',
-                            'bulletList',
-                            'italic',
-                            'orderedList',
-                        ]),
-                ])
-                ->statePath('adtFormData'),
-            'vitalsForm' => $this->makeSchema()
-                ->schema(VitalSignForm::quickElements())
-                ->statePath('vitalsData'),
-            'serviceRequestForm' => $this->makeSchema()
-                ->schema(ServiceRequestForm::quickElements(hidenEncounter: true, lockStatuses: true))
-                ->statePath('serviceRequestData'),
-            'allergyForm' => $this->makeSchema()
-                ->schema(AllergyForm::quickElements())
-                ->statePath('allergyData'),
-            'triageForm' => $this->makeSchema()
-                ->schema(TriageForm::schema(fn (): string => TriageService::ageBandFor($this->currentPatient)->value))
-                ->statePath('triageData'),
-            'consultationForm' => $this->makeSchema()
-                ->schema([
-                    RichEditor::make('notes')
-                        ->label('Consultation / SOAP Notes')
-                        ->placeholder('Subjective, Objective, Assessment, Plan...'),
-                ])
-                ->statePath('consultationData'),
-            'medicationForm' => $this->makeSchema()
-                ->schema($this->medicationOrderFormSchema())
-                ->statePath('medicationData'),
-            'diagnosisForm' => $this->makeSchema()
-                ->schema(EncounterDiagnosisForm::quickElements())
-                ->statePath('diagnosisFormData'),
-            'dischargeForm' => $this->makeSchema()
-                ->schema(fn (): array => ($encounter = $this->getOpenEncounter())
-                    ? EncounterActions::dischargeSchema($encounter)
-                    : [])
-                ->statePath('dischargeData'),
-            'noteForm' => $this->makeSchema()
-                ->schema(ClinicalNoteForm::quickElements())
-                ->statePath('noteFormData'),
-            'referralForm' => $this->makeSchema()
-                ->schema([
-                    TextInput::make('destination')
-                        ->label('Referral Destination')
-                        ->placeholder('Department or facility name')
-                        ->required(),
-                    RichEditor::make('notes')
-                        ->label('Referral Notes'),
-                ])
-                ->statePath('referralData'),
-        ], $this->registerPatientManagementForms());
+        return $schema
+            ->model(fn (): ?Encounter => $this->getOpenEncounter())
+            ->schema([
+                Grid::make(2)
+                    ->schema([
+                        Select::make('type')
+                            ->label('Encounter Type')
+                            ->options([
+                                EncounterType::OUTPATIENT->value => EncounterType::OUTPATIENT->getLabel(),
+                                EncounterType::INPATIENT->value => EncounterType::INPATIENT->getLabel(),
+                                EncounterType::EMERGENCY->value => EncounterType::EMERGENCY->getLabel(),
+                                EncounterType::ANTENATAL->value => EncounterType::ANTENATAL->getLabel(),
+                                EncounterType::POSTNATAL->value => EncounterType::POSTNATAL->getLabel(),
+                                EncounterType::CHILD_WELFARE->value => EncounterType::CHILD_WELFARE->getLabel(),
+                            ])
+                            ->default(EncounterType::OUTPATIENT->value)
+                            ->required()
+                            ->native(false),
+                        EncounterCoverageSchema::coverageField(),
+                        Textarea::make('chief_complaint')
+                            ->label('Chief Complaint')
+                            ->placeholder('Reason for visit')
+                            ->columnSpanFull(),
+                        EncounterCoverageSchema::claimCheckCodeField(),
+                    ]),
+            ])
+            ->disabled(fn (): bool => $this->hasOpenEncounter())
+            ->statePath('encounterFormData');
+    }
+
+    public function adtAdmitForm(Schema $schema): Schema
+    {
+        return $schema
+            ->schema([
+                Select::make('ward_id')
+                    ->label('Ward / Room')
+                    ->options(fn (): array => $this->getWardOptions())
+                    ->searchable()
+                    ->required()
+                    ->live()
+                    ->afterStateUpdated(fn ($state, callable $set) => $set('bed_id', null)),
+                Select::make('bed_id')
+                    ->label('Preferred bed (optional)')
+                    ->helperText('Ward staff confirm the final bed when they accept the request.')
+                    ->options(fn (callable $get): array => $this->getAvailableBedOptions($get('ward_id')))
+                    ->searchable()
+                    ->disabled(fn (callable $get) => blank($get('ward_id'))),
+                Textarea::make('notes')
+                    ->label('Notes for the ward')
+                    ->rows(2),
+            ])
+            ->statePath('adtFormData');
+    }
+
+    public function adtTransferInternalForm(Schema $schema): Schema
+    {
+        return $schema
+            ->schema([
+                Select::make('transfer_ward_id')
+                    ->label('Destination ward / room')
+                    ->options(fn (): array => $this->getWardOptions())
+                    ->searchable()
+                    ->live()
+                    ->afterStateUpdated(fn ($state, callable $set) => $set('transfer_bed_id', null)),
+                Select::make('transfer_bed_id')
+                    ->label('Destination bed')
+                    ->options(fn (callable $get): array => $this->getAvailableBedOptions($get('transfer_ward_id')))
+                    ->searchable()
+                    ->required()
+                    ->disabled(fn (callable $get) => blank($get('transfer_ward_id'))),
+                RichEditor::make('transfer_notes')
+                    ->label('Notes')
+                    ->toolbarButtons([
+                        'bold',
+                        'bulletList',
+                        'italic',
+                        'orderedList',
+                    ]),
+            ])
+            ->statePath('adtFormData');
+    }
+
+    public function adtTransferOutForm(Schema $schema): Schema
+    {
+        return $schema
+            ->schema([
+                Select::make('destination_type')
+                    ->label('Destination type')
+                    ->options([
+                        AdtDestinationType::Branch->value => AdtDestinationType::Branch->getLabel(),
+                        AdtDestinationType::ExternalFacility->value => AdtDestinationType::ExternalFacility->getLabel(),
+                    ])
+                    ->default(AdtDestinationType::ExternalFacility->value)
+                    ->live()
+                    ->required(),
+                Select::make('destination_branch_id')
+                    ->label('Destination branch')
+                    ->options(fn (): array => Branch::query()->orderBy('name')->pluck('name', 'id')->all())
+                    ->searchable()
+                    ->visible(fn (callable $get) => $get('destination_type') === AdtDestinationType::Branch->value)
+                    ->required(fn (callable $get) => $get('destination_type') === AdtDestinationType::Branch->value),
+                TextInput::make('destination_label')
+                    ->label('Destination facility')
+                    ->visible(fn (callable $get) => $get('destination_type') === AdtDestinationType::ExternalFacility->value)
+                    ->required(fn (callable $get) => $get('destination_type') === AdtDestinationType::ExternalFacility->value),
+                RichEditor::make('transfer_out_notes')
+                    ->label('Notes')
+                    ->toolbarButtons([
+                        'bold',
+                        'bulletList',
+                        'italic',
+                        'orderedList',
+                    ]),
+            ])
+            ->statePath('adtFormData');
+    }
+
+    public function adtTransferInForm(Schema $schema): Schema
+    {
+        return $schema
+            ->schema([
+                Select::make('admission_source')
+                    ->label('Admission source')
+                    ->options([
+                        'local' => 'Local (Admit from Consultation / ER)',
+                        'transfer_in' => 'Transfer In (Referral from other Branch / Hospital)',
+                    ])
+                    ->default('local')
+                    ->live()
+                    ->required(),
+                TextInput::make('source_label')
+                    ->label('Transferring facility')
+                    ->placeholder('Hospital or clinic name')
+                    ->visible(fn (callable $get) => $get('admission_source') === 'transfer_in'),
+                Select::make('from_branch_id')
+                    ->label('From branch (same org)')
+                    ->options(fn (): array => Branch::query()->orderBy('name')->pluck('name', 'id')->all())
+                    ->searchable()
+                    ->visible(fn (callable $get) => $get('admission_source') === 'transfer_in'),
+                Textarea::make('transfer_in_chief_complaint')
+                    ->label('Chief complaint')
+                    ->rows(2),
+                Select::make('transfer_in_ward_id')
+                    ->label('Ward / Room')
+                    ->required()
+                    ->options(fn (): array => $this->getWardOptions())
+                    ->searchable()
+                    ->live()
+                    ->afterStateUpdated(fn ($state, callable $set) => $set('transfer_in_bed_id', null)),
+                Select::make('transfer_in_bed_id')
+                    ->label('Bed')
+                    ->options(fn (callable $get): array => $this->getAvailableBedOptions($get('transfer_in_ward_id')))
+                    ->searchable()
+                    ->required()
+                    ->disabled(fn (callable $get) => blank($get('transfer_in_ward_id'))),
+                RichEditor::make('transfer_in_notes')
+                    ->label('Notes')
+                    ->toolbarButtons([
+                        'bold',
+                        'bulletList',
+                        'italic',
+                        'orderedList',
+                    ]),
+            ])
+            ->statePath('adtFormData');
+    }
+
+    public function vitalsForm(Schema $schema): Schema
+    {
+        return $schema
+            ->schema(VitalSignForm::quickElements())
+            ->statePath('vitalsData');
+    }
+
+    public function serviceRequestForm(Schema $schema): Schema
+    {
+        return $schema
+            ->schema(ServiceRequestForm::quickElements(hidenEncounter: true, lockStatuses: true))
+            ->statePath('serviceRequestData');
+    }
+
+    public function allergyForm(Schema $schema): Schema
+    {
+        return $schema
+            ->schema(AllergyForm::quickElements())
+            ->statePath('allergyData');
+    }
+
+    public function triageForm(Schema $schema): Schema
+    {
+        return $schema
+            ->schema(TriageForm::schema(fn (): string => TriageService::ageBandFor($this->currentPatient)->value))
+            ->statePath('triageData');
+    }
+
+    public function consultationForm(Schema $schema): Schema
+    {
+        return $schema
+            ->schema([
+                RichEditor::make('notes')
+                    ->label('Consultation / SOAP Notes')
+                    ->placeholder('Subjective, Objective, Assessment, Plan...'),
+            ])
+            ->statePath('consultationData');
+    }
+
+    public function medicationForm(Schema $schema): Schema
+    {
+        return $schema
+            ->schema($this->medicationOrderFormSchema())
+            ->statePath('medicationData');
+    }
+
+    public function diagnosisForm(Schema $schema): Schema
+    {
+        return $schema
+            ->schema(EncounterDiagnosisForm::quickElements())
+            ->statePath('diagnosisFormData');
+    }
+
+    public function dischargeForm(Schema $schema): Schema
+    {
+        return $schema
+            ->schema(fn (): array => ($encounter = $this->getOpenEncounter())
+                ? EncounterActions::dischargeSchema($encounter)
+                : [])
+            ->statePath('dischargeData');
+    }
+
+    public function noteForm(Schema $schema): Schema
+    {
+        return $schema
+            ->schema(ClinicalNoteForm::quickElements())
+            ->statePath('noteFormData');
+    }
+
+    public function referralForm(Schema $schema): Schema
+    {
+        return $schema
+            ->schema([
+                TextInput::make('destination')
+                    ->label('Referral Destination')
+                    ->placeholder('Department or facility name')
+                    ->required(),
+                RichEditor::make('notes')
+                    ->label('Referral Notes'),
+            ])
+            ->statePath('referralData');
     }
 
     public function getClinicianTabs(): array
@@ -2716,6 +3213,46 @@ class ClinicalWorkspace extends Page implements HasSchemas
             ->toArray();
     }
 
+    /**
+     * Recent patients for the home screen. Skipped while a search is running so a
+     * debounced keystroke does not pay for it.
+     *
+     * @return \Illuminate\Support\Collection<int, Patient>
+     */
+    #[Computed]
+    public function recentPatients(): \Illuminate\Support\Collection
+    {
+        if ($this->mode === 'patient' || strlen($this->searchTerm) >= 2) {
+            return collect();
+        }
+
+        return $this->workspaceService->getRecentPatients(5);
+    }
+
+    public function toggleHistoryDetails(string $encounterId, int $index): void
+    {
+        $this->expandedHistory[$encounterId] = ! $this->isHistoryExpanded($encounterId, $index);
+    }
+
+    public function loadMoreHistory(): void
+    {
+        $this->historyLimit += self::HISTORY_PAGE_SIZE;
+    }
+
+    public function isHistoryExpanded(string $encounterId, int $index): bool
+    {
+        return $this->expandedHistory[$encounterId] ?? $index < self::HISTORY_EXPANDED_BY_DEFAULT;
+    }
+
+    public function hasMoreHistory(): bool
+    {
+        if (! $this->currentPatient) {
+            return false;
+        }
+
+        return Encounter::where('patient_id', $this->currentPatient->id)->count() > $this->historyLimit;
+    }
+
     #[Computed]
     public function pastEncounters(): array
     {
@@ -2724,14 +3261,13 @@ class ClinicalWorkspace extends Page implements HasSchemas
         }
 
         $encounters = Encounter::where('patient_id', $this->currentPatient->id)
-            // ->when($this->currentEncounter, fn ($q) => $q->where('id', '!=', $this->currentEncounter->id))
             ->with([
                 'patient',
                 'vitalSigns' => fn ($q) => $q->latest('recorded_at')->take(1),
                 'clinicalNotes' => fn ($q) => $q->latest()->take(1),
             ])
             ->latest()
-            ->limit(20)
+            ->limit($this->historyLimit)
             ->get();
 
         if ($encounters->isEmpty()) {

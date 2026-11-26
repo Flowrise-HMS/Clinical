@@ -35,16 +35,16 @@ it('navigates the clinical workspace and transitions modern tabs smoothly', func
     $this->actingAs($doctor);
 
     // Visit the clinical workspace for the patient context with dynamic route name helper
-    $page = visit(route('filament.corepanel.workspace.pages.clinical-workspace', ['patient' => $patient->id]));
+    $page = visit(route('filament.corepanel.workspace.pages.clinical-workspace', ['patientId' => $patient->id]));
 
     $page->assertNoJavaScriptErrors()
         ->assertSee($patient->full_name)
         // Verify the modernized clinician action tab bar is rendered
         ->assertSeeAnythingIn('.rounded-t-xl')
         // Click the different modern tabs and verify content transitions without errors
-        ->click('button[wire\:click*="encounter"]')
+        ->click('[data-tab="encounter"]')
         ->assertSee('SOAP Notes')
-        ->click('button[wire\:click*="adt"]')
+        ->click('[data-tab="adt"]')
         ->assertSee('Admit / Transfer / Discharge');
 });
 
@@ -71,17 +71,17 @@ it('allows recording vitals for an active encounter', function () {
 
     $this->actingAs($doctor);
 
-    $page = visit(route('filament.corepanel.workspace.pages.clinical-workspace', ['patient' => $patient->id]));
+    $page = visit(route('filament.corepanel.workspace.pages.clinical-workspace', ['patientId' => $patient->id]));
 
     $page->assertNoJavaScriptErrors()
-        ->click('button[wire\:click*="vitals"]')
-        ->assertSee('Record Vitals')
-        ->fill('vitalsData.systolic_bp', '120')
-        ->fill('vitalsData.diastolic_bp', '80')
-        ->fill('vitalsData.heart_rate', '72')
-        ->fill('vitalsData.temperature', '36.6')
-        ->fill('vitalsData.spo2', '98')
-        ->click('button:contains("Save Vitals")')
+        ->click('[data-tab="vitals"]')
+        ->assertSee('Record patient vital signs')
+        ->fill('[id="vitalsForm.systolic_bp"]', '120')
+        ->fill('[id="vitalsForm.diastolic_bp"]', '80')
+        ->fill('[id="vitalsForm.heart_rate"]', '72')
+        ->fill('[id="vitalsForm.temperature"]', '36.6')
+        ->fill('[id="vitalsForm.spo2"]', '98')
+        ->click('[wire\:click="saveVitals"]')
         ->assertSee('Vital signs recorded');
 
     $this->assertDatabaseHas('vital_signs', [

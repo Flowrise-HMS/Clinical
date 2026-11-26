@@ -11,11 +11,13 @@ use Illuminate\Contracts\Pagination\Paginator;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Auth;
+use Livewire\Attributes\On;
 use Modules\Clinical\Classes\Services\FulfillmentService;
 use Modules\Clinical\Classes\Services\MedicationAdministrationService;
 use Modules\Clinical\Classes\Services\MedicationFulfillmentPolicy;
 use Modules\Clinical\Classes\Support\RequestItemTableEnricher;
 use Modules\Clinical\Filament\Clusters\Clinical\Resources\ServiceRequests\Tables\RequestItemsTable;
+use Modules\Clinical\Filament\Clusters\Workspace\Pages\ClinicalWorkspace;
 use Modules\Clinical\Filament\Support\MarRecordDoseFormSchema;
 use Modules\Clinical\Models\RequestItem;
 use Modules\Core\Classes\Services\BranchService;
@@ -31,6 +33,14 @@ class PendingFulfillmentsWidget extends BaseTableWidget
     protected int|string|array $columnSpan = 'full';
 
     public ?string $patientId = null;
+
+    public ?string $encounterId = null;
+
+    #[On(ClinicalWorkspace::PATIENT_UPDATED_EVENT)]
+    public function onWorkspacePatientUpdated(string $patientId, string $scope): void
+    {
+        // Running the listener re-renders the table; the 30s poll stays for other staff's work.
+    }
 
     protected function getTableQuery(): Builder
     {

@@ -3,9 +3,11 @@
 namespace Modules\Clinical\Filament\Clusters\Workspace\Concerns;
 
 use Filament\Notifications\Notification;
+use Filament\Schemas\Schema;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Gate;
 use Livewire\Attributes\Computed;
+use Livewire\Attributes\Locked;
 use Modules\Core\Classes\Services\BranchService;
 use Modules\Core\Support\ModuleAvailability;
 use Modules\Patient\Classes\Services\PatientSearchService;
@@ -28,6 +30,12 @@ trait ManagesWorkspacePatient
     public bool $confirmDuplicateRegistration = false;
 
     public int $registrationFormKey = 0;
+
+    /**
+     * Patient whose details currently fill the Patient Details form.
+     */
+    #[Locked]
+    public ?string $patientFormFilledFor = null;
 
     public ?Patient $currentPatient = null;
 
@@ -261,9 +269,12 @@ trait ManagesWorkspacePatient
     {
         if (! $this->currentPatient) {
             $this->patientFormData = $this->defaultRegistrationFormData();
+            $this->patientFormFilledFor = null;
 
             return;
         }
+
+        $this->patientFormFilledFor = (string) $this->currentPatient->getKey();
 
         $patient = $this->currentPatient->loadMissing(['identifiers', 'emergencyContacts', 'schools', 'insurancePolicies']);
 
@@ -330,25 +341,59 @@ trait ManagesWorkspacePatient
         };
     }
 
+    public function registerPatientForm(Schema $schema): Schema
+    {
+        return $schema
+            ->model(fn (): Patient => new Patient)
+            ->schema(PatientForm::getSteps())
+            ->statePath('registerFormData');
+    }
+
+    public function patientDetailsForm(Schema $schema): Schema
+    {
+        return $schema
+            ->model(fn (): Patient => $this->currentPatient ?? new Patient)
+            ->schema(PatientForm::getSteps())
+            ->statePath('patientFormData')
+            ->disabled(fn (): bool => $this->currentPatient === null);
+    }
+
+    /**
+     * Eager form of the two schema methods above, for hosts that register schemas
+     * up front (the workspace itself resolves them lazily by method name).
+     *
+     * @return array<string, Schema>
+     */
     protected function registerPatientManagementForms(): array
     {
         return [
-            'registerPatientForm' => $this->makeSchema()
-                ->model(fn (): Patient => new Patient)
-                ->schema(PatientForm::getSteps())
-                ->statePath('registerFormData'),
-            'patientDetailsForm' => $this->makeSchema()
-                ->model(fn (): Patient => $this->currentPatient ?? new Patient)
-                ->schema(PatientForm::getSteps())
-                ->statePath('patientFormData')
-                ->disabled(fn (): bool => $this->currentPatient === null),
+            'registerPatientForm' => $this->registerPatientForm($this->makeSchema()),
+            'patientDetailsForm' => $this->patientDetailsForm($this->makeSchema()),
         ];
+    }
+
+    /**
+     * The ~60-field patient wizard is only filled when the Patient Details tab is
+     * opened, once per patient, instead of on every patient selection.
+     */
+    protected function ensurePatientFormFilled(): void
+    {
+        if ($this->currentPatient === null) {
+            return;
+        }
+
+        if ($this->patientFormFilledFor === (string) $this->currentPatient->getKey()) {
+            return;
+        }
+
+        $this->fillPatientFormDataFromCurrentPatient();
     }
 
     protected function resetPatientManagementState(): void
     {
         $this->registerFormData = $this->defaultRegistrationFormData();
         $this->patientFormData = $this->defaultRegistrationFormData();
+        $this->patientFormFilledFor = null;
         $this->postRegistrationFlow = false;
         $this->confirmDuplicateRegistration = false;
     }

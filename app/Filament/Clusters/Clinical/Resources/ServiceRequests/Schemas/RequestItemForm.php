@@ -54,14 +54,15 @@ class RequestItemForm
                 ->default(1)
                 ->minValue(1)
                 ->required()
-                ->live(),
+                // Totals only need to follow once the user leaves the field, not per keystroke.
+                ->live(onBlur: true),
 
             TextInput::make('unit_price')
                 ->label('Unit Price')
                 ->numeric()
                 ->prefix(config('core.default_currency_symbol'))
                 ->required()
-                ->live(),
+                ->live(onBlur: true),
         ];
     }
 
@@ -90,7 +91,7 @@ class RequestItemForm
                         ->numeric()
                         ->prefix(config('core.default_currency_symbol'))
                         ->default(0)
-                        ->live(),
+                        ->live(onBlur: true),
 
                     TextEntry::make('total')
                         ->label('Total')

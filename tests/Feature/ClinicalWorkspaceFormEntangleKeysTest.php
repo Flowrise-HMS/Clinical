@@ -33,14 +33,84 @@ class ClinicalWorkspaceFormEntangleKeysTest extends TestCase
         $this->user = User::factory()->create()->givePermissionTo('View ClinicalWorkspace');
     }
 
+    /**
+     * Schemas are built lazily per tab, so every tab is opened and checked: a form
+     * seeded only after its tab rendered would pass a single-render check and still
+     * drop its nested keys on the next request.
+     */
     public function test_every_mounted_form_field_has_a_livewire_state_key(): void
     {
+        foreach ([
+            'Create ClinicalNote',
+            'Create EncounterDiagnosis',
+            'Create Encounter',
+            'Update Encounter',
+            'View Encounter',
+            'Update Patient',
+            'View Patient',
+            'Create VitalSign',
+        ] as $permission) {
+            Permission::findOrCreate($permission, 'web');
+            $this->user->givePermissionTo($permission);
+        }
+
         $component = Livewire::actingAs($this->user)
             ->test(ClinicalWorkspace::class, ['patientId' => $this->patient->id]);
 
         $page = $component->instance();
         $this->assertInstanceOf(ClinicalWorkspace::class, $page);
 
+        $tabs = array_keys($page->getClinicianTabs());
+        $this->assertContains('vitals', $tabs);
+        $this->assertContains('adt', $tabs);
+        $this->assertContains('diagnosis', $tabs);
+        $this->assertContains('patient-details', $tabs);
+
+        $visited = [];
+
+        foreach ($tabs as $tab) {
+            $component->set('activeTab', $tab);
+
+            $page = $component->instance();
+            $visited[$tab] = array_keys($page->getCachedSchemas());
+
+            $this->assertSame([], $this->missingStateKeys($page), "Tab [{$tab}]: Livewire cannot entangle Filament fields whose nested keys are missing.");
+        }
+
+        // Each tab really built its own schema (lazy resolution is wired up).
+        $this->assertContains('vitalsForm', $visited['vitals']);
+        $this->assertContains('diagnosisForm', $visited['diagnosis']);
+        $this->assertContains('patientDetailsForm', $visited['patient-details']);
+        $this->assertContains('adtAdmitForm', $visited['adt']);
+        // ...and did not drag the previous tab's schema along.
+        $this->assertNotContains('patientDetailsForm', $visited['vitals']);
+    }
+
+    public function test_only_the_active_tab_schemas_stay_discovered_between_requests(): void
+    {
+        Permission::findOrCreate('Update Patient', 'web');
+        Permission::findOrCreate('View Patient', 'web');
+        $this->user->givePermissionTo(['Update Patient', 'View Patient']);
+
+        $component = Livewire::actingAs($this->user)
+            ->test(ClinicalWorkspace::class, ['patientId' => $this->patient->id])
+            ->set('activeTab', 'patient-details');
+
+        $this->assertContains('patientDetailsForm', $component->instance()->discoveredSchemaNames);
+
+        $component->set('activeTab', 'vitals');
+
+        $discovered = $component->instance()->discoveredSchemaNames;
+
+        $this->assertContains('vitalsForm', $discovered);
+        $this->assertNotContains('patientDetailsForm', $discovered);
+    }
+
+    /**
+     * @return list<string>
+     */
+    protected function missingStateKeys(ClinicalWorkspace $page): array
+    {
         $missing = [];
 
         foreach ($page->getCachedSchemas() as $schema) {
@@ -80,7 +150,7 @@ class ClinicalWorkspaceFormEntangleKeysTest extends TestCase
             }
         }
 
-        $this->assertSame([], $missing, 'Livewire cannot entangle Filament fields whose nested keys are missing.');
+        return $missing;
     }
 
     /**

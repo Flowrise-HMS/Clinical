@@ -34,8 +34,8 @@ it('saves a typed diagnosis from the workspace diagnosis tab', function () {
     $page = visit(route('filament.corepanel.workspace.pages.clinical-workspace', ['patientId' => $patient->id]));
 
     $page->assertNoJavaScriptErrors()
-        ->click('button[wire\:click="$set(\'activeTab\', \'diagnosis\')"]')
-        ->assertSee('Save Diagnoses');
+        ->click('[data-tab="diagnosis"]')
+        ->assertSee('Save diagnoses');
 
     $page->fill('input[wire\:model="diagnosisFormData.diagnoses.0.description"]', 'Malaria')
         ->click('button[wire\:click="saveDiagnoses"]')
@@ -43,7 +43,7 @@ it('saves a typed diagnosis from the workspace diagnosis tab', function () {
 
     $page->screenshot();
 
-    $page->assertSee('Diagnoses saved');
+    $page->assertSee('Diagnoses updated');
 
     $this->assertDatabaseHas('encounter_diagnoses', [
         'encounter_id' => $encounter->id,

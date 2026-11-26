@@ -12,14 +12,15 @@ use Filament\Schemas\Schema;
  */
 trait SeedsSchemaEntangleKeys
 {
-    public function rendering(): void
-    {
-        $this->ensureSchemaEntangleKeysExist();
-    }
-
+    /**
+     * Host pages call this from their `rendering()` hook after resolving the
+     * schemas the view will show. Only schemas already built this request are
+     * seeded: `getCachedSchemas()` would rebuild every schema Filament has ever
+     * discovered, which defeats lazy schema resolution.
+     */
     protected function ensureSchemaEntangleKeysExist(): void
     {
-        foreach ($this->getCachedSchemas() as $schema) {
+        foreach ($this->cachedSchemas as $schema) {
             if ($schema instanceof Schema) {
                 $this->seedStateKeysForSchema($schema);
             }
